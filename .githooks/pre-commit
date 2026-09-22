@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Ambition pre-commit：代码质量与编写规范门禁（全部通过才允许提交）
+set -euo pipefail
+cd "$(dirname "$0")/.."
+export PATH="$HOME/.cargo/bin:$PATH"
+
+fail=0
+say() { printf '[pre-commit] %s\n' "$1"; }
+bad() { printf '[pre-commit] ✗ %s\n' "$1"; fail=1; }
+
+say "1/7 cargo fmt --check（编写规范）"
+cargo fmt --all -- --check || bad "格式化未通过，运行 cargo fmt --all"
+
+say "2/7 cargo clippy -D warnings（质量：含未使用参数/未使用导入/死代码）"
+cargo clippy --workspace --all-targets -- -D warnings || bad "clippy 未通过"
+
+say "3/7 禁止占位/预留参数（预留参数写 // TODO 注释，实现时再加形参）"
+if grep -rnE 'fn[^{]*\(([^)]*\s)?_[a-zA-Z][a-zA-Z0-9_]*\s*:' crates --include='*.rs'; then
+  bad "发现 _xxx 占位参数（预留参数请写 TODO 注释，不要出现在签名里）"
+fi
+if grep -rnE 'fn[^{]*\(\s*_\s*:' crates --include='*.rs'; then
+  bad "发现匿名占位参数 _:"
+fi
+
+say "4/7 函数↔测试配对（每个函数必须有 fn test_<函数名>_* 测试）"
+./scripts/fn_test_check.sh || bad "函数缺测试"
+
+say "5/7 cargo test（测试必须全部通过）"
+cargo test --workspace || bad "测试失败"
+
+say "6/7 未使用的包检查（cargo-machete，可选工具）"
+if command -v cargo-machete >/dev/null 2>&1; then
+  cargo machete || bad "存在未使用的依赖包"
+else
+  say "  （cargo-machete 未安装，跳过；未使用导入已由 clippy 覆盖）"
+fi
+
+say "7/7 通过"
+if [ "$fail" -ne 0 ]; then
+  printf '[pre-commit] ✗ 门禁未通过，已阻止提交（%s 项）\n' "$(grep -c '✗' <<<"$fail" || true)$fail"
+  exit 1
+fi

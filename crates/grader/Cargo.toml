@@ -1,0 +1,7 @@
+[package]
+name = "ambition-grader"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ambition-core = { path = "../core" }

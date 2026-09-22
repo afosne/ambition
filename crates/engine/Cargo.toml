@@ -1,0 +1,15 @@
+[package]
+name = "ambition-engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ambition-core = { path = "../core" }
+ambition-gamify = { path = "../gamify" }
+ambition-grader = { path = "../grader" }
+ambition-store = { path = "../store" }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
+thiserror = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "time"] }
