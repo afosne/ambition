@@ -55,8 +55,29 @@
 
 - **症状**：TUI 判题失败被降级成 `verdict=Pending` 展示，用户看不出是错误还是待裁定。
 - **根因**：错误分支复用了 Pending 的展示路径，没有独立错误态。
-- **解决**：（待修，见 PROGRESS.md 改进建议 #6）——需要独立错误行/状态。
-- **预防**：错误与业务中间态（Pending）永远不同路；降级必须有可见信号。
+- **解决**：✅ M2（b39efef）：`apply_error` 写独立 `state.error` 行（“⚠ 提交失败（未判分）”），错误时**不写 grade**；渲染层错误行与判分浮层分离；`test_apply_error_keeps_grade_none_and_is_overwritten` 钉住“错误绝不落 Pending”。
+- **预防**：错误与业务中间态（Pending）永远不同路；降级必须有可见信号（引擎侧同款处理：Mutex 中毒 eprintln + game_state 落库失败 warn）。
+
+## P-12 Rust 2024 里 `gen` 是保留关键字（不能作变量/标识符）
+
+- **症状**：`error: expected expression, found reserved keyword \`gen\``，gen crate 测试编译全挂（8 处）。
+- **根因**：edition 2024 起 `gen` 为保留字；`let gen = Generator::new(...)` / `gen.generate(...)` 非法。
+- **解决**：变量名改 `generator`；仓内 crate 名 `ambition-gen` 不受影响（连字符名合法）。
+- **预防**：新标识符避开 2024 保留字表（gen/async/gen 关键字集）；改完先 `cargo build --all-targets` 再跑测试。
+
+## P-13 占位参数钩子（grep）覆盖测试代码，测试里的 `_ev` 也拦
+
+- **症状**：pre-commit 第 3 步报“发现 _xxx 占位参数”，但生产码已干净——命中的是 `mod tests` 里的 `fn publish(&self, _ev: DomainEvent)`。
+- **根因**：`grep -rnE ... crates --include='*.rs'` 扫全部 .rs，不区分 cfg(test)。
+- **解决**：测试里改 `ev` + `drop(ev)` 显式消费（不放松钩子，P-10 红线）。
+- **预防**：写测试时同样不写 `_xxx` 形参；提交前先单跑 `grep -rnE 'fn[^{]*\(([^)]*\s)?_[a-zA-Z]' crates --include='*.rs'` 自查。
+
+## P-14 Windows 下 TUI 冒烟不能靠 /dev/null EOF 或 python pty
+
+- **症状**：`ambition.exe </dev/null` 阻塞 120s+（crossterm `event::read()` 在 Windows 不把管道关闭当 EOF）；python `import pty` 直接 `ModuleNotFoundError: termios`（Windows CPython 无 Unix 模块）。
+- **根因**：Windows 控制台模型无 Unix EOF/pty 语义；crossterm 等真实控制台输入事件。
+- **解决**：改“短跑后杀”冒烟：启动 2-4s → `taskkill //F //IM ambition.exe` → 直接查 SQLite 断言（203 seed 题入、schema_version=1、UI 启动序列已写 stdout）。
+- **预防**：Windows 平台的 TUI 验收用“产物断言”（库文件/日志）而不是 stdin 驱动；将来 TUI 自动化用 Windows ConPTY 或 expect 类工具，不用 termios 假设。
 
 ## P-9 编辑工具锚点必须“当前文件实际文本”
 
