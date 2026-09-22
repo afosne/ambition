@@ -5,6 +5,7 @@
 # 用法：continue_mvp.sh            （真实执行）
 #       AMBI_DRY_RUN=1 continue_mvp.sh  （只演练锁/解析，不唤起 pi）
 set -u
+unset AMBI_LOCK_HELD  # 防外层环境泄漏：本脚本自己的 acquire/release 必须真实执行
 export PATH="$HOME/.cargo/bin:/d/nodejs:$PATH"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 1
@@ -64,9 +65,14 @@ while true; do
     break
   fi
 
+  # 记录开工前 HEAD：空烧防护的基准（rc=0 但无新提交 → 不推进）
+  head_before="$(git rev-parse HEAD 2>/dev/null || echo '')"
   log "唤起 pi 执行阶段 $n/6：$label"
-  pi -p --approve --name "ambition-stage-$n" \
+  # AMBI_LOCK_HELD=1：锁由本脚本持有，agent 按 skill 抢锁时继承（否则死锁，P-10）
+  AMBI_LOCK_HELD=1 pi -p --approve --verbose --name "ambition-stage-$n" \
     "你是 Ambition 项目的施工者（当前阶段：$label）。
+
+施工锁：外层任务已持锁——你按 skill 调用 task_lock.sh 会返回“子进程继承”，release 会“跳过”，这都是正常状态，不是别人在施工，直接开工。
 
 必做顺序：
 1) read .pi/skills/ambition-pitfall-log/SKILL.md 并遵守（记坑/抢锁/进度评估守则）；
@@ -81,6 +87,15 @@ while true; do
     log "阶段 $n 失败（exit=$rc），不推进；下一轮定时任务重试"
     echo "阶段 $n 执行失败（exit=$rc），已记录日志 $LOG"
     exit $rc
+  fi
+
+  # 空烧防护：rc=0 但 HEAD 没变 → agent 可能只输出“等待中”就退出了，
+  # 绝不能当阶段完成推进（否则 6 个阶段会被空烧完，P-10）
+  head_after="$(git rev-parse HEAD 2>/dev/null || echo '')"
+  if [ "$head_after" = "$head_before" ]; then
+    log "阶段 $n 返回 0 但 HEAD 未变化，视为未完成，不推进；下一轮定时任务重试"
+    echo "阶段 $n 未产生提交，视为未完成（详见 $LOG）"
+    exit 1
   fi
 
   # 推进阶段号

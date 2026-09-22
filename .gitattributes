@@ -3,3 +3,5 @@
 *.sh text eol=lf
 *.rs text eol=lf
 *.toml text eol=lf
+# .cmd 必须 CRLF：LF-only + 中文注释会让 cmd.exe 拆错行、报 'xxx' is not recognized（P-7 镜像坑）
+*.cmd text eol=crlf

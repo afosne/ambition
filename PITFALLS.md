@@ -44,11 +44,12 @@
 - **解决**：删除垃圾行重插；用逐锚点 `sed '/pattern/a\…'` 而不是带值循环。
 - **预防**：shell 循环变量一律 `while IFS=` 读取或加引号；插入含空格文本用文件/awk，不用 for-in。
 
-## P-7 Windows CRLF 会毁掉 shebang 钩子脚本
+## P-7 Windows CRLF 会毁掉 shebang 钩子脚本（镜像坑：LF 毁 .cmd）
 
 - **症状**：git 提示 `LF will be replaced by CRLF`；一旦 checkout 成 CRLF，`.githooks/*.sh` 头行变 `^M`，钩子静默不执行。
-- **解决**：`.gitattributes`：`* text=auto` + `.githooks/** text eol=lf` + `*.sh text eol=lf`。
-- **预防**：新增可执行脚本必须是 LF；新仓库第一件事就是建 `.gitattributes`。
+- **症状（镜像，2026-09-23）**：`3863dc8` 全仓统一 LF 后，`.cmd` 变 LF-only + 中文注释行 → cmd.exe 拆错行，跑 `continue_mvp.cmd` 报 `'�（Windows' is not recognized as an internal or external command`（实测：CRLF 版本无此错，LF 版本必现）。
+- **解决**：`.gitattributes`：`* text=auto` + `.githooks/** text eol=lf` + `*.sh text eol=lf`；**补 `*.cmd text eol=crlf`** 并把两个 .cmd 转回 CRLF。
+- **预防**：行尾规则成对写：shebang 脚本→lf、`.cmd`→crlf；做「全仓行尾统一」前先按扩展名分类；新入口文件先 `file` 看行尾。
 
 ## P-8 静默降级会吞掉真实错误
 
@@ -63,3 +64,17 @@
 - **根因**：sed 改写/手动记忆与真实文件有 1 字符差异（空格、句号、破折号前后空格）。
 - **解决**：失败后先 `grep -n` 取真实行，再以它为锚。
 - **预防**：多步 sed 后的文件，一律重新取证；别复用改名前的锚点。
+
+## P-10 调度脚本与 agent 双重抢锁 → 死锁，且 rc=0 空烧阶段
+
+- **症状**：定时唤起的施工会话只读了 SKILL/PITFALLS/PROGRESS 就输出「施工锁已被占用（pid=625）→ 等待中」退出（日志 2026-09-23 03:57 会话）；更严重：这种“等待中”退出 rc=0，会被 `continue_mvp.sh` 当成阶段完成 → 推进 MVP_STAGE，6 个阶段会被空烧完而零施工。
+- **根因**：`continue_mvp.sh` 先自抢锁再唤起 pi，而 skill 红线要求 agent 自己再抢同一把锁 → agent 永远抢到的是外层脚本的锁 → 按红线只能退出；同时“没干活但正常退出”与“完成”都= rc0，无法区分。
+- **解决**：①`task_lock.sh` 识别 `AMBI_LOCK_HELD=1`：acquire 返回“子进程继承”、release 跳过（锁归外层 trap）；脚本以 `AMBI_LOCK_HELD=1 pi …` 注入并在 prompt 里明示；②空烧防护：pi rc=0 但 `git rev-parse HEAD` 无变化 → 不推进、按失败下轮重试。
+- **预防**：互斥锁必须有唯一 owner + 显式继承/传递机制；凡“以退出码判定完成”的地方必须同时校验副作用（提交/产物），正常退出 ≠ 干了活。
+
+## P-11 心跳循环绑错 pid → 永不刷新（锁要么空转 1h、要么被误接管）
+
+- **症状**：锁目录 heartbeat 时间戳永远停在 acquire 那一刻（日志里“心跳 117s→1017s 前”持续增长）；孤儿锁要空转满 3600s 才能被接管，反过来超 1h 的正常施工会被定时任务误接管（双施工）。
+- **根因**：心跳子循环写的是 `kill -0 "$$"`，而 `$$` 是 `task_lock.sh` 自己——acquire 一返回进程就退出，循环第一次探测即失败退出，心跳再也没人刷。
+- **解决**：owner 改为 `$PPID`（调用方外层脚本）：`echo $PPID > pid` + 循环按 owner 存活每 30s 刷新；实测 delta=30s ✓。
+- **预防**：后台守护循环的存活探针必须绑“长生命周期的主人”；锁类代码必须实测三态：刷新（活着）、过期接管（主人死）、拒锁（他人持有）。
