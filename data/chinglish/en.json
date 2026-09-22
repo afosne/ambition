@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "lang": "en",
+  "note": "L1 (Chinese) negative-transfer error patterns — 中式英语错式库（DESIGN §13.6，M3）。改错训练用：wrong = 典型中式句，right = 地道改写；zh_note 是给人看的中文点拨（永不进 Jev state）。tag ∈ core::ErrorTag。",
+  "items": [
+    {
+      "id": "very_like",
+      "wrong": "I very like reading books.",
+      "right": "I really like reading books.",
+      "zh_note": "程度副词 very 不能直接修饰 like（对应中文「我很喜欢」的直译）。",
+      "tag": "chinglish"
+    },
+    {
+      "id": "open_the_light",
+      "wrong": "Please open the light.",
+      "right": "Please turn on the light.",
+      "zh_note": "中文说「开灯」，英语灯用 turn on，不用 open。",
+      "tag": "chinglish"
+    },
+    {
+      "id": "i_from_china",
+      "wrong": "I from China.",
+      "right": "I am from China.",
+      "zh_note": "英语系动词不可省：「我来自中国」必须有 be。",
+      "tag": "sentence_structure"
+    },
+    {
+      "id": "although_but",
+      "wrong": "Although it rained, but we went out.",
+      "right": "Although it rained, we went out.",
+      "zh_note": "中文「虽然……但是……」成对出现；英语 although 不与 but 连用。",
+      "tag": "clause_linker"
+    },
+    {
+      "id": "explain_me",
+      "wrong": "Can you explain me this rule?",
+      "right": "Can you explain this rule to me?",
+      "zh_note": "explain 不接双宾语：解释给某人听要用 explain sth to sb。",
+      "tag": "collocation"
+    },
+    {
+      "id": "discuss_about",
+      "wrong": "We discussed about the plan.",
+      "right": "We discussed the plan.",
+      "zh_note": "discuss 本身含「about」义，直接接宾语。",
+      "tag": "redundancy"
+    },
+    {
+      "id": "people_friendly",
+      "wrong": "People here are very friend.",
+      "right": "People here are very friendly.",
+      "zh_note": "名词 friend 不能作表语，要用形容词 friendly。",
+      "tag": "pos_mix"
+    },
+    {
+      "id": "how_long_time",
+      "wrong": "How long time did it take?",
+      "right": "How long did it take?",
+      "zh_note": "中文「多长时间」，英语 how long 已含时间义，不再加 time。",
+      "tag": "redundancy"
+    },
+    {
+      "id": "i_am_agree",
+      "wrong": "I am agree with you.",
+      "right": "I agree with you.",
+      "zh_note": "agree 是动词不是形容词，不与 be 连用。",
+      "tag": "pos_mix"
+    },
+    {
+      "id": "he_come_from",
+      "wrong": "He is come from China.",
+      "right": "He comes from China.",
+      "zh_note": "一般现在时第三人称单数：he comes；be 与实义动词不叠加。",
+      "tag": "tense"
+    },
+    {
+      "id": "color_see_see",
+      "wrong": "I will give you some color to see see.",
+      "right": "I will teach you a lesson.",
+      "zh_note": "「给你点颜色看看」是中文习语，直译会让英语读者莫名其妙。",
+      "tag": "chinglish"
+    },
+    {
+      "id": "thankyou_help",
+      "wrong": "Thank you to help me.",
+      "right": "Thank you for helping me.",
+      "zh_note": "感谢做某事用 thank sb for doing sth。",
+      "tag": "preposition"
+    }
+  ]
+}

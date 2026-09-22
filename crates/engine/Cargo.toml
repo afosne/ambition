@@ -8,14 +8,15 @@ ambition-core = { path = "../core" }
 ambition-gamify = { path = "../gamify" }
 ambition-gen = { path = "../gen" }
 ambition-grader = { path = "../grader" }
+ambition-jev = { path = "../jev" }
+ambition-llm = { path = "../llm" }
 ambition-store = { path = "../store" }
+async-trait = "0.1"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
 thiserror = "2"
 tracing = "0.1"
 
 [dev-dependencies]
-ambition-jev = { path = "../jev" }
-ambition-llm = { path = "../llm" }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt", "time"] }
 wiremock = "0.6"

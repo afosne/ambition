@@ -76,16 +76,42 @@ impl Provenance {
     }
 }
 
-/// 错因标签（画像原料，docs/07-grading §归类；M1 先行子集）
+/// 错因标签（画像原料，docs/02 §1 全量分类 / docs/07 §3 归类；M3 全量落地）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorTag {
+    // 词汇
     WordSense,
+    Confusable,
     Collocation,
-    Tense,
+    Preposition,
     Spelling,
+    PosMix,
     Article,
+    Countability,
+    // 语法
+    Tense,
+    Voice,
+    Sva,
+    ClauseLinker,
+    NonFinite,
+    Subjunctive,
+    InversionEmphasis,
+    SentenceStructure,
+    // 语篇
+    Cohesion,
+    Reference,
+    Logic,
+    // 表达（中式英语负迁移主归口）
+    Chinglish,
+    Register,
+    Redundancy,
+    PatternMisuse,
+    // 应试
+    Misread,
+    TimePressure,
     Careless,
+    // 兜底
     NoError,
     Other,
 }
@@ -95,14 +121,138 @@ impl ErrorTag {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::WordSense => "word_sense",
+            Self::Confusable => "confusable",
             Self::Collocation => "collocation",
-            Self::Tense => "tense",
+            Self::Preposition => "preposition",
             Self::Spelling => "spelling",
+            Self::PosMix => "pos_mix",
             Self::Article => "article",
+            Self::Countability => "countability",
+            Self::Tense => "tense",
+            Self::Voice => "voice",
+            Self::Sva => "sva",
+            Self::ClauseLinker => "clause_linker",
+            Self::NonFinite => "non_finite",
+            Self::Subjunctive => "subjunctive",
+            Self::InversionEmphasis => "inversion_emphasis",
+            Self::SentenceStructure => "sentence_structure",
+            Self::Cohesion => "cohesion",
+            Self::Reference => "reference",
+            Self::Logic => "logic",
+            Self::Chinglish => "chinglish",
+            Self::Register => "register",
+            Self::Redundancy => "redundancy",
+            Self::PatternMisuse => "pattern_misuse",
+            Self::Misread => "misread",
+            Self::TimePressure => "time_pressure",
             Self::Careless => "careless",
             Self::NoError => "no_error",
             Self::Other => "other",
         }
+    }
+
+    /// 稳定字符串反解（Jev `error_cause` choice → 标签；未知 key → None，调用方 warn 跳过）
+    pub fn parse_tag(raw: &str) -> Option<Self> {
+        let tag = match raw {
+            "word_sense" => Self::WordSense,
+            "confusable" => Self::Confusable,
+            "collocation" => Self::Collocation,
+            "preposition" => Self::Preposition,
+            "spelling" => Self::Spelling,
+            "pos_mix" => Self::PosMix,
+            "article" => Self::Article,
+            "countability" => Self::Countability,
+            "tense" => Self::Tense,
+            "voice" => Self::Voice,
+            "sva" => Self::Sva,
+            "clause_linker" => Self::ClauseLinker,
+            "non_finite" => Self::NonFinite,
+            "subjunctive" => Self::Subjunctive,
+            "inversion_emphasis" => Self::InversionEmphasis,
+            "sentence_structure" => Self::SentenceStructure,
+            "cohesion" => Self::Cohesion,
+            "reference" => Self::Reference,
+            "logic" => Self::Logic,
+            "chinglish" => Self::Chinglish,
+            "register" => Self::Register,
+            "redundancy" => Self::Redundancy,
+            "pattern_misuse" => Self::PatternMisuse,
+            "misread" => Self::Misread,
+            "time_pressure" => Self::TimePressure,
+            "careless" => Self::Careless,
+            "no_error" => Self::NoError,
+            "other" => Self::Other,
+            _ => return None,
+        };
+        Some(tag)
+    }
+
+    /// 中文展示名（TUI/报告层用；不参与判分口径，docs/07 §3）
+    pub fn label_zh(&self) -> &'static str {
+        match self {
+            Self::WordSense => "词义",
+            Self::Confusable => "易混词",
+            Self::Collocation => "搭配",
+            Self::Preposition => "介词",
+            Self::Spelling => "拼写",
+            Self::PosMix => "词性",
+            Self::Article => "冠词",
+            Self::Countability => "可数性",
+            Self::Tense => "时态",
+            Self::Voice => "语态",
+            Self::Sva => "主谓一致",
+            Self::ClauseLinker => "从句连词",
+            Self::NonFinite => "非谓语",
+            Self::Subjunctive => "虚拟语气",
+            Self::InversionEmphasis => "倒装强调",
+            Self::SentenceStructure => "句子结构",
+            Self::Cohesion => "衔接",
+            Self::Reference => "指代",
+            Self::Logic => "逻辑",
+            Self::Chinglish => "中式英语",
+            Self::Register => "语域",
+            Self::Redundancy => "冗余",
+            Self::PatternMisuse => "句式误用",
+            Self::Misread => "审题偏差",
+            Self::TimePressure => "时间压力",
+            Self::Careless => "粗心",
+            Self::NoError => "无错",
+            Self::Other => "其它",
+        }
+    }
+
+    /// 全量分类（表驱动测试与语料校验用：顺序稳定）
+    pub fn all() -> &'static [ErrorTag] {
+        &[
+            Self::WordSense,
+            Self::Confusable,
+            Self::Collocation,
+            Self::Preposition,
+            Self::Spelling,
+            Self::PosMix,
+            Self::Article,
+            Self::Countability,
+            Self::Tense,
+            Self::Voice,
+            Self::Sva,
+            Self::ClauseLinker,
+            Self::NonFinite,
+            Self::Subjunctive,
+            Self::InversionEmphasis,
+            Self::SentenceStructure,
+            Self::Cohesion,
+            Self::Reference,
+            Self::Logic,
+            Self::Chinglish,
+            Self::Register,
+            Self::Redundancy,
+            Self::PatternMisuse,
+            Self::Misread,
+            Self::TimePressure,
+            Self::Careless,
+            Self::NoError,
+            Self::Other,
+        ]
     }
 }
 
@@ -332,7 +482,7 @@ pub struct ItemResult {
     pub correct: bool,
 }
 
-/// 判分结果（M1 规则层）
+/// 判分结果（M1 规则层；M3 起由07 三级流水线产出）
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct GradeResult {
     pub verdict: Verdict,
@@ -342,6 +492,46 @@ pub struct GradeResult {
     pub graded_by: GradedBy,
     pub items: Vec<ItemResult>,
     pub error_tags: Vec<ErrorTag>,
+}
+
+/// LLM 第三级复核产出的**判断**（不打分，docs/07 §4；M3 落地）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Arbitration {
+    /// 判断：学生答案可否接受
+    pub acceptable: bool,
+    /// 复核归出的错因（无错 = NoError）
+    pub error_tag: ErrorTag,
+    /// 给人看的一句理由（LLM 文本，不参与判分口径）
+    pub reason: String,
+}
+
+/// 成本台账行（按 kind 聚合，docs/05 §1 usage_summary）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct UsageTotal {
+    pub kind: String,
+    pub tokens_in: i64,
+    pub tokens_out: i64,
+}
+
+/// 成本台账汇总（区间内各 kind + 总计；成本面板数据，M3 落地）
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub struct UsageSummary {
+    pub rows: Vec<UsageTotal>,
+    pub tokens_in: i64,
+    pub tokens_out: i64,
+}
+
+impl UsageSummary {
+    /// 由聚合行构造（总计 = 行求和；空区间 = 零值）
+    pub fn from_rows(rows: Vec<UsageTotal>) -> Self {
+        let tokens_in = rows.iter().map(|r| r.tokens_in).sum();
+        let tokens_out = rows.iter().map(|r| r.tokens_out).sum();
+        Self {
+            rows,
+            tokens_in,
+            tokens_out,
+        }
+    }
 }
 
 /// 领域事件（gamify/sync/profile 订阅，docs/02-core-store §DomainEvent）
@@ -426,6 +616,95 @@ mod tests {
         assert_eq!(ErrorTag::WordSense.as_str(), "word_sense");
         assert_eq!(ErrorTag::NoError.as_str(), "no_error");
         assert_eq!(ErrorTag::Careless.as_str(), "careless");
+        assert_eq!(ErrorTag::NonFinite.as_str(), "non_finite");
+        assert_eq!(ErrorTag::PosMix.as_str(), "pos_mix");
+        assert_eq!(ErrorTag::InversionEmphasis.as_str(), "inversion_emphasis");
+    }
+
+    #[test]
+    fn test_parse_tag_roundtrips_every_variant() {
+        let all = ErrorTag::all();
+        assert_eq!(all.len(), 28, "docs/02 §1 全量 28 类");
+        for tag in all {
+            let raw = tag.as_str();
+            assert_eq!(ErrorTag::parse_tag(raw), Some(*tag), "往返一致: {raw}");
+            assert_eq!(
+                serde_json::to_value(*tag).expect("序列化"),
+                serde_json::json!(raw),
+                "serde 与 as_str 同口径: {raw}"
+            );
+        }
+        assert_eq!(ErrorTag::parse_tag("mystery"), None, "未知 key → None");
+        // 去重：28 个稳定字符串互不相同
+        let mut keys: Vec<&str> = all.iter().map(|t| t.as_str()).collect();
+        keys.sort_unstable();
+        let before = keys.len();
+        keys.dedup();
+        assert_eq!(keys.len(), before, "稳定字符串无重复");
+    }
+
+    #[test]
+    fn test_label_zh_covers_all_variants_translated() {
+        let mut labels: Vec<&str> = ErrorTag::all().iter().map(|t| t.label_zh()).collect();
+        assert_eq!(labels.len(), 28, "28 类全有中文名");
+        for label in &labels {
+            assert!(!label.is_empty(), "中文名非空");
+            assert!(
+                label
+                    .chars()
+                    .any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)),
+                "是中文: {label}"
+            );
+        }
+        let mut sorted = labels.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        labels.clear();
+        assert_eq!(sorted.len(), 28, "中文名互不重复（UI 不混淆）");
+        assert_eq!(ErrorTag::Chinglish.label_zh(), "中式英语");
+    }
+
+    #[test]
+    fn test_all_lists_28_variants() {
+        let all = ErrorTag::all();
+        assert_eq!(all.len(), 28, "docs/02 §1 全量 28 类");
+        assert_eq!(*all.first().expect("非空"), ErrorTag::WordSense, "顺序稳定");
+        assert_eq!(*all.last().expect("非空"), ErrorTag::Other, "兑底收尾");
+    }
+
+    #[test]
+    fn test_from_rows_sums_totals_and_keeps_default() {
+        let empty = UsageSummary::from_rows(vec![]);
+        assert_eq!((empty.tokens_in, empty.tokens_out), (0, 0));
+        let summary = UsageSummary::from_rows(vec![
+            UsageTotal {
+                kind: "llm".into(),
+                tokens_in: 100,
+                tokens_out: 20,
+            },
+            UsageTotal {
+                kind: "jev".into(),
+                tokens_in: 50,
+                tokens_out: 10,
+            },
+        ]);
+        assert_eq!((summary.tokens_in, summary.tokens_out), (150, 30));
+        assert_eq!(summary.rows.len(), 2);
+        assert_eq!(UsageSummary::default().rows.len(), 0, "默认零值可用");
+    }
+
+    #[test]
+    fn test_arbitration_struct_is_serializable() {
+        let arb = Arbitration {
+            acceptable: true,
+            error_tag: ErrorTag::Collocation,
+            reason: "variant accepted".into(),
+        };
+        let json = serde_json::to_string(&arb).expect("序列化");
+        assert!(json.contains("\"acceptable\":true"), "{json}");
+        assert!(json.contains("collocation"), "{json}");
+        let back: Arbitration = serde_json::from_str(&json).expect("反序列化");
+        assert_eq!(back, arb);
     }
 
     #[test]

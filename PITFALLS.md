@@ -79,6 +79,13 @@
 - **解决**：改“短跑后杀”冒烟：启动 2-4s → `taskkill //F //IM ambition.exe` → 直接查 SQLite 断言（203 seed 题入、schema_version=1、UI 启动序列已写 stdout）。
 - **预防**：Windows 平台的 TUI 验收用“产物断言”（库文件/日志）而不是 stdin 驱动；将来 TUI 自动化用 Windows ConPTY 或 expect 类工具，不用 termios 假设。
 
+## P-15 SQLite `datetime(unix,'unixepoch')` 超范围返回 NULL → 过滤条件恒 NULL，**静默空结果**
+
+- **症状**：`usage_summary(0, i64::MAX)` 按 kind 聚合返回 0 行（区间内明明有记账行）；无任何报错。
+- **根因**：SQLite `datetime()` 只能表达到 9999-12-31；传 `i64::MAX` 秒越界 → 返回 NULL → `created_at < NULL` 为 NULL（非 true）→ 行全被过滤。与 P-4 同类：错误被当成“合法空集”。
+- **解决**：入库查询前用 `clamp_unix_range` 把区间钳到 `[0, 253402300799]`（9999-12-31 23:59:59）；`test_clamp_unix_range_keeps_sqlite_datetime_expressible` 钉住。
+- **预防**：凡把数值喂给 SQLite 日期函数/格式化函数，先想边界（负数、i64::MAX、非数字字符串都可能静默变 NULL）；“空结果”断言要区分“真为空”与“被 NULL 吞了”，边界值必须进测试。
+
 ## P-9 编辑工具锚点必须“当前文件实际文本”
 
 - **症状**：edit `oldText` 匹配失败（README 首行、DESIGN 数据模型行等）。

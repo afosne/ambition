@@ -6,7 +6,10 @@
 ## 1. 生命周期与事件旁路
 
 ```rust
-pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数据幂等导入/装配服务（M2：Engine::open(path) 文件库 + seed 幂等导入）
+pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数据幂等导入/装配服务
+// M3 落地：Engine::open(path) 内部取 AiConfig::from_env()（AMBI_JEV_BASE/AMBI_JEV_KEY/TYPESAFE_API_KEY/
+//   AMBI_LLM_BASE/AMBI_LLM_MODEL/AMBI_LLM_KEY，key 缺省 = 离线形态）；测试/定制走 open_with_ai(path, AiConfig)
+//   / open_memory_with_ai(AiConfig)。StoreLedger（AiLedger 的 SQLite 实现）在 engine 装配（05 不依赖 store）。
 // EventBus → 订阅：GameService（可关）/ SyncProjector（server_url 非空）/ ProfileAggregator
 // 落库规则：主事务提交后旁路逐个执行，各自幂等（旁路失败不回滚，tracing 记录可补偿）
 // M2：core::EventBus trait 落地，engine 只 publish 不直调 gamify（解耦改进 #3）；gamify 效果经 save_game_state 落库（#1）
@@ -16,6 +19,11 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 
 ```rust
 // 答题/判分（S1）：start_practice / submit_answer / explain_mistake / resolve_pending / pending_bucket
+//   M3 落地：submit_answer = 三级流水线（规则→Jev→桶）；pending_bucket() 待裁定列表；
+//   resolve_pending(attempt_id, accept) 人工裁决（grades→human + 填空可接受答案回流 + gamify 事件）；
+//   explain_mistake（文字讲解）随 06::explain 讲解层（M4+）；
+//   cost_summary(from_unix, to_unix) -> UsageSummary（成本台账门面，数据源 llm_usage）；
+//   add_chinglish_drills(limit)（中式英语改错训练题注入，data/chinglish/，DESIGN §13.6 归 M3）
 // 复习/词汇（S2）：due_list / review_answer / enroll_words / wrong_wordbook / word_detail / vocab_probe_* / weekly_quiz
 // 出题/题包（S4/S6）：generate / variant_drill / export_pack / import_pack / share_code / pack_updates
 // 写作（S3）：scaffold / submit_essay / model_essays / upgrade_sentence / translate_grade / writing_drills / drill_submit / long_sentence / polish
@@ -95,9 +103,10 @@ ambition                 # 进入 TUI：无需账号、无需服务、无需联�
 | Writing 写作 | `w` | Settings | `s` |
 
 - 全局：`q` 退出 · `?` 帮助 · `Tab` 切面板 · `Esc` 返回；
-- 答题：`j/k` 移动 · `Space` 选中（多选连按）· `Enter` 提交 · `e` 看讲解 · `n` 下一题；
-- 复习翻卡：`Space` 翻面 · `1/2/3/4` = Again/Hard/Good/Easy（FSRS）；
-- 打字：直接输入，`Esc` 结束结算 WPM；待裁定：`y/n` 人工裁决（**裁决回流规则层**，同类题下次直判）；
+- 答题：`j/k` 移动 · `Space` 选中（多选连按）· `Enter` 提交 · `e` 看讲解 · `n` 下一题；**M3：`1-4` 自评把握（→ Attempt.self_confidence，假对检测输入）；判分浮层显示错因标签 + graded_by（结构化讲解①）**；
+- 待裁定：`y/n` 人工裁决（**裁决回流规则层**，同类题下次直判；M3 落地：verdict=pending 显示「待裁定」行，y=判对/n=判错，resolve 后浮层变 graded_by=human）；
+- 复习翻卡：`Space` 翻面 · `1/2/3/4` = Again/Hard/Good/Easy（FSRS，M4）；
+- 打字：直接输入，`Esc` 结束结算 WPM；
 - 题包：`i` 导入（文件/口令码）· `x` 导出 · `f` 关注更新。
 
 ### 5.4 单机的一天（walkthrough）

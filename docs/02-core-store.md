@@ -73,6 +73,7 @@ LexiconReader{senses/relations/lookup/confusables}（**读词库资源文件**�
 - **提交作答 = 单事务**（attempts+grades+error_tags+arbitration）；srs/gamify/sync/profile 后置旁路（幂等可重放）；全部业务写入经 engine 钩子投影 `sync_log`（**完备变更日志**，14-cloud §1.2 全量恢复的基础）；
 - SQLite WAL + busy_timeout；`export_all_json / import_all_json / export_notes_md / db_backup`（数据所有权）。
 - **迁移版本化（M2 落地）**：`schema_version` 单行表 + 代码内迁移清单 `MIGRATIONS: [(version, SQL)]`（只增不改，应用到最大版本）；枚举列一律 serde `snake_case` 字符串（禁 `format!("{:?}")`）；通用 JSON 负载列（questions.payload、grades.payload）统一命名 `payload`（attempts.answer 是语义列保留原名）；题目内容 = core 具名结构 `QuestionContent{stem, kind, difficulty, tags}`（不是位置元组），provenance/quality_score/lang 独立列。
+- **迁移 v2（M3 落地）**：`arbitration` 待裁定唯一桶（`attempt_id` 主键 + `status(pending|resolved)` + `reason` + 裁决后 `verdict/resolved_at`）——`insert_attempt_tx` 在 `verdict=pending` 时**同事务**写入（§事务含 arbitration）；`list_arbitration(status)` / `resolve_arbitration(attempt_id, verdict)`（同时改 grades：`graded_by=human`）；裁决回流 = `add_blank_acceptable(qid, index, value)`（读改写 questions.payload，同值幂等）。`cache_purge_before(unix)`（llm_cache TTL 淘汰）与 `usage_summary(from_unix, to_unix)`（llm_usage 按 kind 区间聚合，成本面板数据源）同版落地。
 - `quality_score REAL NOT NULL DEFAULT 1.0` 随 questions 表（06 质检回路产物；组卷/导入用 θ 过滤）。
 
 ## 3. 验证点

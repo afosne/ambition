@@ -1,5 +1,15 @@
-//! Ambition grader：三级判题流水线的第一级（规则层，M1）
-//! 设计见 docs/07-grading：①规则 → ②Jev（M3）→ ③LLM/待裁定（M3）。
+//! Ambition grader：三级判题流水线（docs/07-grading）
+//! M1 规则层（本文件纯函数）；M3 落地 `pipeline::Grader`（规则 → Jev → LLM 复核/待裁定桶）
+//! 与 `corpus`（data/jev/error_tags.json 判分语料 + 错因归类口）。
+
+mod corpus;
+mod pipeline;
+
+pub use corpus::{
+    ERROR_TAGS_VERSION, corpus_version, error_cause_question, error_cause_questions,
+    error_criteria, tag_error_cause,
+};
+pub use pipeline::{BlankJudge, Grader, ItemJudge, LLM_JUDGE_CONFIDENCE, MultiJudge, Thresholds};
 
 use ambition_core::{
     ChoiceBody, FillBody, GradeResult, GradedBy, ItemResult, QuestionKind, Verdict, normalize_text,

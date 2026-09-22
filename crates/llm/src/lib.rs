@@ -65,6 +65,8 @@ pub enum LlmKind {
     QuestionGen,
     /// 讲解/范文等自由文本（M3+）
     Explain,
+    /// 第三级 LLM 复核（判断不打分，docs/07 §4，M3）
+    Arbitrate,
 }
 
 impl LlmKind {
@@ -73,6 +75,7 @@ impl LlmKind {
         match self {
             Self::QuestionGen => "question_gen",
             Self::Explain => "explain",
+            Self::Arbitrate => "arbitrate",
         }
     }
 }
@@ -97,6 +100,9 @@ pub enum LlmError {
     QuotaExceeded,
     #[error("offline: no api key configured")]
     Offline,
+    /// 全局熔断：连续失败达阈值后的快速失败（不发请求，docs/05 §1，M3）
+    #[error("circuit breaker open (consecutive failures)")]
+    BreakerOpen,
 }
 
 /// LLM 供给方（OpenAI 兼容 / Anthropic / M7 代管代理）
@@ -117,6 +123,8 @@ pub trait AiLedger: Send + Sync {
     async fn cache_put(&self, cache_key: &str, payload: &str);
     /// 记账（kind = LlmKind::as_str 或 "jev"）
     async fn record_usage(&self, kind: &str, model: &str, tokens_in: i64, tokens_out: i64);
+    /// 成本台账：区间 [from_unix, to_unix) 按 kind 聚合（unix 秒；docs/05 §1，M3）
+    async fn usage_summary(&self, from_unix: i64, to_unix: i64) -> ambition_core::UsageSummary;
 }
 
 #[cfg(test)]
@@ -172,6 +180,12 @@ mod tests {
             debug_assert!(
                 tokens_in >= 0 && tokens_out >= 0 && !kind.is_empty() && !model.is_empty()
             );
+        }
+
+        async fn usage_summary(&self, from_unix: i64, to_unix: i64) -> ambition_core::UsageSummary {
+            // 语义由 MemLedger 测；此处消费参数防占位
+            debug_assert!(from_unix < to_unix);
+            ambition_core::UsageSummary::default()
         }
     }
 
@@ -278,8 +292,33 @@ mod tests {
     fn test_as_str_llm_kind_snake_case_matches_serde() {
         assert_eq!(LlmKind::QuestionGen.as_str(), "question_gen");
         assert_eq!(LlmKind::Explain.as_str(), "explain");
-        let json = serde_json::to_value(LlmKind::QuestionGen).expect("序列化");
-        assert_eq!(json, serde_json::json!("question_gen"), "与 serde 同口径");
+        assert_eq!(LlmKind::Arbitrate.as_str(), "arbitrate");
+        let json = serde_json::to_value(LlmKind::Arbitrate).expect("序列化");
+        assert_eq!(json, serde_json::json!("arbitrate"), "与 serde 同口径");
+    }
+
+    #[tokio::test]
+    async fn test_usage_summary_stub_ledger_returns_empty() {
+        // StubLedger 的 usage_summary 由 MemLedger/StoreLedger 实测；此处钉住 trait 可达
+        let router = LlmRouter::new(
+            Box::new(StubProvider {
+                outputs: std::sync::Mutex::new(vec![]),
+            }),
+            None,
+            Box::new(StubLedger),
+        );
+        let summary = router.usage_summary(0, i64::MAX).await;
+        assert_eq!(summary.rows.len(), 0);
+    }
+
+    #[test]
+    fn test_breaker_open_error_is_non_retryable_signal() {
+        let err = LlmError::BreakerOpen;
+        assert!(err.to_string().contains("breaker"), "{err}");
+        assert!(
+            !matches!(err, LlmError::Offline | LlmError::Http { .. }),
+            "BreakerOpen 独立变体"
+        );
     }
 
     #[test]

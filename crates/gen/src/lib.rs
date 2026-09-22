@@ -2,8 +2,12 @@
 //! 主流程：prompt → llm.structured（JSON Schema 约束草稿）→ 校验（qid=内容哈希）
 //! → qc_question（Jev fan-out 单请求）→ 不合格重生成 ≤2 轮 → 交 engine 入库。
 
+mod chinglish;
 mod qpack;
 
+pub use chinglish::{
+    CHINGLISH_SCHEMA_VERSION, ChinglishItem, builtin_chinglish, drill_questions, parse_chinglish,
+};
 pub use qpack::{
     IMPORT_QUALITY_FLOOR, ImportPlan, Manifest, PackItem, QPACK_SCHEMA_VERSION, QPack, build_qpack,
     parse_qpack, plan_import,
@@ -589,6 +593,8 @@ pub enum GenError {
     InvalidSpec(String),
     #[error("qpack: {0}")]
     Pack(String),
+    #[error("chinglish corpus: {0}")]
+    Chinglish(String),
     #[error("all questions rejected after {rounds} regeneration round(s)")]
     AllRejected { rounds: u32 },
 }

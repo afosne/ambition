@@ -37,6 +37,7 @@ dependencies = [
  "ambition-jev",
  "ambition-llm",
  "ambition-store",
+ "async-trait",
  "serde_json",
  "sqlx",
  "thiserror",
@@ -72,6 +73,13 @@ name = "ambition-grader"
 version = "0.1.0"
 dependencies = [
  "ambition-core",
+ "ambition-jev",
+ "ambition-llm",
+ "async-trait",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wiremock",
 ]
 
 [[package]]
@@ -79,6 +87,7 @@ name = "ambition-jev"
 version = "0.1.0"
 dependencies = [
  "ambition-llm",
+ "futures",
  "reqwest",
  "serde",
  "serde_json",

@@ -1,5 +1,6 @@
 //! Ambition jev：TypeSafe System One（Jev）HTTP 客户端（docs/05 §2）
-//! M2 落地 `evaluate`（供 06 质检回路 fan-out）；evaluate_many 并发池 / 置信度路由随 M3。
+//! M2 落地 `evaluate`（供 06 质检回路 fan-out）；M3 落地 `evaluate_many`（并发池 8、保序、单题失败不中断）
+//! 与 `route_by_confidence` 置信度路由（0.75/0.35，非英语阈值由调用方传入）。
 //! wire 契约（docs.typesafe.ai/api，2026-09-23 取证）：
 //!   POST {base}/systemone  body {state, model, questions:{id:{type,instructions,criteria}}}
 //!   resp {model, answers:{id:{type, noul|choice|score}}, usage:{input_tokens,output_tokens}}
@@ -20,6 +21,50 @@ pub const JEV_RETRY_LIMIT: u32 = 3;
 pub const JEV_BACKOFF_MS: u64 = 200;
 /// 单请求超时（docs/05：15s）
 pub const JEV_TIMEOUT_SECS: u64 = 15;
+/// fan-out 并发池上限（docs/05 §2：并发池 8，M3）
+pub const JEV_CONCURRENCY: usize = 8;
+
+/// fan-out 作业：一次作答一单（state + 判断集，M3）
+#[derive(Debug, Clone)]
+pub struct JevJob {
+    pub state: JevState,
+    pub questions: JevQuestions,
+}
+
+/// 路由决策（docs/05 §2：阈值两端采信、灰区升级复核，M3）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Route {
+    /// 高置信：采信判断（Noul 采信「是」）
+    AutoAccept,
+    /// 低置信：不采信该判断（Noul 采信「否」——确定性否定）
+    AutoReject,
+    /// 灰区：升级 LLM 粗判（只出判断不打分）
+    LlmReview,
+    /// LLM 复核不可用时的人工裁决（由 07 降级填入，不直接由阈值产生）
+    HumanReview,
+}
+
+/// 阈值路由（纯 margin 版；`route_by_confidence` 的底座，grader 按裸 margin 复用）
+pub fn route_from_margin(margin: f32, accept: f32, reject: f32) -> Route {
+    if margin >= accept {
+        Route::AutoAccept
+    } else if margin <= reject {
+        Route::AutoReject
+    } else {
+        Route::LlmReview
+    }
+}
+
+/// 置信度路由（docs/05 §2：margin ≥ accept → AutoAccept；margin ≤ reject → AutoReject；灰区 → LlmReview）
+/// Noul 的 margin = yes_prob（有向）；Choice/Score 的 margin = confidence。
+pub fn route_by_confidence(ans: &JevAnswer, accept: f32, reject: f32) -> Route {
+    let margin = match ans {
+        JevAnswer::Noul { yes_prob } => *yes_prob as f32,
+        JevAnswer::Choice { confidence, .. } => *confidence as f32,
+        JevAnswer::Score { confidence, .. } => *confidence as f32,
+    };
+    route_from_margin(margin, accept, reject)
+}
 
 /// Jev 状态（只放 l2 文本；母语/中文永不进 state，docs/05 §3.5）
 #[derive(Debug, Clone)]
@@ -292,6 +337,16 @@ impl JevClient {
             status: 502,
             retryable: true,
         }))
+    }
+
+    /// 批量 fan-out（并发池 `JEV_CONCURRENCY`=8、**保序**、单题失败不中断，docs/05 §2，M3）
+    pub async fn evaluate_many(&self, jobs: Vec<JevJob>) -> Vec<Result<JevAnswers, JevError>> {
+        use futures::StreamExt as _;
+        futures::stream::iter(jobs)
+            .map(|job| async move { self.evaluate(job.state, &job.questions).await })
+            .buffered(JEV_CONCURRENCY)
+            .collect()
+            .await
     }
 
     /// 记账（旁路：失败只升级为返回值里的信号——evaluate 成功路径不因它失败）
@@ -688,5 +743,170 @@ mod tests {
     fn test_model_reports_configured_identifier() {
         let client = JevClient::with_options("http://localhost:9", "jev-x", None, None);
         assert_eq!(client.model(), "jev-x");
+    }
+
+    fn fanout_job(marker: &str) -> JevJob {
+        JevJob {
+            state: JevState(serde_json::json!({ "stem": marker })),
+            questions: sample_questions(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_many_isolates_failure_and_preserves_order() {
+        let server = MockServer::start().await;
+        // job-a → 422（不可重试，快速失败）；job-b → 200
+        Mock::given(method("POST"))
+            .and(path("/v1/systemone"))
+            .and(body_string_contains("job-a"))
+            .respond_with(ResponseTemplate::new(422))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/systemone"))
+            .and(body_string_contains("job-b"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(ok_body()))
+            .mount(&server)
+            .await;
+
+        let client = JevClient::with_options(
+            &format!("{}/v1", server.uri()),
+            DEFAULT_JEV_MODEL,
+            Some("k".into()),
+            None,
+        );
+        let results = client
+            .evaluate_many(vec![fanout_job("job-a"), fanout_job("job-b")])
+            .await;
+        assert_eq!(results.len(), 2, "单题失败不中断，槽数不变");
+        assert!(
+            matches!(
+                &results[0],
+                Err(JevError::Http {
+                    status: 422,
+                    retryable: false
+                })
+            ),
+            "槽位 0 = 失败且保序: {:?}",
+            results[0]
+        );
+        assert!(
+            results[1].as_ref().is_ok_and(|a| a.len() == 3),
+            "槽位 1 = 成功（失败不拖垮邻槽）"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_many_handles_batch_beyond_pool_capacity() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/systemone"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(ok_body()))
+            .mount(&server)
+            .await;
+        let client = JevClient::with_options(
+            &format!("{}/v1", server.uri()),
+            DEFAULT_JEV_MODEL,
+            Some("k".into()),
+            None,
+        );
+        let jobs: Vec<JevJob> = (0..JEV_CONCURRENCY * 2 + 2)
+            .map(|i| fanout_job(&format!("pool-{i}")))
+            .collect();
+        let results = client.evaluate_many(jobs).await;
+        assert_eq!(results.len(), JEV_CONCURRENCY * 2 + 2, "全量完成");
+        assert!(results.iter().all(Result::is_ok), "超额批次全成功");
+        assert_eq!(JEV_CONCURRENCY, 8, "docs/05 §2：并发池 8");
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_many_keyless_reports_offline_per_slot() {
+        let client = JevClient::with_options("http://localhost:9", DEFAULT_JEV_MODEL, None, None);
+        let results = client.evaluate_many(vec![fanout_job("x")]).await;
+        assert!(
+            matches!(results[0], Err(JevError::Offline)),
+            "无 key 每槽显式 Offline 不静默"
+        );
+    }
+
+    #[test]
+    fn test_route_from_margin_orders_three_bands() {
+        assert_eq!(route_from_margin(0.75, 0.75, 0.35), Route::AutoAccept);
+        assert_eq!(route_from_margin(0.74, 0.75, 0.35), Route::LlmReview);
+        assert_eq!(route_from_margin(0.35, 0.75, 0.35), Route::AutoReject);
+        assert_eq!(route_from_margin(0.36, 0.75, 0.35), Route::LlmReview);
+        assert_eq!(route_from_margin(0.0, 0.75, 0.35), Route::AutoReject);
+        assert_eq!(route_from_margin(1.0, 0.75, 0.35), Route::AutoAccept);
+        // 退化阈值（reject ≥ accept）仍不 panic：先判 accept
+        assert_eq!(route_from_margin(0.5, 0.5, 0.5), Route::AutoAccept);
+    }
+
+    #[test]
+    fn test_route_by_confidence_boundary_table() {
+        let noul = |p: f64| JevAnswer::Noul { yes_prob: p };
+        let choice = |c: f64| JevAnswer::Choice {
+            choice: "x".into(),
+            probabilities: BTreeMap::new(),
+            confidence: c,
+        };
+        let score = |c: f64| JevAnswer::Score {
+            score: 1.0,
+            confidence: c,
+        };
+        let (accept, reject) = (0.75, 0.35); // 英语默认阈值
+        // 边界（=阈值）表驱动：两端闭区间采信
+        let table: Vec<(JevAnswer, Route)> = vec![
+            (noul(0.75), Route::AutoAccept),
+            (noul(0.749), Route::LlmReview),
+            (noul(0.5), Route::LlmReview),
+            (noul(0.351), Route::LlmReview),
+            (noul(0.35), Route::AutoReject),
+            (choice(0.9), Route::AutoAccept),
+            (choice(0.75), Route::AutoAccept),
+            (choice(0.5), Route::LlmReview),
+            (choice(0.35), Route::AutoReject),
+            (score(0.8), Route::AutoAccept),
+            (score(0.1), Route::AutoReject),
+            (score(0.4), Route::LlmReview),
+        ];
+        for (ans, expected) in &table {
+            assert_eq!(
+                route_by_confidence(ans, accept, reject),
+                *expected,
+                "路由不符: {ans:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_route_by_confidence_switches_to_non_english_thresholds() {
+        // docs/05 §3：其它语种 0.85/0.20（更保守：更多灰区进复核）
+        let (accept, reject) = (0.85, 0.20);
+        let p80 = JevAnswer::Noul { yes_prob: 0.80 };
+        assert_eq!(
+            route_by_confidence(&p80, accept, reject),
+            Route::LlmReview,
+            "en 下 0.80 自动接受，其它语种进灰区"
+        );
+        assert_eq!(
+            route_by_confidence(&p80, 0.75, 0.35),
+            Route::AutoAccept,
+            "英语阈值同输入不同结论"
+        );
+        assert_eq!(
+            route_by_confidence(&JevAnswer::Noul { yes_prob: 0.85 }, accept, reject),
+            Route::AutoAccept,
+            "=0.85 边界采信"
+        );
+        assert_eq!(
+            route_by_confidence(&JevAnswer::Noul { yes_prob: 0.20 }, accept, reject),
+            Route::AutoReject,
+            "=0.20 边界拒绝"
+        );
+        assert_eq!(
+            route_by_confidence(&JevAnswer::Noul { yes_prob: 0.21 }, accept, reject),
+            Route::LlmReview,
+            "0.21 进灰区"
+        );
     }
 }

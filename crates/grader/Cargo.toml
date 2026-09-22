@@ -5,3 +5,12 @@ edition.workspace = true
 
 [dependencies]
 ambition-core = { path = "../core" }
+ambition-jev = { path = "../jev" }
+ambition-llm = { path = "../llm" }
+serde_json = "1"
+tracing = "0.1"
+
+[dev-dependencies]
+async-trait = "0.1"
+tokio = { version = "1", features = ["macros", "rt", "time"] }
+wiremock = "0.6"

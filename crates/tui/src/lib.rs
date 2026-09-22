@@ -1,5 +1,6 @@
 //! Ambition TUI：壳层状态机（纯 update + 渲染，设计见 docs/03-engine-ui §3）
 //! M2：填空输入行 · 判分错误独立展示（≠ Pending，P-8/改进 #6）· 提交计时（假对检测输入）
+//! M3：待裁定 y/n 裁决回路 · 判分浮层错因标签（结构化讲解①）· 1-4 自评把握（改进 #10）
 
 use std::time::Instant;
 
@@ -33,6 +34,8 @@ pub struct AppState {
     pub started_at: Instant,
     /// 修订次数（光标移动/输入删改，Timing.revision_count）
     pub revisions: u32,
+    /// 自评把握 1-4（提交前键入 → Attempt.self_confidence，假对检测输入，改进 #10）
+    pub self_confidence: Option<u8>,
 }
 
 /// 输入消息
@@ -47,6 +50,10 @@ pub enum Msg {
     Char(char),
     /// 填空输入行退格
     Backspace,
+    /// 人工裁决（待裁定态：y=判对 / n=判错）
+    Arbitrate(bool),
+    /// 自评把握 1-4
+    Confidence(u8),
 }
 
 /// 状态机输出（Quit/Submit 由 main 执行副作用）
@@ -55,6 +62,8 @@ pub enum Cmd {
     None,
     Quit,
     Submit(Answer),
+    /// 人工裁决（main 调 engine.resolve_pending）
+    Arbitrate(bool),
 }
 
 /// 构造初始状态（空题库直接 finished）
@@ -71,6 +80,7 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         error: None,
         started_at: Instant::now(),
         revisions: 0,
+        self_confidence: None,
     }
 }
 
@@ -101,6 +111,12 @@ pub fn key_to_msg(fill_mode: bool, code: KeyCode) -> Option<Msg> {
         KeyCode::Char('q') => Some(Msg::Quit),
         KeyCode::Char('j') | KeyCode::Down => Some(Msg::MoveDown),
         KeyCode::Char('k') | KeyCode::Up => Some(Msg::MoveUp),
+        // 待裁定裁决与自评把握（仅非输入态；docs/03 §5.3）
+        KeyCode::Char('y') => Some(Msg::Arbitrate(true)),
+        KeyCode::Char('n') => Some(Msg::Arbitrate(false)),
+        KeyCode::Char(c) if ('1'..='4').contains(&c) => {
+            Some(Msg::Confidence(c.to_digit(10).unwrap_or(1) as u8))
+        }
         _ => None,
     }
 }
@@ -126,6 +142,23 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
         Msg::Backspace => {
             if state.is_fill_input() && state.input.pop().is_some() {
                 state.revisions += 1;
+            }
+            Cmd::None
+        }
+        Msg::Arbitrate(accept) => {
+            // 仅待裁定态响应裁决键；其余状态忽略（防误触）
+            if state
+                .grade
+                .as_ref()
+                .is_some_and(|g| g.verdict == ambition_core::Verdict::Pending)
+            {
+                return Cmd::Arbitrate(accept);
+            }
+            Cmd::None
+        }
+        Msg::Confidence(level) => {
+            if state.grade.is_none() && !state.is_fill_input() {
+                state.self_confidence = Some(level.clamp(1, 4));
             }
             Cmd::None
         }
@@ -194,6 +227,7 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             state.sel = 0;
             state.input.clear();
             state.revisions = 0;
+            state.self_confidence = None;
             state.started_at = Instant::now();
             if state.idx + 1 >= state.questions.len() {
                 state.finished = true;
@@ -276,6 +310,11 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         if matches!(q.kind, QuestionKind::FillBlank(_)) && state.grade.is_none() {
             text.push_str(&format!("\n  答案: {}▍\n", state.input));
             text.push_str("  多空用 ; 分隔 · Enter 提交 · Esc 退出\n");
+        } else if state.grade.is_none() {
+            text.push_str("\n j/k 移动 · Enter 提交/下一题 · 1-4 自评把握 · q 退出\n");
+            if let Some(level) = state.self_confidence {
+                text.push_str(&format!(" 自评把握: {level}/4\n"));
+            }
         } else {
             text.push_str("\n j/k 移动 · Enter 提交/下一题 · q 退出\n");
         }
@@ -292,6 +331,18 @@ pub fn render(frame: &mut Frame, state: &AppState) {
                 ambition_core::Verdict::Acceptable => "≈",
             };
             text.push_str(&format!("\n {} 得分 {}/{}", icon, grade.score, grade.max));
+            if grade.graded_by == ambition_core::GradedBy::Human {
+                text.push_str(" · 人工裁决");
+            }
+            // 结构化讲解①：错因标签（中文展示名）
+            if !grade.error_tags.is_empty() {
+                let labels: Vec<&str> = grade.error_tags.iter().map(|tag| tag.label_zh()).collect();
+                text.push_str(&format!(
+                    "\n 错因: {}（置信 {:.2}）",
+                    labels.join("、"),
+                    grade.confidence
+                ));
+            }
             if matches!(q.kind, QuestionKind::FillBlank(_)) {
                 let sets = fill_answers(&q.kind);
                 let answers: Vec<&str> = sets
@@ -299,6 +350,9 @@ pub fn render(frame: &mut Frame, state: &AppState) {
                     .map(|set| set.first().map(String::as_str).unwrap_or(""))
                     .collect();
                 text.push_str(&format!("\n 正确答案: {}", answers.join(" ; ")));
+            }
+            if grade.verdict == ambition_core::Verdict::Pending {
+                text.push_str("\n ⏳ 待裁定：y 判对 / n 判错（裁决回流规则层）\n");
             }
         }
     }
@@ -642,5 +696,121 @@ mod tests {
         let fbuf = render_to(&f);
         assert!(fbuf.contains("答案:"), "输入行标签可见");
         assert!(fbuf.contains("am"), "输入内容可见");
+    }
+
+    #[test]
+    fn test_key_to_msg_arbitration_and_confidence_keys() {
+        use Msg::*;
+        assert_eq!(
+            key_to_msg(false, KeyCode::Char('y')),
+            Some(Arbitrate(true)),
+            "y = 判对"
+        );
+        assert_eq!(
+            key_to_msg(false, KeyCode::Char('n')),
+            Some(Arbitrate(false)),
+            "n = 判错"
+        );
+        for level in 1..=4 {
+            assert_eq!(
+                key_to_msg(false, KeyCode::Char(char::from(b'0' + level))),
+                Some(Confidence(level)),
+                "{level} 档自评"
+            );
+        }
+        assert_eq!(key_to_msg(false, KeyCode::Char('5')), None, "5 档不存在");
+        // 填空输入态：y/n/数字仍是输入字符（裁决/自评只在选择态）
+        assert_eq!(key_to_msg(true, KeyCode::Char('y')), Some(Char('y')));
+        assert_eq!(key_to_msg(true, KeyCode::Char('1')), Some(Char('1')));
+    }
+
+    #[test]
+    fn test_update_arbitrate_only_fires_on_pending_grade() {
+        let mut s = new_state(vec![sample_question()]);
+        // 未判分：裁决键无效
+        assert_eq!(update(&mut s, Msg::Arbitrate(true)), Cmd::None);
+        // 非 Pending 判分：忽略
+        apply_grade(&mut s, grade(Verdict::Correct));
+        assert_eq!(
+            update(&mut s, Msg::Arbitrate(false)),
+            Cmd::None,
+            "已定判不裁决"
+        );
+        // Pending：转出裁决命令
+        apply_grade(&mut s, grade(Verdict::Pending));
+        assert_eq!(update(&mut s, Msg::Arbitrate(true)), Cmd::Arbitrate(true));
+        assert_eq!(update(&mut s, Msg::Arbitrate(false)), Cmd::Arbitrate(false));
+    }
+
+    #[test]
+    fn test_update_confidence_records_pre_submit_and_resets_on_next() {
+        let mut s = new_state(vec![sample_question()]);
+        assert_eq!(update(&mut s, Msg::Confidence(3)), Cmd::None);
+        assert_eq!(
+            s.self_confidence,
+            Some(3),
+            "自评落状态（→ Attempt.self_confidence）"
+        );
+        update(&mut s, Msg::Confidence(9));
+        assert_eq!(s.self_confidence, Some(4), "越界钳到 4");
+        update(&mut s, Msg::Confidence(0));
+        assert_eq!(s.self_confidence, Some(1), "越界钳到 1");
+        // 判分后不再改（防误触）
+        apply_grade(&mut s, grade(Verdict::Wrong));
+        update(&mut s, Msg::Confidence(2));
+        assert_eq!(s.self_confidence, Some(1), "判分后锁定");
+        // 下一题重置
+        update(&mut s, Msg::Next);
+        assert_eq!(s.self_confidence, None, "新题重新自评");
+        // 填空输入态不吞自评（键位层已路由为字符，状态机双保险）
+        let mut fill = new_state(vec![fill_question(1)]);
+        update(&mut fill, Msg::Confidence(2));
+        assert_eq!(fill.self_confidence, None, "填空输入态不自评");
+    }
+
+    #[test]
+    fn test_render_shows_pending_arbitration_and_error_tags() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        fn render_to(s: &AppState) -> String {
+            use unicode_width::UnicodeWidthStr;
+            let mut terminal = Terminal::new(TestBackend::new(76, 24)).expect("terminal");
+            terminal.draw(|f| render(f, s)).expect("draw");
+            let cells = &terminal.backend().buffer().content;
+            let mut out = String::new();
+            let mut i = 0;
+            while i < cells.len() {
+                let sym = cells[i].symbol();
+                out.push_str(sym);
+                i += 1 + usize::from(sym.width() == 2);
+            }
+            out
+        }
+
+        let mut s = new_state(vec![sample_question()]);
+        // 自评提示与档位
+        let hint = render_to(&s);
+        assert!(hint.contains("自评把握"), "自评入口可见: {hint:?}");
+        update(&mut s, Msg::Confidence(3));
+        let hinted = render_to(&s);
+        assert!(hinted.contains("3/4"), "档位可见: {hinted:?}");
+        // 待裁定：y/n 裁决提示 + 错因标签 + 人工裁决标记
+        let mut pending = grade(Verdict::Pending);
+        pending.error_tags = vec![ambition_core::ErrorTag::Collocation];
+        pending.confidence = 0.42;
+        apply_grade(&mut s, pending);
+        let buf = render_to(&s);
+        assert!(buf.contains("待裁定"), "待裁定行可见: {buf:?}");
+        assert!(buf.contains("y 判对"), "裁决键提示: {buf:?}");
+        assert!(buf.contains("错因: 搭配"), "错因中文标签: {buf:?}");
+        assert!(buf.contains("0.42"), "结构化讲解含概率: {buf:?}");
+        // 人工裁决标记
+        let mut human = grade(Verdict::Correct);
+        human.graded_by = ambition_core::GradedBy::Human;
+        apply_grade(&mut s, human);
+        let human_buf = render_to(&s);
+        assert!(human_buf.contains("人工裁决"), "裁决后可见: {human_buf:?}");
+        assert!(!human_buf.contains("待裁定"), "已裁决不显示待裁定行");
     }
 }

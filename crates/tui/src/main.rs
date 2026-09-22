@@ -33,6 +33,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let questions = engine.start_practice(0).await?;
     let mut state = new_state(questions);
     let mut attempt_seq = 0i64;
+    // 待裁定上下文：最近一次提交的 attempt id（y/n 裁决用，M3）
+    let mut last_attempt_id: Option<String> = None;
 
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -61,18 +63,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
             Cmd::Quit => break,
             Cmd::Submit(answer) => {
                 attempt_seq += 1;
+                let attempt_id = format!("tui-{attempt_seq}");
                 let attempt = Attempt {
-                    attempt_id: format!("tui-{attempt_seq}"),
+                    attempt_id: attempt_id.clone(),
                     qid: state.questions[state.idx].qid.clone(),
                     answer,
                     timing: Some(state.timing()),
-                    self_confidence: None,
+                    self_confidence: state.self_confidence,
                     mode: AttemptMode::Practice,
                 };
                 match engine.submit_answer(&attempt).await {
-                    Ok(outcome) => apply_grade(&mut state, outcome.grade),
+                    Ok(outcome) => {
+                        last_attempt_id = Some(attempt_id);
+                        apply_grade(&mut state, outcome.grade);
+                    }
                     // 失败 = 独立错误行，绝不伪造 Pending 判分（P-8 / 改进 #6）
                     Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::Arbitrate(accept) => {
+                // 人工裁决：grades 改判 + 填空回流 + 游戏旁路结算（engine.resolve_pending）
+                if let Some(attempt_id) = last_attempt_id.clone() {
+                    match engine.resolve_pending(&attempt_id, accept).await {
+                        Ok(grade) => apply_grade(&mut state, grade),
+                        Err(err) => apply_error(&mut state, err.to_string()),
+                    }
                 }
             }
             Cmd::None => {}

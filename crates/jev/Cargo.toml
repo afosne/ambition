@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 ambition-llm = { path = "../llm" }
+futures = "0.3"
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

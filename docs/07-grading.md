@@ -1,14 +1,15 @@
 # 07 · grading — 三级判题流水线（M3；M1 先落规则层）
 
-> 实现顺序：**M1（规则层）→ M3（Jev/LLM 全流水线）**。并入来源：旧 `05-grader`。
+> 实现顺序：**M1（规则层）→ M3（Jev/LLM 全流水线，已落地：三级 grade、待裁定桶、错因分类、中式英语错式库）**。并入来源：旧 `05-grader`。
 > 判分唯一实现（00-overview §5）：06/10/13/15/18 的一切"判断对错"都调本册。LLM 不打分。
 
 ## 1. 总控与路由
 
 ```rust
-pub struct Grader { jev: Arc<JevClient>, llm: Arc<LlmRouter>, rules: RuleSet, thresholds: Thresholds }
-pub async fn grade(&self, q: &Question, a: &Answer, ctx: &GradeCtx) -> GradeResult;
-// ①规则命中→完；②Jev（confidence≥θ）→完+错因；③LLM 粗判（只出判断）或进 arbitration 待裁定（唯一桶）
+pub struct Thresholds { pub accept: f32, pub reject: f32 }          // M3：for_lang(en)=0.75/0.35；其它=0.85/0.20（docs/05 §3）
+pub struct Grader { jev: Option<Arc<JevClient>>, llm: Option<Arc<LlmRouter>>, thresholds: Thresholds }  // AI 全可空 = 离线形态
+pub async fn grade(&self, q: &Question, answer: &Answer) -> GradeResult;   // 永不 Err：离线/网络失败 → Pending 进桶（tracing 可见）
+// ①规则命中→完；②Jev（margin≥θ）→完+错因；③LLM 粗判（只出判断）或进 arbitration 待裁定（唯一桶）
 ```
 
 | Kind | ①规则 | ②Jev | ③兜底 |
@@ -33,18 +34,20 @@ normalize_for_compare(s)   // core::normalize_text + 按 track 可选忽略冠�
 ## 3. Jev 升级（单请求 fan-out 多判断）
 
 ```rust
-pub async fn jev_blank(&self, q, blank, typed) -> Result<BlankJudge>;      // acceptable(noul)+error_cause(choice)+severity(score)
-pub async fn jev_multi_items(&self, q, sel) -> Result<Vec<ItemResult>>;    // 逐项 noul 部分分
-pub async fn jev_composite(&self, state, dims: &[RubricDim]) -> Result<CompositeJudge>;  // 每维 score + veto×3（off_topic/meaning_changed/heavy_chinglish 一票降档）
-pub fn compose_scores(dims: &[DimScore], weights, band_map) -> f32;        // 加权→档位（rubric 版本化）
-pub async fn tag_error_cause(&self, q, a, judge) -> Vec<Tagged>;           // 唯一错因归类口（48 溯源消费）
+pub async fn jev_blank(&self, q, blank, typed) -> Result<BlankJudge>;    // acceptable(noul)+error_cause(choice)（M3 落地；severity 展示随讲解层 GradeDetail）
+pub async fn jev_multi_items(&self, q, sel) -> Result<MultiJudge>;    // 逐项 noul 部分分（M3：只判漏选项 answer\sel；MultiJudge{items: Vec<ItemJudge{index, belongs, margin}>, error_tags}；无 Jev → Offline）
+pub async fn jev_composite(&self, state, dims: &[RubricDim]) -> Result<CompositeJudge>;  // M5：每维 score + veto×3
+pub fn compose_scores(dims: &[DimScore], weights, band_map) -> f32;   // M5：加权→档位（rubric 版本化）
+pub fn tag_error_cause(answers: &JevAnswers) -> Vec<ErrorTag>;        // 唯一错因归类口（M3：error_cause choice → ErrorTag；未知 key tracing::warn 跳过）
 ```
 
 ## 4. 第三级：LLM 复核与待裁定桶
 
 ```rust
-pub async fn llm_arbitrate(&self, q, a) -> Result<Arbitration>;            // acceptable+error_tag+brief_reason（判断，不打分）
-// 仍不定夺/离线 → arbitration 表（唯一桶）；人工裁决 resolve → 可接受答案回流 Blank.acceptable → 同类题规则直判（规则增强闭环）
+pub async fn llm_arbitrate(&self, q, a) -> Result<Arbitration>;            // acceptable+error_tag+brief_reason（判断，不打分，M3 落地：LlmKind::Arbitrate）
+// 仍不定夺/离线 → arbitration 表（唯一桶，store 迁移 v2）；人工裁决 resolve → grades 更新（graded_by=human）
+//   + 填空题 typed 答案回流 Blank.acceptable（add_blank_acceptable）→ 同类题规则直判（规则增强闭环）
+// engine 门面（M3 落地）：pending_bucket() / resolve_pending(attempt_id, accept)
 ```
 
 ## 5. 判题后讲解（Jev 结果 → 三层讲解输出）
@@ -66,12 +69,13 @@ pub async fn llm_arbitrate(&self, q, a) -> Result<Arbitration>;            // ac
 
 | 情况 | 行为 |
 |---|---|
-| Jev 离线 | 客观题规则结果+low_confidence；主观题 Pending |
-| LLM 离线 | 无复核/讲解（直接展示 Jev 结果） |
-| 全离线 | 本地题库+规则判题（M1 形态），UI 明示 |
+| Jev 离线 | 规则可判（单选/全对全错/填空全对或错）→ 规则结果（graded_by=rule，无错因标签）；规则不可判（多选漏选）→ 第三级：有 LLM key 则粗判（graded_by=llm_review），否则 Pending 进 arbitration 桶（confidence=0 标低置信，人工 y/n 可裁决）；Jev 请求**中途失败**（非 key 缺席的网络错）= Jev 离线 → 保持当前已得判定（规则结果/已判项），warn 可见 |
+| LLM 离线 | 无复核（route=LlmReview 直接降级 HumanReview 进桶）；讲解不生成 |
+| 全离线 | 本地题库+规则判题（M1 形态）+ 待裁定人工裁决（零 key 可用，docs/03 §5.2） |
 
 ## 7. 验证点
 
-- [ ] 每 Kind 三路径集成测试（fake AI）；composite 加权/档位边界（高考 25 分档/雅思 band）；veto 降档；
-- [ ] 裁决回流 → 二次作答规则直判闭环；离线矩阵逐格；错因归类概率阈值测试；
-- [ ] **无 LLM key 时结构化讲解完整**（错因+概率分布+规则 diff）；explain 的 prompt payload 含 Jev 错因标签（断言）。
+- [x] M1 三题型三路径（fake/wiremock AI）；route 灰区 → Pending；离线矩阵（Jev 无 key / LLM 无 key / 全离线）；错因归类概率阈值测试；
+- [x] 裁决回流 → 二次作答规则直判闭环（M3）；
+- [ ] composite 加权/档位边界（高考 25 分档/雅思 band）；veto 降档（M5）；
+- [ ] **无 LLM key 时结构化讲解完整**（错因+概率分布+规则 diff）；explain 的 prompt payload 含 Jev 错因标签（断言）（随讲解层，06::explain）。
