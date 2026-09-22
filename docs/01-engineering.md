@@ -44,7 +44,7 @@
 - 回滚：判分事故优先回退 rubric version；迁移事故走全量导出/幂等导入；密钥泄漏走 keychain 轮换 + audit；
 - onboarding 顺序：00-overview → 本册 → 对应功能分册；
 - **进度与雷点**（skill `ambition-pitfall-log` 强制）：完成一个部分 → `PROGRESS.md`（进度日志 + 四段代码评估：质量/实际使用/耦合度/鲁棒性 + 改进建议）；遇坑 → `PITFALLS.md`（五要素，开工前必读，同根因更新不新开）；
-- **定时施工任务**：`scripts/continue_mvp.sh`（Windows 任务 AmbitionMVP，每 15 分钟）读 `MVP_STAGE` 唤起 pi 逐阶段推进到 M6，阶段内连跑下一阶段；`task_lock.sh` 互斥（已有任务则等待）。
+- **定时施工任务**：`scripts/continue_mvp.sh`（Windows 任务 AmbitionMVP，每 15 分钟）读 `MVP_STAGE` 唤起 pi 逐阶段推进到 M6，阶段内连跑下一阶段；`task_lock.sh` 互斥（已有任务则等待）；**停用/删除**：`scripts/uninstall_task.sh`（或双击 `.cmd`；`AMBI_DRY_RUN=1` 可演练）。
 
 ## 5. 检查清单（评审）
 
