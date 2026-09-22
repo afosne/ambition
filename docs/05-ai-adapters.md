@@ -1,6 +1,6 @@
 # 05 · ai-adapters — LLM + Jev 适配层（M2 / M3）
 
-> 实现顺序：**M2（LLM）/ M3（Jev）**。并入来源：旧 `03-llm` + `04-jev`。
+> 实现顺序：**M2（LLM 全量 + Jev 最小 `evaluate`，供 06 质检回路）/ M3（Jev 全量：fan-out 并发池、置信度路由、错因分类）**。并入来源：旧 `03-llm` + `04-jev`。
 > 外部 AI 的唯一出口：回包只经本层 → 被 06/07/10/11/15/18 消费 → engine 落库（00-overview §2 红线）。
 
 ## 1. LLM（OpenAI / Anthropic 协议 + 代管代理）
@@ -20,8 +20,9 @@ impl LlmRouter {
 }
 pub enum LlmError { Http{status, retryable}, InvalidOutput{attempts}, QuotaExceeded, Offline }
 ```
-- prompt 模板 `data/prompts/<kind>.md`（`{{l2}}/{{l1}}` 占位，用户目录可覆盖）；判分内容字段必须 l2 原文；
-- `llm_cache` key=hash(content+kind+params)（素材/讲解/范文共用，00-overview S7）；`llm_usage` 记账。
+- prompt 模板 `data/prompts/<kind>.md`（`{{l2}}/{{l1}}` 占位，M2 内嵌默认 + data/ 目录可覆盖，用户目录覆盖随 16-config）；判分内容字段必须 l2 原文；
+- `llm_cache` key=hash(content+kind+params)（素材/讲解/范文共用，00-overview S7）；`llm_usage` 记账——两表由 store 提供读写函数，**trait `AiLedger` 定义在 llm，SQLite 实现经 engine 装配**（保持 05 不依赖 store 的方向）。
+- **M2 落地范围**：`OpenAiCompat`/`Anthropic` 两实现 + `LlmRouter::structured/text` + wiremock 双协议契约测试；`usage_summary` 成本面板与 `ProxyLlm` 随 M3/M7（记账 M2 先落 `llm_usage` 行）。
 
 ## 2. Jev（TypeSafe System One：choice/score/noul）
 
@@ -33,9 +34,14 @@ pub enum JevAnswer { Choice(ChoiceAnswer{choice, probabilities, confidence}),
                      Score(ScoreAnswer{score, probabilities, confidence}), Noul(NoulAnswer{yes_prob}) }
 impl JevClient {
     pub async fn evaluate(&self, state: JevState, qs: JevQuestions) -> Result<JevAnswers>;  // POST /v1/systemone，model=jev-latest
-    pub async fn evaluate_many(&self, jobs: Vec<…>) -> Vec<Result<JevAnswers>>;             // 并发池 8，单题失败不中断
+    pub async fn evaluate_many(&self, jobs: Vec<…>) -> Vec<Result<JevAnswers>>;             // M3：并发池 8，单题失败不中断
 }
-// 重试：429/5xx 指数退避 ≤3；超时 15s；记 llm_usage(kind=jev)
+// 重试：429/529/5xx 指数退避 ≤3；超时 15s；记 llm_usage(kind=jev)
+// wire 契约（docs.typesafe.ai/api，M2 取证）：请求 {state, model, questions:{id:{type, instructions, criteria}}}；
+//   criteria：choice=map<opt,desc>、score=有序 levels 数组（2–10 档）、noul={"true","false"} 描述；
+//   响应 {model, answers:{id:{type, noul | choice+probabilities+confidence | score+legend+probabilities+confidence}}, usage}；
+//   错误：401 key 无效 / 422 body 校验失败 / 429 限流 / 529 过载。
+// M2 落地范围：`JevClient::evaluate`（重试+超时）供 06::qc；evaluate_many/route_by_confidence 属 M3。
 
 pub enum Route { AutoAccept, AutoReject, LlmReview, HumanReview }
 pub fn route_by_confidence(ans: &JevAnswer, accept: f32, reject: f32) -> Route;   // 默认 0.75/0.35；noul 用 yes_prob 边际

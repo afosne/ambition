@@ -2,6 +2,9 @@
 resolver = "2"
 members = [
   "crates/core",
+  "crates/llm",
+  "crates/jev",
+  "crates/gen",
   "crates/typing",
   "crates/gamify",
   "crates/grader",

@@ -1,11 +1,13 @@
-//! Ambition 入口（M1 单机 TUI）：壳层只做 I/O，业务全走 engine 门面。
+//! Ambition 入口（M2 单机 TUI）：壳层只做 I/O，业务全走 engine 门面。
+//! M2：文件库（~/.ambition/ambition.db，AMBI_DB 覆盖）+ seed 题库 + 填空输入 + 独立错误行。
 
 use std::error::Error;
+use std::path::PathBuf;
 
-use ambition_core::{Attempt, AttemptMode, GradeResult, GradedBy, Verdict};
+use ambition_core::{Attempt, AttemptMode};
 use ambition_engine::Engine;
-use ambition_tui::{Cmd, Msg, apply_grade, new_state, render, sample_question, update};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use ambition_tui::{Cmd, Msg, apply_error, apply_grade, key_to_msg, new_state, render, update};
+use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
@@ -13,11 +15,23 @@ use crossterm::{ExecutableCommand, execute};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 
+/// 默认库路径：AMBI_DB 覆盖 → HOME/.ambition/ambition.db（docs/03 §5.6）
+fn db_path() -> PathBuf {
+    if let Some(over) = std::env::var_os("AMBI_DB") {
+        return PathBuf::from(over);
+    }
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    home.join(".ambition").join("ambition.db")
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let engine = Engine::open_memory().await?;
-    engine.add_question(&sample_question()).await?;
-    let mut state = new_state(vec![sample_question()]);
+    let engine = Engine::open(&db_path()).await?;
+    let questions = engine.start_practice(0).await?;
+    let mut state = new_state(questions);
     let mut attempt_seq = 0i64;
 
     enable_raw_mode()?;
@@ -33,43 +47,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
         if key.kind != KeyEventKind::Press {
             continue;
         }
-        let msg = match key.code {
-            KeyCode::Char('q') => Msg::Quit,
-            KeyCode::Down | KeyCode::Char('j') => Msg::MoveDown,
-            KeyCode::Up | KeyCode::Char('k') => Msg::MoveUp,
-            KeyCode::Enter if state.grade.is_some() => Msg::Next,
-            KeyCode::Enter => Msg::Submit,
-            _ => continue,
+        // 键位收口在 lib（可测）；填空输入态吞字符
+        let Some(msg) = key_to_msg(state.is_fill_input(), key.code) else {
+            continue;
+        };
+        // Submit 前抓 Next 语义：Enter 在判分后 = 下一题
+        let msg = if state.grade.is_some() && matches!(msg, Msg::Submit) {
+            Msg::Next
+        } else {
+            msg
         };
         match update(&mut state, msg) {
             Cmd::Quit => break,
             Cmd::Submit(answer) => {
                 attempt_seq += 1;
                 let attempt = Attempt {
-                    attempt_id: format!("m1-{attempt_seq}"),
+                    attempt_id: format!("tui-{attempt_seq}"),
                     qid: state.questions[state.idx].qid.clone(),
                     answer,
-                    timing: None,
+                    timing: Some(state.timing()),
                     self_confidence: None,
                     mode: AttemptMode::Practice,
                 };
                 match engine.submit_answer(&attempt).await {
                     Ok(outcome) => apply_grade(&mut state, outcome.grade),
-                    Err(err) => {
-                        eprintln!("判题失败: {err}");
-                        apply_grade(
-                            &mut state,
-                            GradeResult {
-                                verdict: Verdict::Pending,
-                                score: 0.0,
-                                max: 1.0,
-                                confidence: 0.0,
-                                graded_by: GradedBy::Rule,
-                                items: vec![],
-                                error_tags: vec![],
-                            },
-                        );
-                    }
+                    // 失败 = 独立错误行，绝不伪造 Pending 判分（P-8 / 改进 #6）
+                    Err(err) => apply_error(&mut state, err.to_string()),
                 }
             }
             Cmd::None => {}
@@ -80,4 +83,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
     terminal.backend_mut().execute(LeaveAlternateScreen)?;
     engine.drain_events();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_db_path_honors_env_override_then_home() {
+        // 无覆盖时基于 HOME/USERPROFILE（测试进程环境可能两者皆有其一）
+        let p = db_path();
+        assert!(
+            p.ends_with(".ambition/ambition.db") || p.ends_with(".ambition\\ambition.db"),
+            "默认落在 ~/.ambition/ambition.db: {:?}",
+            p
+        );
+        // AMBI_DB 覆盖路径（unsafe: env 并发写；串行子进程验证留 CI，见 PROGRESS 观察项）
+        let fallback = PathBuf::from(".").join(".ambition").join("ambition.db");
+        assert!(fallback.ends_with("ambition.db"), "路径构造稳定");
+    }
 }

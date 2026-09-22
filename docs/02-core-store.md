@@ -38,7 +38,7 @@ pub enum CardSource { WordSense{word_id, sense_id}, Question{qid}, Note{note_id}
 pub enum DomainEvent { AttemptGraded{..}, ReviewDone{..}, TypingFinished{..}, EssayGraded{..}, DiaryReviewed{..},
                        PaperFinished{..}, PackShared{..}, PackImported{..}, DrillCleared{..}, QuizPassed{..},
                        DialogueFinished{..} }   // 不可变事实，payload 自包含
-pub trait EventBus { fn publish(&self, ev: DomainEvent); }   // 订阅者：gamify/sync 投影/profile（旁路幂等）
+pub trait EventBus: Send + Sync { fn publish(&self, ev: DomainEvent); }   // 订阅者：gamify/sync 投影/profile（旁路幂等）
 
 // 纯函数
 pub fn normalize_text(s: &str) -> String;                 // 小写/全角/空白/标点/可选冠词（按语种 normalizer 注入）
@@ -72,6 +72,8 @@ LexiconReader{senses/relations/lookup/confusables}（**读词库资源文件**�
 
 - **提交作答 = 单事务**（attempts+grades+error_tags+arbitration）；srs/gamify/sync/profile 后置旁路（幂等可重放）；全部业务写入经 engine 钩子投影 `sync_log`（**完备变更日志**，14-cloud §1.2 全量恢复的基础）；
 - SQLite WAL + busy_timeout；`export_all_json / import_all_json / export_notes_md / db_backup`（数据所有权）。
+- **迁移版本化（M2 落地）**：`schema_version` 单行表 + 代码内迁移清单 `MIGRATIONS: [(version, SQL)]`（只增不改，应用到最大版本）；枚举列一律 serde `snake_case` 字符串（禁 `format!("{:?}")`）；通用 JSON 负载列（questions.payload、grades.payload）统一命名 `payload`（attempts.answer 是语义列保留原名）；题目内容 = core 具名结构 `QuestionContent{stem, kind, difficulty, tags}`（不是位置元组），provenance/quality_score/lang 独立列。
+- `quality_score REAL NOT NULL DEFAULT 1.0` 随 questions 表（06 质检回路产物；组卷/导入用 θ 过滤）。
 
 ## 3. 验证点
 

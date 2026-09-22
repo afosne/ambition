@@ -2,13 +2,16 @@
 
 > 实现顺序：**M2**（出题+质检+qpack）→ **M13**（DSL/一键出课/真题级干扰项）。并入来源：旧 `06-gen` + `39-studio` + `36-exam-realism(干扰项引擎)`。
 > 唯一出题生成口（00-overview §5）：DSL/微课/辨析/对战出题全部收口于此或其参数化插件。
+> **M2 落地范围**：`crates/gen` = GenSpec + `generate` + `qc_question`（Jev 质检 fan-out，05::evaluate）+ `build/parse/import/export qpack` + seed 加载；变式/讲解/干扰项引擎/出课随 M3+/M13。
 
 ## 1. 生成规格与主流程
 
 ```rust
 pub struct GenSpec { pub track: TrackId, pub kinds: Vec<QuestionKindTag>, pub count: u32, pub difficulty: (u8,u8) /*必来自 08::cat*/,
                      pub topic: Option<String>, pub source_words: Option<WordSet>, pub weak_points: Vec<ErrorTag>, pub seed_qid: Option<Qid> }
-pub async fn generate(&self, spec: &GenSpec) -> Result<Vec<Question>>;   // prompt → llm.structured → 反序列化(qid=内容哈希) → 质检回路(≤2 轮) → 入库(quality_score)
+pub async fn generate(&self, spec: &GenSpec) -> Result<Vec<Question>>;   // prompt → llm.structured → 校验(qid=内容哈希) → 质检回路(≤2 轮) → 交 engine 入库
+// quality_score 已是 Question 字段（qc_report 回写）；引擎落库时存 quality 列（00-overview §2：回包经适配层→engine 落库）
+// M2：结构化输出 = JSON Schema 约束的题草稿数组（DraftQuestion，字段同统一模型）；重生成 ≤2 轮后仍不合格 → 丢弃并记 tracing::warn
 ```
 
 ## 2. 质检回路（出题质量护城河，fan-out 单请求）
@@ -17,6 +20,7 @@ pub async fn generate(&self, spec: &GenSpec) -> Result<Vec<Question>>;   // prom
 pub async fn qc_question(&self, q: &Question) -> Result<QcReport>;
 // unique_answer(noul) / key_correct(noul) / natural(score) / distractor_valid(noul) / difficulty_fit(score)
 // pass：noul ≥0.7 且 natural ≥1.5；低质题不进组卷；中文剥离后只判英文部分
+// M2：一次 Jev 请求 fan-out 上述问题（05::evaluate）；state 只含题干/选项/答案（l2），母语/提示永不进 state
 ```
 
 ## 3. 真题级干扰项引擎（原 36 §1）
@@ -54,9 +58,11 @@ pub async fn run_dir(&self, dir: &Path) -> Result<BulkReport>;             // �
 
 ```rust
 pub fn build_qpack(questions: &[Question], manifest: Manifest) -> QPack;   // 格式见 14-cloud §qpack
-pub fn parse_qpack(bytes: &[u8]) -> Result<QPack>;
-pub async fn import_qpack(&self, pack: &QPack) -> Result<ImportReport>;    // 去重/低质拒绝
-pub async fn assemble_paper(&self, spec: &PaperSpec) -> Result<Paper>;     // 只取 quality_score ≥ θ
+pub fn parse_qpack(bytes: &[u8]) -> Result<QPack>;                          // schema_version 校验 + 内容哈希
+pub async fn import_qpack(&self, pack: &QPack) -> Result<ImportReport>;    // 去重/低质拒绝（quality_score < θ 丢弃）
+pub async fn export_qpack(&self, tags: &[String]) -> Result<QPack>;        // 从题库按标签导出（空标签=全量）
+pub async fn assemble_paper(&self, spec: &PaperSpec) -> Result<Paper>;     // 只取 quality_score ≥ θ（M5 套卷）
+// seed：data/seed/<lang>/<track>/*.qpack.json（内置离线内容包，16-config §3）；open() 时幂等导入
 ```
 
 ## 7. 判题沉淀（自动保存为题库，可导出可导入）
@@ -80,3 +86,4 @@ pub fn explanations_for(&self, qid: &Qid) -> Result<Vec<Explanation>>;          
 - [ ] 干扰项防双正确（qc 断言）+ 假对样本入共现统计；变式考点保持（noul）；
 - [ ] explain 缓存命中不重复调用；qpack round-trip hash 稳定；组卷低质题过滤；
 - [ ] **判题即沉淀幂等**（同题多次作答只收一题）；qpack 带讲解 round-trip 无损；导入后可追加讲解且多来源并存。
+- [x] M2：qc 全 fan-out 一轮请求（mock Jev）；重生成 ≤2 轮后丢弃；导入去重（同 qid 跳过）+ 低质拒绝；seed 幂等导入。

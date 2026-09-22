@@ -6,9 +6,10 @@
 ## 1. 生命周期与事件旁路
 
 ```rust
-pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数据幂等导入/装配服务
+pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数据幂等导入/装配服务（M2：Engine::open(path) 文件库 + seed 幂等导入）
 // EventBus → 订阅：GameService（可关）/ SyncProjector（server_url 非空）/ ProfileAggregator
 // 落库规则：主事务提交后旁路逐个执行，各自幂等（旁路失败不回滚，tracing 记录可补偿）
+// M2：core::EventBus trait 落地，engine 只 publish 不直调 gamify（解耦改进 #3）；gamify 效果经 save_game_state 落库（#1）
 ```
 
 ## 2. use-case 门面（函数全集，按域）
@@ -33,6 +34,7 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 ```rust
 // TUI（ratatui+crossterm）：App{state, screen, engine}；Msg/ update(纯) / draw；Screen=Home|Practice|Review|Wordbook|Typing|Writing|Notes|Diary|Todo|Games|Pack|Profile|Settings|Mock
 // 要点：unicode-width CJK 折行；答题组件（题干/选项/填空光标/判分视图）；打字组件复用 04-typing；游戏全 TUI 可玩
+// M2：判题失败 → 独立错误行（≠ Pending 态，P-8）；填空题输入行（采集→ Answer::Fill）；提交计时 → timing（假对检测输入，#5 半步）
 // Web（React+TS，OpenAPI 生成客户端）：页面↔Screen 一一对应；TanStack Query
 ```
 

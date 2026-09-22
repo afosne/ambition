@@ -29,7 +29,7 @@ stages/<lang>/<track>.json   词表 wordlists/   rubric rubrics/   模板 templa
 错式库 chinglish/   观点库 arguments/<lang>/   中国文化 culture/   听力材料 listening/<lang>/   场景 scenes/<lang>/
 打字课程 typing/   判断措辞 jev/（error_tags.json=判分口径，改必升 version）   prompts/（{{l2}}/{{l1}} 占位）
 qpack.schema.json   importers/（Anki/CSV 映射 profile）
-seed/<lang>/<track>/       # 内置离线内容包：种子题库（每轨 ≥200 题）——内容三级保障①，零 AI 零网核心功能可用
+seed/<lang>/<track>/       # 内置离线内容包：种子题库（每轨 ≥200 题）——内容三级保障①，零 AI 零网核心功能可用；M2 格式=qpack（*.qpack.json），open() 幂等导入
 lexicon/<lang>/            # **词库资源**（EC-DICT 构建产物：JSONL+索引）；词库不进 SQLite（02-core-store 分层）
 ```
 
@@ -92,6 +92,7 @@ impl SetupWizard {
 [s3]  endpoint="" bucket="" prefix="qpacks"    [httpd] bind="127.0.0.1:8787" web_dist=""
 ```
 - 密钥只进 keychain（service=`ambition`）：`llm.*.api_key`/`jev.api_key`/`s3.secret`/`account.token`；env 覆盖：`AMBI_LLM_KEY`/`AMBI_JEV_KEY`/`TYPESAFE_API_KEY`（兼容）/`AMBI_SERVER_URL`；
+- M2 过渡 env（config 落地前的 provider 定址，16-config 接入后收回）：`AMBI_LLM_BASE`（默认 `https://api.openai.com/v1`）、`AMBI_LLM_MODEL`（默认 `gpt-4o-mini`）、`AMBI_JEV_BASE`（默认 typesafe v1）、`AMBI_DB`（覆盖库文件路径，默认 `~/.ambition/ambition.db`）；
 - 加载器：`load_stage/load_rubric/load_jev_error_tags/load_templates/load_prompt/config_load/secret_get`（幂等导入静态数据）；
 - 首启向导：选 track → 词汇量测试定位 → 填 key 或连服务端（可跳过）。
 
