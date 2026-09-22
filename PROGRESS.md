@@ -47,6 +47,23 @@ MVP_STAGE: 2/6
 - [ ] 7. seed 题库加载器（`data/seed`）+ qpack 导入（M2 主线）
 - [ ] 8. 引入 `tracing`（事件/降级路径可见）
 
+### 2026-09-23 · 定时施工链路修复（自动化基建，非 MVP 阶段）
+
+- **背景**：手动跑 `scripts\continue_mvp.cmd` 报 `'（Windows' is not recognized`；日志 03:54 阶段 2 唤起后 pi 静默 exit=1；03:57 复现会话发现 agent 永远“等待中”退出（详见 PITFALLS P-7 镜像坑 / P-10 / P-11）。
+- **修复**：①`.gitattributes` 增 `*.cmd text eol=crlf`、两个 .cmd 转 CRLF（cmd 解析报错消失）；②锁继承 `AMBI_LOCK_HELD=1`（acquire 继承 / release 跳过）解开脚本锁与 agent 锁死锁；③空烧防护：pi rc=0 但 `git HEAD` 无变化不推进阶段；④心跳 owner 由 `$$` 改 `$PPID`（孤儿锁/误接管两类隐患一并消除）；⑤pi 加 `--verbose`、清 settings.json 死模型条目（每轮 Warning 消失）；⑥释放 03:57 遗留孤儿锁。
+- **验证**：`bash -n` ×2、cmd DRY_RUN 全路径、锁继承/release 跳过/陌生人拒锁 ×3、心跳 delta=30s、settings JSON 合法；提交过七步钩子 7/7。提交 `4103637`。
+- **残余风险**：03:54 那次 pi 启动静默 exit=1 根因未定位（无会话无输出，疑瞬时网络/供应商故障）——`--verbose` 已就位，下次真实唤起取证。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：无 Rust 改动，钩子七步 7/7 全过；bash 语法 `bash -n` 全绿；修复点均交叉引用 PITFALLS（P-7/P-10/P-11），脚本注释同步。
+- **实际使用**：手动入口与 schtasks 定时入口共用同一 .cmd，已实测 dry-run 无报错且走到“DRY_RUN ok”；真实施工链路待下一次定时触发（04:29）首验。
+- **代码耦合度**：改动收敛在 `scripts/` 与 `.gitattributes`，业务 crate 零接触；锁协议仍单点 `task_lock.sh`（唯一 owner=外层脚本），skill/prompt 只经它交互，无新增耦合。
+- **鲁棒性**：新增“rc=0 但无提交=失败”错误路径；锁三态（刷新/过期接管/拒锁）实测闭环；`unset AMBI_LOCK_HELD` 防环境泄漏误继承。未覆盖：pi 启动静默失败仍无结构化退出信息（靠 --verbose 日志补盲）。
+
+**后续观察（下次真实唤起时做）**：
+- [ ] 9. 用 `--verbose` 日志定位 03:54 型 pi 启动静默 exit=1 根因；确认阶段 2 正常推进到 3/6。
+
 ---
 
 （后续阶段完成后按同格式追加：进度日志 + 四段评估 + 改进建议勾选。）
