@@ -42,7 +42,9 @@
 - 版本：0.x MINOR 可破坏（CHANGELOG 标注）；1.0 后严格 semver；rubric/qpack/sync 协议独立版本（兼容窗口 ≥2 MINOR）；
 - 发布：CHANGELOG → tag → CI 双平台二进制（内嵌 SPA + `--web-dist` 说明）+ SHA256；产物带 PolyForm-NC 许可标注；
 - 回滚：判分事故优先回退 rubric version；迁移事故走全量导出/幂等导入；密钥泄漏走 keychain 轮换 + audit；
-- onboarding 顺序：00-overview → 本册 → 对应功能分册。
+- onboarding 顺序：00-overview → 本册 → 对应功能分册；
+- **进度与雷点**（skill `ambition-pitfall-log` 强制）：完成一个部分 → `PROGRESS.md`（进度日志 + 四段代码评估：质量/实际使用/耦合度/鲁棒性 + 改进建议）；遇坑 → `PITFALLS.md`（五要素，开工前必读，同根因更新不新开）；
+- **定时施工任务**：`scripts/continue_mvp.sh`（Windows 任务 AmbitionMVP，每 15 分钟）读 `MVP_STAGE` 唤起 pi 逐阶段推进到 M6，阶段内连跑下一阶段；`task_lock.sh` 互斥（已有任务则等待）。
 
 ## 5. 检查清单（评审）
 
