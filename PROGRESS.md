@@ -11,7 +11,7 @@ MVP_STAGE: 3/6
 |---|---|---|---|
 | 1 | M1 骨架 | core/store/engine/tui + 规则判题 + 打字通底座 + 游戏底座 | ✅ 完成（2026-09-24，提交 5271323） |
 | 2 | M2 出题 | llm crate（OpenAI/Anthropic 协议）+ 结构化出题 + Jev 质检回路 + qpack 导入导出 + seed 题库 | ✅ 完成（2026-09-24，提交 b39efef） |
-| 3 | M3 判题 | jev crate 客户端 + 待裁定桶 + 错因分类 + 中式英语错式库 + 成本台账 | ⬜ 待施工 |
+| 3 | M3 判题 | jev crate 客户端 + 待裁定桶 + 错因分类 + 中式英语错式库 + 成本台账 | ✅ 完成（2026-09-24，提交 75408b0） |
 | 4 | M4 记忆 | FSRS 接线 fsrs-rs + 错词本/义项/句式 + 假对上线 + 复习队列 | ⬜ 待施工 |
 | 5 | M5 写作 | composite scoring + 批注 + 模板作文填槽 + 翻译题型 + 套卷估分 | ⬜ 待施工 |
 | 6 | M6 闭环 | 笔记/日记/TODO + 画像聚合 + 个性化出题 + 周报 + 游戏全量 | ⬜ 待施工 |
@@ -21,6 +21,20 @@ MVP_STAGE: 3/6
 ---
 
 ## 进度日志
+
+### 2026-09-24 · M3 判题完成
+
+- **jev 全量**：`evaluate_many`（并发池 `JEV_CONCURRENCY=8`、保序、单题失败不中断，futures buffered）；`Route` + `route_by_confidence`/`route_from_margin`（accept/reject 两端闭区间采信、灰区 LlmReview；边界表驱动 + 非英语阈值切换断言）；`JevJob` 作业体。16→21 测试。
+- **grader 三级流水线（新 pipeline.rs + corpus.rs）**：`Grader{jev?, llm?, thresholds}` `grade()` **永不 Err**（离线矩阵逐格降级）——①规则命中即完（正确 0 成本）；②Jev 升级：多选漏选逐项 noul（`jev_multi_items`→`MultiJudge`）、填空错空 `jev_blank` 翻案（Acceptable/Partial）/确认错（带错因，置信=最弱 margin）、选择题错只补 `error_cause`；③灰区 → `llm_arbitrate`（`LlmKind::Arbitrate` + 内嵌 arbitrate.md prompt + schema 约束，temperature 0；复核不可用/失败 → Pending 进桶，warn 可见）。`Thresholds::for_lang` en=0.75/0.35 其它 0.85/0.20。**错因分类**：`ErrorTag` 扩到 docs/02 全量 28 类（+`parse_tag`/`all`/`label_zh` 中文展示名）；`data/jev/error_tags.json`（28 criteria 全英文、version=1.0.0 与代码常量同步断言——措辞即判分口径）；唯一归类口 `tag_error_cause`（confidence<accept 不采信、未知键 warn 跳过）。grader 48 测试。
+- **待裁定桶（store 迁移 v2）**：`arbitration` 唯一桶（attempt_id 主键 + status/reason/verdict/resolved_at + idx）；`insert_attempt_tx` 在 verdict=pending **同事务**入桶；`get/list/resolve_arbitration`（单事务改 grades：verdict/score/confidence=1/graded_by=human + 桶关闭，重复裁决幂等返 None）；`add_blank_acceptable` 读改写回流（同值幂等/越界 false）。store 24 测试。
+- **成本台账**：`AiLedger::usage_summary(from,to)`（MemLedger 时间戳分组 + StoreLedger SQLite 区间聚合，`datetime` 钳制防 NULL 静默——P-15）；`LlmRouter::usage_summary`；engine `cost_summary` 门面；**全局熔断**（连续失败 ≥5 → 快速失败 `LlmError::BreakerOpen` 10 次不发请求 → 放行 1 次试探，成功关闸；缓存命中不计数、Offline 不计入）；`llm_cache` TTL 7 天（`cache_purge_before`，open 时执行）。llm 43→59 测试。
+- **engine 装配与门面**：`AiConfig::from_env`（AMBI_JEV_BASE/AMBI_JEV_KEY·TYPESAFE_API_KEY/AMBI_LLM_BASE/AMBI_LLM_MODEL/AMBI_LLM_KEY，key 缺省=离线）+ `open_with_ai`/`open_memory_with_ai` 注入口；`StoreLedger`（AiLedger 的 SQLite 实现经 engine 装配，05 不依赖 store 红线）；`build_grader`；`submit_answer` 改走 `grader.grade()`（移除 `EngineError::RuleIncomplete`）；`settle` 统一旁路结算（提交/裁决共用）；新门面 `pending_bucket` / `resolve_pending`（裁决→改判→填空回流→旁路结算，**回流→二次作答规则直判闭环测试**）/ `cost_summary` / `add_chinglish_drills`。engine 34→35 测试。
+- **中式英语错式库**：`data/chinglish/en.json` 12 条 L1 负迁移错式（id/wrong/right/zh_note/tag，schema_version 校验 + id 去重 + 内容自洽）；gen `parse_chinglish/builtin_chinglish/drill_questions` → 单选改错训练题（id 哈希奇偶打散选项防猜、题面无 CJK 保 Jev-state 纯净、qid 内容寻址幂等）。
+- **TUI**：待裁定态显示 `⏳ 待裁定：y/n`，`Cmd::Arbitrate` → `engine.resolve_pending`；判分浮层错因标签（`label_zh` 中文）+ 置信度 + 「人工裁决」标记；选择态 `1-4` 自评把握 → `Attempt.self_confidence`（判分后锁定、换题重置；is_guess 接线随 M4）。
+- **契约先行**：docs/02（v2 迁移/回流口径）、docs/03（open(cfg)→AiConfig、新门面、键位表）、docs/05（usage_summary/熔断/JevJob/路由语义/验证点全勾）、docs/07（Grader 结构/离线矩阵细化/M3 验证点勾选）先于实现提交。
+- **质量**：**282 测试全绿**（M2 182→282，+100）、`clippy -D warnings` 零告警、函数↔测试配对 100%、七步钩子 7/7 一次过；提交 **75408b0**。
+- **冒烟（P-14 方法）**：新二进制短跑 4-6s → 杀 → `AMBI_DB` 文件库三件套（db/wal/shm，WAL 1.9MB=203 seed 入库）+ stdout 可见 `[1/203]` 与「1-4 自评把握」提示行。
+- **新坑入册**：P-15（SQLite `datetime(unix,'unixepoch')` 超范围返回 NULL → 过滤恒 NULL 静默空结果；钳制 + 边界测试预防）。
 
 ### 2026-09-24 · M2 出题完成
 
@@ -56,6 +70,13 @@ MVP_STAGE: 3/6
 - **代码耦合度**：11 crates 依赖单向无环：`core ← {llm,jev,typing,grader,srs,gamify} ← {gen,store} ← engine ← tui`；**AI 唯一出口红线落地**：`AiLedger` trait 定义在 llm、SQLite 实现经 engine 装配（05 不依赖 store）；engine→gamify 直调改 `EventBus::publish`（#3 ✓）；gen 是纯函数库（llm+jev 注入，可被 httpd 复用）。**遗留**：gen 同时依赖 llm+jev（M3 `evaluate_many` 后仍合理）；`ProxyLlm`/`LlmRouter::usage_summary` 按契约留 M3/M7（文档已标注范围）。
 - **鲁棒性**：qpack 三重防线（schema_version 拒异版本、qid 内容哈希防篡改、低质 θ=0.6 拒收）+ 导入幂等（同 qid 跳过）；LLM 重试≤2/Jev 退避≤3 均有 wiremock 路径测试；qc 全拒报 `AllRejected` 不静默（P-8 风格）；迁移在事务里（版本号与 SQL 同提交）；文件库 WAL+busy_timeout；游戏状态重启水合（测试断言 xp 续档）。**欠账**：LLM 重试无全局熔断（连续失败会拖慢单次 generate，M3 成本面板一并看）；`llm_cache` 无 TTL/淘汰；seed 导入失败会阻止 `open()`（当前 fail-fast 正确，但缺“跳过坏 seed 只警告”的降级开关，见 #14）。
 
+### M3 代码评估（四段）
+
+- **代码质量**：282/282 测试全绿（M2 182→282，+100）；`clippy -D warnings` 零告警；函数↔测试配对 100%（钩子一次过）；生产码无 `unwrap/expect/panic`（P-4 显式兜底、锁中毒取内层+eprintln、SQLite NULL 边界用钳制而非静默——P-15）；wiremock 契约覆盖关键路径（fan-out 失败隔离/灰区→桶/翻案→回流→直判闭环/熔断三态/LLM 复核成败双路）；判分语料 version 代码↔文件双同步断言（措辞即口径）；契约先行 4 分册先于实现提交，签名漂移（MultiJudge/chinglish 门面名）提交前已回改对齐。
+- **实际使用**：`ambition.exe` 真实启动 → 203 seed 入库 → 答题；**无 key 全链路可用**：多选漏选/灰区 → 待裁定行 → `y/n` 人工裁决 →（填空）认可答案回流 → 同类题下次规则直判；错因中文标签与置信度直接上屏；`1-4` 自评落 Attempt；**填 key（BYOK env）解锁**：Jev 模糊翻案/错因分类/多选逐项分 + LLM 粗判。**边界**：成本面板只有 `engine::cost_summary` 门面，TUI 无展示屏；改错训练只有 `engine::add_chinglish_drills`，TUI 无入口；讲解层②③（06::explain、`e` 键）未做（归 M4）；arbitration reason 未区分灰区/离线（单值 pipeline_undecided）。
+- **代码耦合度**：依赖仍严格单向无环：`core ← {llm, jev} ← grader ← {gen, store} ← engine ← tui`（grader 新增 jev/llm 依赖，与 docs/07 `Grader{jev,llm}` 契约一致）；**AI 唯一出口红线保持**：`AiLedger` trait 定义在 llm、`StoreLedger` 实现在 engine、05/07 均不依赖 store；grader 纯判定不落库（落库全在 engine/store 单事务）；TUI 纯状态机，裁决副作用全在 main→engine。**遗留**：grader 内嵌 `data/jev/error_tags.json`、gen 内嵌 `data/chinglish`/`data/prompts` —— include_str 模式三处重复，随 16-config 抽统一资源 loader。
+- **鲁棒性**：`grade()` 永不 Err + 离线矩阵逐格有测试（Jev 无 key/网络失败、LLM 无 key/复核失败、全离线三态）；Pending **同事务**入桶无半写；裁决幂等（重复/不存在返 NotFound 显式报错，不静默）；回流失败 warn 不回滚已生效裁决；熔断三态实测（开闸拒发/窗口递减/试探续票/成功关闸）且缓存命中不受害；datetime NULL 静默空集已钳制（P-15）。**欠账**：LLM 粗判 `reason` 未持久化（GradeResult 无 detail 字段，随讲解层 GradeDetail 补）；选择题人工裁决不回流 answer 集（只回流填空，见 #20）；`arbitration.reason` 单值；evaluate_many 尚无真实消费方（mock 模考 M5 用）。
+
 ### M1 改进建议（M2 开工即处理，勾=完成）
 
 - [x] 1. engine 接线 gamify 效果持久化：提交后 `apply(effects) → save_game_state`（M2：GameProjector publish→snapshot→save，测试断言 xp/streak 落库）
@@ -69,13 +90,22 @@ MVP_STAGE: 3/6
 
 ### M2 改进建议（M3 开工即处理，勾=完成）
 
-- [ ] 10. TUI 自评键位（提交前 1-4 档 confidence）→ `Attempt.self_confidence` → 接 `is_guess` + `srs::decide_action`（与 M4 FSRS 队列合流）
-- [ ] 11. Jev 全量：`evaluate_many` 并发池 8 + `route_by_confidence`（0.75/0.35）+ 待裁定桶 + 错因分类（docs/05 §2-§4 M3 范围）
-- [ ] 12. `LlmRouter::usage_summary` 成本面板 + `llm_cache` TTL/淘汰 + generate 全局熔断（连续失败快速返回）
-- [ ] 13. TUI 题包屏（`i` 导入/`x` 导出键位，docs/03 §5.3）接线 `import_pack`/`export_pack`；`share_code` 口令码随 M7
-- [ ] 14. seed 导入失败降级开关：坏 seed 包只 `tracing::warn` 跳过（不阻断 open），qid 损坏仍拒（当前 fail-fast 对内置包正确，对用户放入 `data/seed/` 的包过严）
-- [ ] 15. 题型补全：完形/阅读/七选五/语法填空（DESIGN §13.4 归 M2，本阶段标签未列——core QuestionKind 扩展 + grader 递归子题 + seed 补题型）
-- [ ] 16. seed 扩轨：gaokao/zhongkao/…（seed_gen 参数化 track + 每轨 ≥200 题，docs/16 §3）
+- [ ] 10. TUI 自评键位（提交前 1-4 档 confidence）→ `Attempt.self_confidence` → 接 `is_guess` + `srs::decide_action`（与 M4 FSRS 队列合流）——**两步半**：M3 已落键位采集与落库（1-4 档、判分锁定、换题重置，TUI 提交带 self_confidence）；`is_guess` 需用户延迟基线（p50/p90）与 FSRS 队列，归 M4（尾已移 #19）
+- [x] 11. Jev 全量：`evaluate_many` 并发池 8 + `route_by_confidence`（0.75/0.35）+ 待裁定桶 + 错因分类（docs/05 §2-§4 M3 范围）（M3：并发池保序+失败隔离测试；路由边界/非英语阈值表驱动；arbitration 迁移 v2 同事务入桶；28 类 ErrorTag + error_tags.json 语料）
+- [x] 12. `LlmRouter::usage_summary` 成本面板 + `llm_cache` TTL/淘汰 + generate 全局熔断（连续失败快速返回）（M3：区间聚合双实现 + `cache_purge_before` 7 天 + 熔断 5/10/试探三态实测）
+- [ ] 13. TUI 题包屏（`i` 导入/`x` 导出键位，docs/03 §5.3）接线 `import_pack`/`export_pack`；`share_code` 口令码随 M7（M3 未动，承接至 M4）
+- [ ] 14. seed 导入失败降级开关：坏 seed 包只 `tracing::warn` 跳过（不阻断 open），qid 损坏仍拒（用户 `data/seed/` 目录加载器未落地，承接至 M4）
+- [ ] 15. 题型补全：完形/阅读/七选五/语法填空（DESIGN §13.4 归 M2，本阶段标签未列——core QuestionKind 扩展 + grader 递归子题 + seed 补题型）（承接至 M4）
+- [ ] 16. seed 扩轨：gaokao/zhongkao/…（seed_gen 参数化 track + 每轨 ≥200 题，docs/16 §3）（承接至 M4）
+
+### M3 改进建议（M4 开工即处理，勾=完成）
+
+- [ ] 17. 讲解层①②：`GradeResult` 加 `detail`（Jev 概率分布/规则 diff 持久化）+ TUI `e` 键接 `06::explain`（文本讲解，需 LLM key；无 key 只显结构化讲解——docs/07 §5）
+- [ ] 18. 成本面板与题包屏入 TUI：`cost_summary` → Profile/Settings 展示（M3 已有门面）；题包 `i/x` 键位（承接 #13）
+- [ ] 19. 假对检测合流：从 attempts.timing 算用户延迟基线（p50/p90 滚动）→ `is_guess(timing, self_confidence, baseline)` 接 `srs::decide_action`（M3 已采自评键位，承接 #10 尾巴）
+- [ ] 20. 裁决增强：选择题人工裁决回流 `ChoiceBody.answer` 集（当前只回流填空 acceptable）；`arbitration.reason` 分值区分灰区/离线两态
+- [ ] 21. 资源 loader 统一：`data/jev`、`data/chinglish`、`data/prompts` 三处 include_str 收口到 16-config 单入口（用户目录可覆盖）
+- [ ] 22. `evaluate_many` 消费方：M5 套卷批量判题接入（当前仅有契约测试）
 
 ### 2026-09-23 · 定时施工链路修复（自动化基建，非 MVP 阶段）
 
