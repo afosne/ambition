@@ -1,0 +1,119 @@
+//! 生成内置 seed 题库 `data/seed/en/cet4/core.qpack.json`（内容三级保障①，docs/16 §3）。
+//! 运行：`cargo run -p ambition-gen --example seed_gen`（幂等：重跑覆盖同文件）。
+//! 题目全部英文（Jev state 无中文红线）；qid 由内容哈希自动计算。
+
+use std::path::PathBuf;
+
+use ambition_core::{ChoiceBody, OptionItem, Provenance, Question, QuestionKind};
+use ambition_gen::{Manifest, PackItem, QPACK_SCHEMA_VERSION, QPack};
+
+mod grammar;
+mod mixed;
+mod usage;
+
+use grammar::{future_will, past_regular, present_sva};
+use mixed::{fill_blanks, multi_choice, tense_mix};
+use usage::{articles, prepositions};
+
+pub(crate) fn choice(
+    stem: String,
+    options: &[&str],
+    answer: usize,
+    difficulty: u8,
+    tags: &[&str],
+) -> Question {
+    let items: Vec<OptionItem> = options
+        .iter()
+        .enumerate()
+        .map(|(i, text)| OptionItem {
+            id: i as u32,
+            text: (*text).to_string(),
+        })
+        .collect();
+    Question::new(
+        stem,
+        QuestionKind::SingleChoice(ChoiceBody {
+            options: items,
+            answer: vec![answer as u32],
+        }),
+        difficulty,
+        tags.iter().map(|t| (*t).to_string()).collect(),
+        Provenance::Seed,
+    )
+}
+
+pub(crate) fn multi(
+    stem: String,
+    options: &[&str],
+    answers: &[usize],
+    difficulty: u8,
+    tags: &[&str],
+) -> Question {
+    Question::new(
+        stem,
+        QuestionKind::MultiChoice(ChoiceBody {
+            options: options
+                .iter()
+                .enumerate()
+                .map(|(i, text)| OptionItem {
+                    id: i as u32,
+                    text: (*text).to_string(),
+                })
+                .collect(),
+            answer: answers.iter().map(|i| *i as u32).collect(),
+        }),
+        difficulty,
+        tags.iter().map(|t| (*t).to_string()).collect(),
+        Provenance::Seed,
+    )
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut scored: Vec<(Question, String)> = Vec::new();
+    scored.extend(present_sva());
+    scored.extend(past_regular());
+    scored.extend(future_will());
+    scored.extend(articles());
+    scored.extend(prepositions());
+    scored.extend(tense_mix());
+    scored.extend(fill_blanks());
+    scored.extend(multi_choice());
+    assert!(
+        scored.len() >= 200,
+        "docs/16 requires >=200 questions per track, got {}",
+        scored.len()
+    );
+
+    // 唯一性兜底（qid 内容哈希，重复内容必须暴露）
+    let mut qids = std::collections::HashSet::new();
+    for (q, _) in &scored {
+        if !qids.insert(q.qid.0.clone()) {
+            return Err(format!("duplicate question content: {}", q.stem).into());
+        }
+    }
+
+    let questions: Vec<Question> = scored.iter().map(|(q, _)| q.clone()).collect();
+    let pack = QPack {
+        schema_version: QPACK_SCHEMA_VERSION,
+        manifest: Manifest::local("core", "cet4"),
+        questions: questions
+            .iter()
+            .zip(scored.iter())
+            .map(|(q, (_, explain))| PackItem::with_explanations(q.clone(), vec![explain.clone()]))
+            .collect(),
+    };
+
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let out_path = root.join("data/seed/en/cet4/core.qpack.json");
+    if let Some(parent) = out_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(&pack)?;
+    std::fs::write(&out_path, json)?;
+    println!(
+        "wrote {} questions -> {}",
+        pack.questions.len(),
+        out_path.display()
+    );
+    Ok(())
+}

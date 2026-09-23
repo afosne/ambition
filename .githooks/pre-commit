@@ -22,9 +22,19 @@ if grep -rnE 'fn[^{]*\(\s*_\s*:' crates --include='*.rs'; then
   bad "发现匿名占位参数 _:"
 fi
 
-say "4/7 函数↔测试配对（每个函数必须有 fn test_<函数名>_* 测试）"
+say "4/7 结构门禁：函数↔测试配对 + 文件 ≤500 行（docs/01 §组织）"
 pair_fail=0
 shopt -s nullglob
+# 行数：全仓 .rs（src + examples，docs/01 文件 ≤500 行）
+for f in crates/*/src/*.rs crates/*/src/**/*.rs crates/*/examples/*.rs crates/*/examples/**/*.rs; do
+  [ -f "$f" ] || continue
+  lines=$(wc -l < "$f")
+  if [ "$lines" -gt 500 ]; then
+    echo "  ✗ 文件超 500 行: $f ($lines) → 按职责拆模块（docs/01 §组织）"
+    pair_fail=1
+  fi
+done
+# 配对：仅 src（与原 fn_test_check.sh 范围一致）
 for f in crates/*/src/*.rs crates/*/src/**/*.rs; do
   [ -f "$f" ] || continue
   names=$(awk '
@@ -43,7 +53,7 @@ for f in crates/*/src/*.rs crates/*/src/**/*.rs; do
     fi
   done
 done
-[ "$pair_fail" -eq 0 ] || bad "函数缺测试"
+[ "$pair_fail" -eq 0 ] || bad "结构门禁未过（缺测试/超 500 行）"
 
 say "5/7 cargo test（测试必须全部通过）"
 cargo test --workspace || bad "测试失败"

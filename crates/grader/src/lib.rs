@@ -4,16 +4,34 @@
 
 mod corpus;
 mod pipeline;
+// 三级流水线分层（docs/01 §组织：文件 ≤500 行；impl Grader 跨模块拆分，字段/辅助需 pub(crate)）
+mod arbitrate;
+mod fill;
+mod helpers;
+mod judges;
+mod rule;
+mod thresholds;
 
+pub use arbitrate::*;
 pub use corpus::{
     ERROR_TAGS_VERSION, corpus_version, error_cause_question, error_cause_questions,
     error_criteria, tag_error_cause,
 };
-pub use pipeline::{BlankJudge, Grader, ItemJudge, LLM_JUDGE_CONFIDENCE, MultiJudge, Thresholds};
+pub(crate) use helpers::*;
+pub use judges::*;
+pub use pipeline::*;
+pub use thresholds::*;
 
+// 子模块（thresholds/judges/helpers/rule/fill/arbitrate/pipeline）经 `use super::*` 共享本组导入
 use ambition_core::{
-    ChoiceBody, FillBody, GradeResult, GradedBy, ItemResult, QuestionKind, Verdict, normalize_text,
+    Answer, ChoiceBody, ErrorTag, FillBody, GradeResult, GradedBy, ItemResult, Question,
+    QuestionKind, Verdict, normalize_text,
 };
+use ambition_jev::Route;
+use ambition_jev::{
+    JevClient, JevError, JevQuestion, JevQuestions, JevState, NoulQ, route_from_margin,
+};
+use ambition_llm::{GenRequest, LlmError, LlmKind, LlmRouter};
 
 /// 比对规范化：去首尾空白标点、可选忽略冠词（按 track 配置）
 pub fn normalize_for_compare(input: &str, ignore_articles: bool) -> String {

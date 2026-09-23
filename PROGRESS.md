@@ -22,6 +22,32 @@ MVP_STAGE: 4/6
 
 ## 进度日志
 
+### 2026-09-24 · 分层重构：9 个超标文件拆模块（非阶段任务，用户手动发起）
+
+- **背景**：用户指出代码全挤单文件、可读性差；docs/01 §组织本就规定 `lib.rs` 薄壳 + 文件 ≤500 行，但执行走样（9 个文件超 500，最大 pipeline.rs 1463 行 = 2.9×）。
+- **拆分结果（全部 ≤500，pre-commit 已加行数门禁防回退）**：
+  - `grader/pipeline.rs` 1464 → pipeline(192)+rule(398)+fill(481)+arbitrate(335)+helpers(222)+thresholds(72)+judges(66)；
+  - `store/lib.rs` 1316 → lib(27)+migration+question_repo+attempts+arbitration(481)+kv+usage；
+  - `gen/lib.rs` 1255 → lib(34)+spec+draft+qc+prompt+generator；
+  - `engine/lib.rs` 1193 → lib(111)+lifecycle+packs+practice+pending（impl Engine 按方法拆 4 块）；
+  - `core/lib.rs` 1083 → lib(22)+ids+taxonomy+question+attempt+usage+event+analysis；
+  - `jev/lib.rs` 912 → lib(27)+types+route+codec+error+client；
+  - `tui/lib.rs` 816 → lib(25)+state+input+update+render；
+  - `llm/router.rs` 657 → router(221)+requests(453)+breaker(71)；
+  - `srs/lib.rs` 540 → lib(14)+model+schedule；
+  - 另：`gen/examples/seed_gen.rs` 639 → `examples/seed_gen/{main,grammar,usage,mixed}.rs`（重跑幂等，data/ 零 diff）。
+- **手段**：spec 驱动拆分器（`target/rust_split.py`，按条目/impl 方法/测试三类分配 + 配对/行数预检）；跨模块可见性统一 `pub(crate)`；测试块 use 按 unused 告警逐文件裁剪；同名 fn（as_str/new）的配对测试归拢或补写。
+- **门禁升级**：pre-commit 第 4 步扩为**结构门禁** = 函数↔测试配对（范围不变，仅 src/）+ **全仓 .rs ≤500 行**（src+examples）；docs/01 §3 同步（去掉已删的 fn_test_check.sh 引用）。
+- **质量**：**295 测试全绿**（重构前 292，+3 新配对测试）、`clippy -D warnings` 零告警、fmt 干净、七步钩子 7/7；P-14 冒烟：ambition.exe 启动 → 203 seed 入库 → TUI `[1/203]` 上屏 ✓。
+- **新坑入册**：P-16（拆文件三连锁：可见性收口/配对名前缀/共享 helper）；P-9 复发案例补记（批量 edits 原子回滚）。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：295/295 测试全绿（+3 均为拆分暴露的真实配对缺口：srs as_str、grader Provisional::new、seed_gen 无需）；`clippy -D warnings` 零告警；fmt 干净；七步钩子 7/7（第 4 步已扩为结构门禁）；纯结构调整零行为变更（seed_gen 重跑 203 题 data/ 零 diff = 逐字节幂等）。
+- **实际使用**：`ambition.exe` 冒烟 ✓（203 seed 入库、TUI `[1/203]` 上屏、判分/键位无回归）；对外 API 不变（`pub use X::*` 收口，下游 tui/engine 未改一行 import）；边界：拆分器是一次性工具（`target/` 下，不进版本库），后续拆分需手写或重建。
+- **代码耦合度**：依赖方向未变（单向无环）；**新增 crate 内模块边界**：grader 6 模块（pipeline/rule/fill/arbitrate 职责链）+ helpers 三方共用；engine 按门面拆 4 块（lifecycle/packs/practice/pending）；跨模块一律 `pub(crate)`（可见性最小化，对外零扩散）；每个模块自带 `mod tests`，测试随被测物走（拆分器按 fn 名前缀自动配平，配对门禁钉住）。
+- **鲁棒性**：重构本身无运行时路径变更；**欠账**：①`pub(crate)` 字段/方法（Grader 字段、Engine settle/publish、llm breaker 状态）是拆分引入的可见性扩散，将来若再抽 crate 需收口；②同名 fn（as_str/new）分散在多文件时配对测试靠补写维持，后续改名需两处同步；③`target/` 下的拆分脚本未版本化，丢失后同类重构需重写。
+
 ### 2026-09-24 · M3 判题完成
 
 - **jev 全量**：`evaluate_many`（并发池 `JEV_CONCURRENCY=8`、保序、单题失败不中断，futures buffered）；`Route` + `route_by_confidence`/`route_from_margin`（accept/reject 两端闭区间采信、灰区 LlmReview；边界表驱动 + 非英语阈值切换断言）；`JevJob` 作业体。16→21 测试。
