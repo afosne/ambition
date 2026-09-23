@@ -13,6 +13,8 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 // EventBus → 订阅：GameService（可关）/ SyncProjector（server_url 非空）/ ProfileAggregator
 // 落库规则：主事务提交后旁路逐个执行，各自幂等（旁路失败不回滚，tracing 记录可补偿）
 // M2：core::EventBus trait 落地，engine 只 publish 不直调 gamify（解耦改进 #3）；gamify 效果经 save_game_state 落库（#1）
+// M4：submit 后 SRS 旁路（insert 前取基线 → is_guess → decide_action → 建卡/提权/调度；旁路失败 warn 不回滚）
+//   + assemble 幂等入卡内置义项/句式（data/lexicon、data/patterns，坏文件仅 warn 不阻断 open）+ ReviewDone 经 settle 落 game_state
 ```
 
 ## 2. use-case 门面（函数全集，按域）
@@ -24,6 +26,10 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 //   explain_mistake（文字讲解）随 06::explain 讲解层（M4+）；
 //   cost_summary(from_unix, to_unix) -> UsageSummary（成本台账门面，数据源 llm_usage）；
 //   add_chinglish_drills(limit)（中式英语改错训练题注入，data/chinglish/，DESIGN §13.6 归 M3）
+//   M4 落地：SubmitOutcome{grade, effects, srs: Option<CardAction>}（入卡处置回传 UI 提示）；
+//   due_list(now_unix, limit) -> Vec<ReviewItem>（到期+交错）；review_answer(card_id, rating) -> Card（FSRS 调度 + ReviewDone）；
+//   wrong_wordbook() -> Vec<WrongWordRow>（错词本：错因标签+次数+题干）；word_detail(lemma) -> Vec<Sense>（09 义项查询）；
+//   （weekly_quiz / vocab_probe_* / spelling_material 随 M5+，docs/08 §1 注记）
 // 复习/词汇（S2）：due_list / review_answer / enroll_words / wrong_wordbook / word_detail / vocab_probe_* / weekly_quiz
 // 出题/题包（S4/S6）：generate / variant_drill / export_pack / import_pack / share_code / pack_updates
 // 写作（S3）：scaffold / submit_essay / model_essays / upgrade_sentence / translate_grade / writing_drills / drill_submit / long_sentence / polish
@@ -43,6 +49,8 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 // TUI（ratatui+crossterm）：App{state, screen, engine}；Msg/ update(纯) / draw；Screen=Home|Practice|Review|Wordbook|Typing|Writing|Notes|Diary|Todo|Games|Pack|Profile|Settings|Mock
 // 要点：unicode-width CJK 折行；答题组件（题干/选项/填空光标/判分视图）；打字组件复用 04-typing；游戏全 TUI 可玩
 // M2：判题失败 → 独立错误行（≠ Pending 态，P-8）；填空题输入行（采集→ Answer::Fill）；提交计时 → timing（假对检测输入，#5 半步）
+// M4：Tab 切 Practice↔Review 复习屏（Space/Enter 翻面 · 1-4 = Again/Hard/Good/Easy · Esc/Tab 返回；无 Home 屏故 `3` 直达键随 M6）；
+//   判分后 SRS 提示行（错词本入册/假对进卡/FSRS 已安排，apply_srs_hint）
 // Web（React+TS，OpenAPI 生成客户端）：页面↔Screen 一一对应；TanStack Query
 ```
 
@@ -97,7 +105,7 @@ ambition                 # 进入 TUI：无需账号、无需服务、无需联�
 |---|---|---|---|
 | Home 今日 | `1` | Games 游戏 | `6` |
 | Practice 答题 | `2` | Notes/Diary/Todo | `7/8/9` |
-| Review 复习 | `3` | Pack 题包 | `o` |
+| Review 复习 | `3`（M4：`Tab` 从答题屏切入） | Pack 题包 | `o` |
 | Wordbook 单词 | `4` | Profile 画像 | `p` |
 | Typing 打字 | `5` | Mock 模考 | `m` |
 | Writing 写作 | `w` | Settings | `s` |
@@ -105,7 +113,7 @@ ambition                 # 进入 TUI：无需账号、无需服务、无需联�
 - 全局：`q` 退出 · `?` 帮助 · `Tab` 切面板 · `Esc` 返回；
 - 答题：`j/k` 移动 · `Space` 选中（多选连按）· `Enter` 提交 · `e` 看讲解 · `n` 下一题；**M3：`1-4` 自评把握（→ Attempt.self_confidence，假对检测输入）；判分浮层显示错因标签 + graded_by（结构化讲解①）**；
 - 待裁定：`y/n` 人工裁决（**裁决回流规则层**，同类题下次直判；M3 落地：verdict=pending 显示「待裁定」行，y=判对/n=判错，resolve 后浮层变 graded_by=human）；
-- 复习翻卡：`Space` 翻面 · `1/2/3/4` = Again/Hard/Good/Easy（FSRS，M4）；
+- 复习翻卡：`Space`/`Enter` 翻面 · `1/2/3/4` = Again/Hard/Good/Easy（FSRS，M4 落地：`Tab` 进入/退出复习屏，空队列显「暂无到期卡片」）；
 - 打字：直接输入，`Esc` 结束结算 WPM；
 - 题包：`i` 导入（文件/口令码）· `x` 导出 · `f` 关注更新。
 
@@ -128,7 +136,7 @@ Settings 填 `server_url` → 配对码登录 → 解锁同步/广场/代管 key
 
 ## 6. 错误与验证
 
-`EngineError{Store, Grader, Llm, Jev, Pack, CloudDisabled, Offline}`；外部失败可恢复降级。
+`EngineError{Store, Grader, Llm, Jev, Pack, CloudDisabled, Offline, Gen, Seed, NotFound, Srs, Vocab}`（Srs/Vocab 为 M4 新增）；外部失败可恢复降级。
 - [ ] S1–S8 端到端（fake AI + 真 SQLite）；旁路失败注入主事务仍成功；CloudDisabled 显式报错；
 - [ ] 同权映射表逐行走查；TUI 中文宽度快照；媒体降级可作答；游戏 TUI 全可玩；SPA 深链 fallback；
 - [ ] **单机全流程走通**（无 key 无网：答题/复习/打字/游戏/笔记/口令码题包）；键位表与 `?` 帮助屏一致。

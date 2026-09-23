@@ -8,6 +8,7 @@
 ```rust
 pub enum GameEffect { Xp(i32), Coins(i32), ComboUp, ComboBreak, StreakAdvanced, StreakFreezeUsed, UnlockBadge(BadgeId), GiveItem(ItemId,u32), MapProgress(NodeId), Notify(..) }
 pub fn on_event(&self, ev: &DomainEvent) -> Vec<GameEffect>;   // 事件→效果映射表；apply 幂等（event_id 去重）
+// M4：ReviewDone → Xp(1)（复习即反馈、只给小额经验，不进连击——排程不受游戏影响，§原则）
 pub fn round_settle(&self, r: &RoundResult) -> Vec<GameEffect>;   // 所有游戏/对战统一结算口
 // 进度：level_of(xp) / streak_update(Advance|FreezeUsed|Reset 从轻) / check_badges（词汇里程碑/错题清零/模考上岸/盲打通关/写作连优）
 // 学习地图：node_status（知识点=关卡，错题变式=复仇战，模考=Boss）/ boss_round(paper)

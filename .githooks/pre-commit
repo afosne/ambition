@@ -23,7 +23,27 @@ if grep -rnE 'fn[^{]*\(\s*_\s*:' crates --include='*.rs'; then
 fi
 
 say "4/7 函数↔测试配对（每个函数必须有 fn test_<函数名>_* 测试）"
-./scripts/fn_test_check.sh || bad "函数缺测试"
+pair_fail=0
+shopt -s nullglob
+for f in crates/*/src/*.rs crates/*/src/**/*.rs; do
+  [ -f "$f" ] || continue
+  names=$(awk '
+    /^mod tests/ { skip = 1; next }
+    skip && /^\}/ { skip = 0; next }
+    skip { next }
+    match($0, /(pub )?(async )?fn [a-z0-9_]+/) {
+      s = substr($0, RSTART, RLENGTH)
+      sub(/.*fn /, "", s)
+      if (s != "main" && s !~ /^test_/) print s
+    }' "$f" | sort -u)
+  for n in $names; do
+    if ! grep -qE "fn test_${n}(_|[ (])" "$f"; then
+      echo "  ✗ 缺少测试: $f :: fn $n  →  需要 fn test_${n}_..."
+      pair_fail=1
+    fi
+  done
+done
+[ "$pair_fail" -eq 0 ] || bad "函数缺测试"
 
 say "5/7 cargo test（测试必须全部通过）"
 cargo test --workspace || bad "测试失败"

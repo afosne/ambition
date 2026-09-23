@@ -5,7 +5,7 @@
 ## 1. 领域类型（crates/core，纯类型+纯函数）
 
 ```rust
-// ID：Qid(内容哈希)/AttemptId/CardId/EssayId/NoteId/DocId（uuid v7）/ContentHash(sha256)
+// ID：Qid(内容哈希)/CardId(source 内容寻址——M4 定案：同源同卡=幂等入卡，不走 uuid)/AttemptId/EssayId/NoteId/DocId（uuid v7）/ContentHash(sha256)
 pub struct LangTag(pub String);                  // BCP-47："en"/"zh-Hans"/"ja"…（16-config-i18n）
 pub struct Stem { pub text_l2: String, pub text_l1_hint: Option<String>, pub lang: LangTag } // l2 进 Jev；l1 永不进
 pub struct MediaRef { pub kind: MediaKind /* Image|Audio */, pub path: String, pub alt_zh: String }
@@ -44,6 +44,7 @@ pub trait EventBus: Send + Sync { fn publish(&self, ev: DomainEvent); }   // 订
 pub fn normalize_text(s: &str) -> String;                 // 小写/全角/空白/标点/可选冠词（按语种 normalizer 注入）
 pub fn canonical_json_hash<T: Serialize>(v: &T) -> ContentHash;
 pub fn is_guess(t: &Timing, c: Option<u8>, b: &UserBaseline) -> bool;   // 假对三形态（08-adaptive §假对）
+pub fn baseline_from_timings(&[Timing]) -> UserBaseline;                // 近 N 次 total_ms 滚动 p50/p90（空历史=默认 15s/60s，M4 落地）
 ```
 
 ## 2. 持久化（crates/store：sqlx 双后端同一迁移）
@@ -61,8 +62,8 @@ pub fn is_guess(t: &Timing, c: Option<u8>, b: &UserBaseline) -> bool;   // 假�
 ### Repo trait（engine 只依赖这些；测试用 fake）
 
 ```rust
-QuestionRepo{upsert/get/by_tags/link} · AttemptRepo{insert_attempt/insert_grade/add_error_tags/recent_wrong/push_arbitration/resolve_arbitration}
-CardRepo{upsert/due/get} · EssayRepo{insert/history/upsert_template/templates} · NoteRepo{upsert/backlinks/search/diary_range/todo_open}
+QuestionRepo{upsert/get/by_tags/link} · AttemptRepo{insert_attempt_tx/get_arbitration/resolve_arbitration/add_blank_acceptable/get_attempt/recent_timings}
+CardRepo{upsert_card/get_card/due_cards/wrong_cards} · EssayRepo{insert/history/upsert_template/templates} · NoteRepo{upsert/backlinks/search/diary_range/todo_open}
 TypingRepo{insert/history} · ProfileRepo{save_snapshot/latest/error_heat} · GameRepo{load/save/log_event}
 PackRepo{upsert_pack/upsert_shared/followed} · SyncRepo{append/unpushed/mark_pushed} · AiLedgerRepo{cache_get/cache_put/record_usage/usage_summary}
 LexiconReader{senses/relations/lookup/confusables}（**读词库资源文件**，09-vocabulary） · PatternRepo{upsert/by_track} · TranslateRepo{insert/search/favorite} · MaterialRepo{ingest/get/register/usage_of/set_status/asset_*}
@@ -75,6 +76,7 @@ LexiconReader{senses/relations/lookup/confusables}（**读词库资源文件**�
 - **迁移版本化（M2 落地）**：`schema_version` 单行表 + 代码内迁移清单 `MIGRATIONS: [(version, SQL)]`（只增不改，应用到最大版本）；枚举列一律 serde `snake_case` 字符串（禁 `format!("{:?}")`）；通用 JSON 负载列（questions.payload、grades.payload）统一命名 `payload`（attempts.answer 是语义列保留原名）；题目内容 = core 具名结构 `QuestionContent{stem, kind, difficulty, tags}`（不是位置元组），provenance/quality_score/lang 独立列。
 - **迁移 v2（M3 落地）**：`arbitration` 待裁定唯一桶（`attempt_id` 主键 + `status(pending|resolved)` + `reason` + 裁决后 `verdict/resolved_at`）——`insert_attempt_tx` 在 `verdict=pending` 时**同事务**写入（§事务含 arbitration）；`list_arbitration(status)` / `resolve_arbitration(attempt_id, verdict)`（同时改 grades：`graded_by=human`）；裁决回流 = `add_blank_acceptable(qid, index, value)`（读改写 questions.payload，同值幂等）。`cache_purge_before(unix)`（llm_cache TTL 淘汰）与 `usage_summary(from_unix, to_unix)`（llm_usage 按 kind 区间聚合，成本面板数据源）同版落地。
 - `quality_score REAL NOT NULL DEFAULT 1.0` 随 questions 表（06 质检回路产物；组卷/导入用 θ 过滤）。
+- **迁移 v3（M4 落地）**：`srs_queue` 复习卡——`card_id` PK（= core CardId，source 内容寻址，幂等入卡）+ `payload`（整张 Card JSON：FSRS 状态/模式/错词计数/假对计数/错因标签）+ **`due_at` 整数 unix 秒索引列**（避开 `datetime()` NULL 静默坑，P-15）+ `wrong_count` 查询列（错词本入口）；单写者 08-adaptive（经 engine：on_attempt/review_answer）。同版新增 `get_attempt(attempt_id)`（读回整条 Attempt——attempts.answer 列存的是完整 Attempt JSON）与 `recent_timings(limit)`（近 N 次 total_ms 滚动样本，假对基线原料）。
 
 ## 3. 验证点
 

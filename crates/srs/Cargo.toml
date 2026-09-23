@@ -5,3 +5,9 @@ edition.workspace = true
 
 [dependencies]
 ambition-core = { path = "../core" }
+fsrs = "6"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+serde_json = "1"

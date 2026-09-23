@@ -30,7 +30,7 @@ stages/<lang>/<track>.json   词表 wordlists/   rubric rubrics/   模板 templa
 打字课程 typing/   判断措辞 jev/（error_tags.json=判分口径，改必升 version）   prompts/（{{l2}}/{{l1}} 占位）
 qpack.schema.json   importers/（Anki/CSV 映射 profile）
 seed/<lang>/<track>/       # 内置离线内容包：种子题库（每轨 ≥200 题）——内容三级保障①，零 AI 零网核心功能可用；M2 格式=qpack（*.qpack.json），open() 幂等导入
-lexicon/<lang>/            # **词库资源**（EC-DICT 构建产物：JSONL+索引）；词库不进 SQLite（02-core-store 分层）
+lexicon/<lang>/            # **词库资源**（EC-DICT 构建产物：JSONL+索引）；词库不进 SQLite（02-core-store 分层）；M4 内置 senses.json（义项，根带 schema_version=1）
 ```
 
 **资源解析顺序（词库/内置内容）**：`server_url` 已配置且服务端托管 → S3 → **本地 `data/`**（无服务端/S3 时，资源就保存/使用本地 `data/` 目录）。SQLite 只存业务数据（02-core-store 存储分层）。**多设备一致性**：词库包含 `version`（semver），客户端按锁定版本拉取——换机恢复自动拉同版词库（14-cloud §1.2），保证 word_id/sense_id 跨设备稳定；用户词库增量走业务同步。

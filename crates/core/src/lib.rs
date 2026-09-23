@@ -5,7 +5,6 @@ use sha2::{Digest, Sha256};
 /// 内容寻址题目 ID：sha256(题目内容) 前 8 字节 hex（16 字符）
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Qid(pub String);
-
 impl Qid {
     /// 由题目内容生成稳定 id（同内容同 id，用于去重与共享）
     pub fn from_content(content: &str) -> Self {
@@ -16,6 +15,40 @@ impl Qid {
             .map(|byte| format!("{byte:02x}"))
             .collect();
         Self(hex)
+    }
+}
+
+/// 卡片来源（docs/02 §1；统一入 08 复习队列）
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CardSource {
+    /// 义项卡（word_id = lemma 内容定名，09-vocabulary）
+    WordSense { word_id: String, sense_id: u64 },
+    /// 错题/假对卡
+    Question { qid: Qid },
+    /// 笔记卡（M6+）
+    Note { note_id: String },
+    /// 短语卡（M5+）
+    Phrase { phrase_id: String },
+    /// 句式卡（09-vocabulary）
+    Pattern { pattern_id: String },
+}
+
+/// 复习卡 ID：source 内容寻址（M4 定案：同源同卡 = 幂等入卡，不走 uuid；docs/02 §1）
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct CardId(pub String);
+
+impl CardId {
+    /// 由卡片来源推导稳定 id（可读前缀 + 源键；同源恒同卡）
+    pub fn from_source(source: &CardSource) -> Self {
+        let key = match source {
+            CardSource::WordSense { word_id, sense_id } => format!("ws:{word_id}:{sense_id}"),
+            CardSource::Question { qid } => format!("q:{}", qid.0),
+            CardSource::Note { note_id } => format!("note:{note_id}"),
+            CardSource::Phrase { phrase_id } => format!("phrase:{phrase_id}"),
+            CardSource::Pattern { pattern_id } => format!("pat:{pattern_id}"),
+        };
+        Self(key)
     }
 }
 
@@ -544,6 +577,12 @@ pub enum DomainEvent {
         verdict: Verdict,
         correct: bool,
     },
+    /// 复习评分完成（M4：FSRS 调度后发布，gamify → Xp(1)）
+    ReviewDone {
+        card_id: String,
+        /// Rating 持久化字符串（again/hard/good/easy）
+        rating: String,
+    },
 }
 
 /// 事件总线：订阅者（gamify/sync 投影/profile）旁路消费，各自幂等；engine 只 publish 不直调（改进 #3）
@@ -582,6 +621,24 @@ pub fn is_guess(timing: &Timing, self_confidence: Option<u8>, baseline: &UserBas
         return true;
     }
     self_confidence.is_some_and(|c| c <= 2) && timing.total_ms > baseline.latency_p90_ms
+}
+
+/// 假对基线：近 N 次 total_ms 滚动 p50/p90（nearest-rank）；空历史用默认 15s/60s（冷启动不误判，docs/08 §2）
+pub fn baseline_from_timings(timings: &[Timing]) -> UserBaseline {
+    if timings.is_empty() {
+        return UserBaseline {
+            latency_p50_ms: 15_000,
+            latency_p90_ms: 60_000,
+        };
+    }
+    let mut samples: Vec<u64> = timings.iter().map(|t| t.total_ms).collect();
+    samples.sort_unstable();
+    let n = samples.len();
+    let pick = |pct: usize| samples[(n * pct).div_ceil(100) - 1];
+    UserBaseline {
+        latency_p50_ms: pick(50),
+        latency_p90_ms: pick(90),
+    }
 }
 
 #[cfg(test)]
@@ -907,6 +964,72 @@ mod tests {
             revision_count: 2,
         };
         assert!(!is_guess(&normal, Some(4), &base));
+    }
+
+    #[test]
+    fn test_baseline_from_timings_percentiles_and_empty_default() {
+        // 空历史 → 默认 15s/60s（冷启动不误判）
+        assert_eq!(
+            baseline_from_timings(&[]),
+            UserBaseline {
+                latency_p50_ms: 15_000,
+                latency_p90_ms: 60_000
+            }
+        );
+        // 1..=100ms 样本：nearest-rank p50 = 50, p90 = 90
+        let samples: Vec<Timing> = (1..=100)
+            .map(|i| Timing {
+                total_ms: i,
+                revision_count: 0,
+            })
+            .collect();
+        assert_eq!(
+            baseline_from_timings(&samples),
+            UserBaseline {
+                latency_p50_ms: 50,
+                latency_p90_ms: 90
+            }
+        );
+        // 单样本退化不越界
+        let one = [Timing {
+            total_ms: 42,
+            revision_count: 1,
+        }];
+        assert_eq!(baseline_from_timings(&one).latency_p50_ms, 42);
+    }
+
+    #[test]
+    fn test_from_source_is_stable_and_readable() {
+        let qid = Qid("abc123".into());
+        let source = CardSource::Question { qid: qid.clone() };
+        assert_eq!(CardId::from_source(&source), CardId("q:abc123".to_string()));
+        assert_eq!(
+            CardId::from_source(&source),
+            CardId::from_source(&CardSource::Question { qid }),
+            "同源同卡（幂等入卡）"
+        );
+        assert_eq!(
+            CardId::from_source(&CardSource::WordSense {
+                word_id: "bank".into(),
+                sense_id: 2
+            }),
+            CardId("ws:bank:2".to_string())
+        );
+        assert_eq!(
+            CardId::from_source(&CardSource::Pattern {
+                pattern_id: "not_only".into()
+            }),
+            CardId("pat:not_only".to_string())
+        );
+        assert_ne!(
+            CardId::from_source(&CardSource::Question {
+                qid: Qid("abc123".into())
+            }),
+            CardId::from_source(&CardSource::Pattern {
+                pattern_id: "abc123".into()
+            }),
+            "不同来源不同卡"
+        );
     }
 
     #[test]

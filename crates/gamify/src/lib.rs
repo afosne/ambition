@@ -94,6 +94,8 @@ pub fn on_event(event: &DomainEvent) -> Vec<GameEffect> {
             Verdict::Wrong => vec![GameEffect::Xp(1), GameEffect::ComboBreak],
             Verdict::Pending => vec![],
         },
+        // M4：复习只给小额经验、不进连击——排程不受游戏影响（docs/13 §原则）
+        DomainEvent::ReviewDone { .. } => vec![GameEffect::Xp(1)],
     }
 }
 
@@ -158,6 +160,14 @@ mod tests {
             vec![GameEffect::Xp(1), GameEffect::ComboBreak]
         );
         assert!(on_event(&graded(Verdict::Pending)).is_empty());
+        // ReviewDone：Xp(1) 且不断/不升连击
+        assert_eq!(
+            on_event(&DomainEvent::ReviewDone {
+                card_id: "c1".into(),
+                rating: "good".into(),
+            }),
+            vec![GameEffect::Xp(1)]
+        );
     }
 
     #[test]
