@@ -9,10 +9,12 @@ use ambition_gen::{Manifest, PackItem, QPACK_SCHEMA_VERSION, QPack};
 
 mod grammar;
 mod mixed;
+mod passage;
 mod usage;
 
 use grammar::{future_will, past_regular, present_sva};
 use mixed::{fill_blanks, multi_choice, tense_mix};
+use passage::{cloze, grammar_fill, reading, seven_of_five};
 use usage::{articles, prepositions};
 
 pub(crate) fn choice(
@@ -78,6 +80,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     scored.extend(tense_mix());
     scored.extend(fill_blanks());
     scored.extend(multi_choice());
+    // M4 题型补全：语篇四题型（完形/语法填空/阅读/七选五）
+    scored.extend(cloze());
+    scored.extend(grammar_fill());
+    scored.extend(reading());
+    scored.extend(seven_of_five());
     assert!(
         scored.len() >= 200,
         "docs/16 requires >=200 questions per track, got {}",

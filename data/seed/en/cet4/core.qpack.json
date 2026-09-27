@@ -8613,6 +8613,448 @@
       "explanations": [
         "'Quickly' modifies verbs; 'very' modifies adjectives and adverbs."
       ]
+    },
+    {
+      "qid": "4b7d0b6bf97ed937",
+      "question": {
+        "qid": "4b7d0b6bf97ed937",
+        "kind": {
+          "cloze": {
+            "passage": "Every morning, Kate ___ early, ___ breakfast with her family, and then ___ the bus to school. She never ___ the bus.",
+            "blanks": [
+              {
+                "acceptable": [
+                  "gets"
+                ]
+              },
+              {
+                "acceptable": [
+                  "has"
+                ]
+              },
+              {
+                "acceptable": [
+                  "takes"
+                ]
+              },
+              {
+                "acceptable": [
+                  "misses"
+                ]
+              }
+            ]
+          }
+        },
+        "stem": "Cloze: daily routine",
+        "difficulty": 3,
+        "tags": [
+          "cloze",
+          "reading"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Present simple: third-person singular takes -s (gets/has/takes/misses)."
+      ]
+    },
+    {
+      "qid": "d3072c379c6f3ee3",
+      "question": {
+        "qid": "d3072c379c6f3ee3",
+        "kind": {
+          "cloze": {
+            "passage": "Last Sunday we ___ the science museum. The guide ___ us about the stars. We ___ a lot and ___ home before dark.",
+            "blanks": [
+              {
+                "acceptable": [
+                  "visited"
+                ]
+              },
+              {
+                "acceptable": [
+                  "told"
+                ]
+              },
+              {
+                "acceptable": [
+                  "learned"
+                ]
+              },
+              {
+                "acceptable": [
+                  "returned"
+                ]
+              }
+            ]
+          }
+        },
+        "stem": "Cloze: a visit to the museum",
+        "difficulty": 3,
+        "tags": [
+          "cloze",
+          "reading"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Narrative past: the story is finished, so all verbs take the past form."
+      ]
+    },
+    {
+      "qid": "2b8cf2d12acf4b67",
+      "question": {
+        "qid": "2b8cf2d12acf4b67",
+        "kind": {
+          "grammar_fill": {
+            "passage": "By next year we ___ this project. She ___ already ___ the report when I arrived.",
+            "blanks": [
+              {
+                "acceptable": [
+                  "will finish"
+                ]
+              },
+              {
+                "acceptable": [
+                  "had"
+                ]
+              },
+              {
+                "acceptable": [
+                  "finished"
+                ]
+              }
+            ]
+          }
+        },
+        "stem": "Grammar fill: tense",
+        "difficulty": 3,
+        "tags": [
+          "grammar",
+          "fill"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Future with will; past perfect 'had + past participle' for the earlier action."
+      ]
+    },
+    {
+      "qid": "b2f220117ed2b362",
+      "question": {
+        "qid": "b2f220117ed2b362",
+        "kind": {
+          "grammar_fill": {
+            "passage": "The bridge ___ last year. He is ___ honest man and ___ honest man never lies.",
+            "blanks": [
+              {
+                "acceptable": [
+                  "was built"
+                ]
+              },
+              {
+                "acceptable": [
+                  "an"
+                ]
+              },
+              {
+                "acceptable": [
+                  "an"
+                ]
+              }
+            ]
+          }
+        },
+        "stem": "Grammar fill: voice and articles",
+        "difficulty": 3,
+        "tags": [
+          "grammar",
+          "fill"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Passive voice 'was built'; 'honest' starts with a vowel sound → 'an'."
+      ]
+    },
+    {
+      "qid": "b0cf367b54fbf99c",
+      "question": {
+        "qid": "b0cf367b54fbf99c",
+        "kind": {
+          "reading": {
+            "passage": "Mara opened a small café near the station three years ago. She wakes at five every day to bake bread herself. At first only regular commuters came, but the smell soon drew office workers from the next street. Last year she hired two assistants, yet she still checks the ovens before dawn.",
+            "items": [
+              {
+                "question": "When does Mara bake the bread?",
+                "options": [
+                  {
+                    "id": 0,
+                    "text": "At noon"
+                  },
+                  {
+                    "id": 1,
+                    "text": "Before dawn"
+                  },
+                  {
+                    "id": 2,
+                    "text": "After lunch"
+                  },
+                  {
+                    "id": 3,
+                    "text": "At midnight"
+                  }
+                ],
+                "answer": [
+                  1
+                ]
+              },
+              {
+                "question": "Why did office workers come?",
+                "options": [
+                  {
+                    "id": 0,
+                    "text": "The smell of bread"
+                  },
+                  {
+                    "id": 1,
+                    "text": "Cheap prices"
+                  },
+                  {
+                    "id": 2,
+                    "text": "A newspaper report"
+                  },
+                  {
+                    "id": 3,
+                    "text": "A radio show"
+                  }
+                ],
+                "answer": [
+                  0
+                ]
+              },
+              {
+                "question": "How many assistants work there now?",
+                "options": [
+                  {
+                    "id": 0,
+                    "text": "One"
+                  },
+                  {
+                    "id": 1,
+                    "text": "Two"
+                  },
+                  {
+                    "id": 2,
+                    "text": "Three"
+                  },
+                  {
+                    "id": 3,
+                    "text": "None"
+                  }
+                ],
+                "answer": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        "stem": "Reading: the early bird café",
+        "difficulty": 3,
+        "tags": [
+          "reading",
+          "comprehension"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Details are stated: 'wakes at five… bake bread', 'the smell soon drew office workers', 'hired two assistants'."
+      ]
+    },
+    {
+      "qid": "35a232067b323574",
+      "question": {
+        "qid": "35a232067b323574",
+        "kind": {
+          "reading": {
+            "passage": "Riverside town introduced blue recycling bins in 2019. At first many residents ignored them, but the council ran a school programme that taught children to sort waste. Within two years the town recycled sixty percent of its household waste, and neighbouring villages copied the model. The programme now costs less than the old landfill fees.",
+            "items": [
+              {
+                "question": "What changed residents' habits?",
+                "options": [
+                  {
+                    "id": 0,
+                    "text": "Higher taxes"
+                  },
+                  {
+                    "id": 1,
+                    "text": "A school programme"
+                  },
+                  {
+                    "id": 2,
+                    "text": "New shops"
+                  },
+                  {
+                    "id": 3,
+                    "text": "A road closing"
+                  }
+                ],
+                "answer": [
+                  1
+                ]
+              },
+              {
+                "question": "How much waste is recycled today?",
+                "options": [
+                  {
+                    "id": 0,
+                    "text": "Ten percent"
+                  },
+                  {
+                    "id": 1,
+                    "text": "Thirty percent"
+                  },
+                  {
+                    "id": 2,
+                    "text": "Sixty percent"
+                  },
+                  {
+                    "id": 3,
+                    "text": "All of it"
+                  }
+                ],
+                "answer": [
+                  2
+                ]
+              },
+              {
+                "question": "What happened to the cost?",
+                "options": [
+                  {
+                    "id": 0,
+                    "text": "It rose"
+                  },
+                  {
+                    "id": 1,
+                    "text": "It fell"
+                  },
+                  {
+                    "id": 2,
+                    "text": "It stayed equal"
+                  },
+                  {
+                    "id": 3,
+                    "text": "It became unknown"
+                  }
+                ],
+                "answer": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        "stem": "Reading: recycling in Riverside",
+        "difficulty": 3,
+        "tags": [
+          "reading",
+          "comprehension"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "The passage states the school programme, sixty percent, and 'costs less than the old landfill fees'."
+      ]
+    },
+    {
+      "qid": "bc4efc211160a1ad",
+      "question": {
+        "qid": "bc4efc211160a1ad",
+        "kind": {
+          "seven_of_five": {
+            "passage": "When you meet a new word, first ___ it in a sentence you understand. Next, ___ the word the same evening; sleep helps the brain keep new traces. Then, ___ using the word in your own writing within three days. After that, ___ its family: verb, noun, adjective. Finally, ___ the word again after a week.",
+            "options": [
+              "guess its meaning from context",
+              "copy the word three times",
+              "try",
+              "collect",
+              "review",
+              "throw away the note",
+              "close the dictionary at once"
+            ],
+            "answer": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          }
+        },
+        "stem": "Seven of five: how to study a word",
+        "difficulty": 4,
+        "tags": [
+          "reading",
+          "seven_of_five"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "The five blanks follow the study sequence: guess → copy → use → build the word family → review."
+      ]
+    },
+    {
+      "qid": "e5effe62b2ddbf93",
+      "question": {
+        "qid": "e5effe62b2ddbf93",
+        "kind": {
+          "seven_of_five": {
+            "passage": "A good breakfast ___ the body after a night without food. Children who eat breakfast ___ better at school. Choose food that ___ slowly, such as oats, ___ sugar, and ___ water instead of juice.",
+            "options": [
+              "fuels",
+              "concentrate",
+              "releases energy",
+              "limit",
+              "drink",
+              "skip the meal",
+              "sweeten the coffee"
+            ],
+            "answer": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          }
+        },
+        "stem": "Seven of five: a healthy breakfast",
+        "difficulty": 4,
+        "tags": [
+          "reading",
+          "seven_of_five"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Each blank follows logically: fuels → concentrate → releases energy → limit sugar → drink water."
+      ]
     }
   ]
 }
