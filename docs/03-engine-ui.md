@@ -110,8 +110,10 @@ ambition                 # 进入 TUI：无需账号、无需服务、无需联�
 | Typing 打字 | `5` | Mock 模考 | `m` |
 | Writing 写作 | `w` | Settings | `s` |
 
-- 全局：`q` 退出 · `?` 帮助 · `Tab` 切面板 · `Esc` 返回；
-- 答题：`j/k` 移动 · `Space` 选中（多选连按）· `Enter` 提交 · `e` 看讲解 · `n` 下一题；**M3：`1-4` 自评把握（→ Attempt.self_confidence，假对检测输入）；判分浮层显示错因标签 + graded_by（结构化讲解①）**；
+- 全局：`q` 退出（非编辑态）· **`Ctrl+Q`/`Ctrl+C` 恒退出（任何状态，含填空编辑中）** · `?` 帮助 · `Tab` 切面板 · `Esc` 返回/退出；
+- **键位唯一入口（2026-09-27 统一重构）**：`crates/tui/src/keys.rs::key_to_msg(KeyCtx, key, mods)` —— `KeyCtx`（Choice / Fill{editing} / Pending / Graded / Finished）由 `AppState::key_ctx()` 计算，键位表只此一份；提示行 `hint(ctx)` 与路由同源（render 不得硬编码键位文案）；main 不做任何键位改写（Enter→下一题也在表内）；
+- 答题（Choice ctx）：`j/k` 移动 · **`Space` 选中/取消（多选连按；未选中时按光标位提交，M3 落地）** · `Enter` 提交 · `e` 看讲解（改进 #17 未接）· **`1-4` 自评把握（→ Attempt.self_confidence，假对检测输入；仅作答态）**；判分浮层显示错因标签 + graded_by（结构化讲解①）；
+- 填空（Fill ctx，**2026-09-27 键位修订**）：**打字即编辑（无需进入键，任何可打印字符含空格/`;`/数字直接进输入行）** · `;` 分隔多空 · `Enter` 提交 · **`Esc` = 退出编辑但保留已输入**（再打字直接恢复编辑；未编辑时 `Esc` 才退出程序）——修订前 `Esc` 直接退程序丢答案是坑；
 - 待裁定：`y/n` 人工裁决（**裁决回流规则层**，同类题下次直判；M3 落地：verdict=pending 显示「待裁定」行，y=判对/n=判错，resolve 后浮层变 graded_by=human）；
 - 复习翻卡：`Space`/`Enter` 翻面 · `1/2/3/4` = Again/Hard/Good/Easy（FSRS，M4 落地：`Tab` 进入/退出复习屏，空队列显「暂无到期卡片」）；
 - 打字：直接输入，`Esc` 结束结算 WPM；

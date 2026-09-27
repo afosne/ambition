@@ -27,6 +27,10 @@ pub struct AppState {
     pub revisions: u32,
     /// 自评把握 1-4（提交前键入 → Attempt.self_confidence，假对检测输入，改进 #10）
     pub self_confidence: Option<u8>,
+    /// 填空编辑态（打字即进入；Esc 退出保留文本——keys.rs KeyCtx::Fill{editing}）
+    pub editing: bool,
+    /// 选择题已选中集合（Space 切换；空 = 未显式选中，提交回退光标位）
+    pub checked: Vec<u32>,
 }
 
 /// 输入消息
@@ -45,6 +49,10 @@ pub enum Msg {
     Arbitrate(bool),
     /// 自评把握 1-4
     Confidence(u8),
+    /// Space 选中/取消（选择题；单选=替换选中集，多选=切换）
+    Select,
+    /// Esc 退出编辑（保留已输入；打字直接恢复编辑）
+    StopEdit,
 }
 
 /// 状态机输出（Quit/Submit 由 main 执行副作用）
@@ -72,15 +80,34 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         started_at: Instant::now(),
         revisions: 0,
         self_confidence: None,
+        editing: false,
+        checked: Vec::new(),
     }
 }
 
 impl AppState {
-    /// 当前题是否处于填空输入态（有题、未判分、题型为填空）
-    pub fn is_fill_input(&self) -> bool {
+    /// 当前题是否等待填空作答（有题、未判分、题型为填空）
+    pub fn is_fill_pending(&self) -> bool {
         !self.finished
             && self.grade.is_none()
             && matches!(self.questions[self.idx].kind, QuestionKind::FillBlank(_))
+    }
+
+    /// 键位上下文（keys.rs 唯一路由入参；键位表只此一份）
+    pub fn key_ctx(&self) -> KeyCtx {
+        if self.finished {
+            return KeyCtx::Finished;
+        }
+        match &self.grade {
+            Some(g) if g.verdict == ambition_core::Verdict::Pending => KeyCtx::Pending,
+            Some(_) => KeyCtx::Graded,
+            None if matches!(self.questions[self.idx].kind, QuestionKind::FillBlank(_)) => {
+                KeyCtx::Fill {
+                    editing: self.editing,
+                }
+            }
+            None => KeyCtx::Choice,
+        }
     }
 
     /// 采集本题计时（提交时调用；毫秒）
@@ -199,17 +226,45 @@ mod tests {
     }
 
     #[test]
-    fn test_is_fill_input_gates_char_input() {
+    fn test_is_fill_pending_gates_char_input() {
         let choice = new_state(vec![sample_question()]);
-        assert!(!choice.is_fill_input(), "选择题不吞字符");
+        assert!(!choice.is_fill_pending(), "选择题不吞字符");
         let mut fill = new_state(vec![fill_question(1)]);
-        assert!(fill.is_fill_input(), "填空未判分 = 输入态");
+        assert!(fill.is_fill_pending(), "填空未判分 = 待答");
+        assert_eq!(
+            update(&mut fill, Msg::Char('a')),
+            Cmd::None,
+            "打字直接进编辑"
+        );
+        assert!(fill.editing, "首键进入编辑态");
+        assert_eq!(update(&mut fill, Msg::StopEdit), Cmd::None, "Esc 退出编辑");
+        assert!(!fill.editing && fill.input == "a", "退出编辑保留输入");
+        update(&mut fill, Msg::Char('b'));
+        assert!(fill.editing && fill.input == "ab", "打字直接恢复编辑");
         apply_grade(&mut fill, grade(Verdict::Correct));
-        assert!(!fill.is_fill_input(), "判分后退出输入态");
+        assert!(!fill.is_fill_pending(), "判分后退出待答");
         fill.finished = true;
-        let mut c2 = choice.clone();
-        c2.finished = true;
-        assert!(!c2.is_fill_input(), "结束后非输入态");
+        assert!(!fill.is_fill_pending(), "结束后非待答");
+    }
+
+    #[test]
+    fn test_key_ctx_routes_states() {
+        let choice = new_state(vec![sample_question()]);
+        assert_eq!(choice.key_ctx(), KeyCtx::Choice);
+        let mut fill = new_state(vec![fill_question(1)]);
+        assert_eq!(
+            fill.key_ctx(),
+            KeyCtx::Fill { editing: false },
+            "打字前未编辑（首键直接进编辑）"
+        );
+        fill.editing = true;
+        assert_eq!(fill.key_ctx(), KeyCtx::Fill { editing: true });
+        apply_grade(&mut fill, grade(Verdict::Pending));
+        assert_eq!(fill.key_ctx(), KeyCtx::Pending, "待裁定单独上下文");
+        apply_grade(&mut fill, grade(Verdict::Correct));
+        assert_eq!(fill.key_ctx(), KeyCtx::Graded);
+        fill.finished = true;
+        assert_eq!(fill.key_ctx(), KeyCtx::Finished);
     }
 
     #[test]

@@ -17,20 +17,25 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         ));
         if let QuestionKind::SingleChoice(body) | QuestionKind::MultiChoice(body) = &q.kind {
             for (i, opt) in body.options.iter().enumerate() {
-                let mark = if state.sel == i { "❯" } else { " " };
-                text.push_str(&format!("  {} {}. {}\n", mark, i + 1, opt.text));
+                let cursor = if state.sel == i { "❯" } else { " " };
+                let tick = if state.checked.contains(&(i as u32)) {
+                    "✓"
+                } else {
+                    " "
+                };
+                text.push_str(&format!("  {}{} {}. {}\n", cursor, tick, i + 1, opt.text));
             }
         }
         if matches!(q.kind, QuestionKind::FillBlank(_)) && state.grade.is_none() {
             text.push_str(&format!("\n  答案: {}▍\n", state.input));
-            text.push_str("  多空用 ; 分隔 · Enter 提交 · Esc 退出\n");
-        } else if state.grade.is_none() {
-            text.push_str("\n j/k 移动 · Enter 提交/下一题 · 1-4 自评把握 · q 退出\n");
-            if let Some(level) = state.self_confidence {
-                text.push_str(&format!(" 自评把握: {level}/4\n"));
-            }
-        } else {
-            text.push_str("\n j/k 移动 · Enter 提交/下一题 · q 退出\n");
+        }
+        // 键位提示：与路由同源（keys.rs::hint，禁止硬编码）
+        text.push_str(&format!("\n{}\n", hint(state.key_ctx())));
+        if state.grade.is_none()
+            && !matches!(q.kind, QuestionKind::FillBlank(_))
+            && let Some(level) = state.self_confidence
+        {
+            text.push_str(&format!(" 自评把握: {level}/4\n"));
         }
         // 独立错误行（红字，≠ 判分浮层；P-8）
         if let Some(err) = &state.error {
@@ -72,6 +77,7 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     }
     let paragraph = Paragraph::new(text)
         .alignment(Alignment::Left)
+        .wrap(Wrap { trim: false })
         .block(
             Block::default()
                 .title("Ambition, 俺必胜！".bold())
@@ -122,6 +128,25 @@ mod tests {
             }),
             1,
             vec!["grammar".into()],
+            Provenance::Seed,
+        )
+    }
+
+    /// 多选题夹具（测试内 helper）
+    fn multi_question() -> Question {
+        Question::new(
+            "Pick two.".into(),
+            QuestionKind::MultiChoice(ambition_core::ChoiceBody {
+                options: (0..3)
+                    .map(|i| ambition_core::OptionItem {
+                        id: i,
+                        text: format!("opt{i}"),
+                    })
+                    .collect(),
+                answer: vec![0, 2],
+            }),
+            2,
+            vec![],
             Provenance::Seed,
         )
     }
@@ -195,6 +220,40 @@ mod tests {
         let fbuf = render_to(&f);
         assert!(fbuf.contains("答案:"), "输入行标签可见");
         assert!(fbuf.contains("am"), "输入内容可见");
+        assert!(fbuf.contains("退出编辑"), "提示行取 hint(ctx)：编辑态");
+        update(&mut f, Msg::StopEdit);
+        let bbuf = render_to(&f);
+        assert!(bbuf.contains("打字恢复编辑"), "提示随 ctx 变化: {bbuf:?}");
+    }
+
+    #[test]
+    fn test_render_marks_checked_option_for_multi_select() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        fn render_to(s: &AppState) -> String {
+            use unicode_width::UnicodeWidthStr;
+
+            let mut terminal = Terminal::new(TestBackend::new(72, 18)).expect("terminal");
+            terminal.draw(|f| render(f, s)).expect("draw");
+            let cells = &terminal.backend().buffer().content;
+            let mut out = String::new();
+            let mut i = 0;
+            while i < cells.len() {
+                let sym = cells[i].symbol();
+                out.push_str(sym);
+                i += 1 + usize::from(sym.width() == 2);
+            }
+            out
+        }
+
+        let mut s = new_state(vec![multi_question()]);
+        update(&mut s, Msg::Select);
+        update(&mut s, Msg::MoveDown);
+        update(&mut s, Msg::Select);
+        let buf = render_to(&s);
+        assert!(buf.contains("✓"), "选中标记可见: {buf:?}");
+        assert_eq!(s.checked, vec![0, 1], "多选两枚");
     }
 
     #[test]

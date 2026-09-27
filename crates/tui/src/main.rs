@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use ambition_core::{Attempt, AttemptMode};
 use ambition_engine::Engine;
-use ambition_tui::{Cmd, Msg, apply_error, apply_grade, key_to_msg, new_state, render, update};
+use ambition_tui::{Cmd, apply_error, apply_grade, key_to_msg, new_state, render, update};
 use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -49,15 +49,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         if key.kind != KeyEventKind::Press {
             continue;
         }
-        // 键位收口在 lib（可测）；填空输入态吞字符
-        let Some(msg) = key_to_msg(state.is_fill_input(), key.code) else {
+        // 键位唯一入口（keys.rs：KeyCtx 路由 + 恒定层 Ctrl+Q/Ctrl+C；Enter 提交/下一题在表内）
+        let Some(msg) = key_to_msg(state.key_ctx(), key.code, key.modifiers) else {
             continue;
-        };
-        // Submit 前抓 Next 语义：Enter 在判分后 = 下一题
-        let msg = if state.grade.is_some() && matches!(msg, Msg::Submit) {
-            Msg::Next
-        } else {
-            msg
         };
         match update(&mut state, msg) {
             Cmd::Quit => break,
