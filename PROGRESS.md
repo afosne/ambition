@@ -22,6 +22,23 @@ MVP_STAGE: 4/6
 
 ## 进度日志
 
+### 2026-09-27 · TUI 键位二期：多空分行作答 + 全站禁单字母快捷键（非阶段任务，用户手动发起）
+
+- **背景与决策（用户裁定）**：①“多空题目应该多空填写而不是使用 `;` 分割”；②“统一所有页面的快捷键，**不允许单字母快捷键**”——追问确认：**仅非字母键 + Ctrl 组合**（方向/Enter/Space/Esc/Tab/数字 + Ctrl）；待裁定裁决改**方向键选择高亮 + Enter 确认**；未来多屏切换改 **Ctrl+字母直达**。
+- **改动**：
+  - **多空分行**：state `input: String → inputs: Vec<String> + blank_sel`（`blank_count(kind)` 单点重建：构造与下一题两处收口）；update 每空独立提交（逐位 trim 按序）、填空 ctx 的 Move = 切空位（`Tab/→/↓` 下一空、`Shift+Tab/←/↑` 上一空；单空原地不计修订、判分后锁定）；render 每空一位独立行（`❯`+`▍` 标当前空、多空带编号）；**废除 `;` 分隔**（错误提示/hint/docs 同步删）；防御分支保留（输入位与空数不齐不提交，人为造错测试钉住）。
+  - **禁单字母快捷键**：keys.rs 三层表重写——①恒定层 `Ctrl` 组合：`Ctrl+Q`/`Ctrl+C` 恒退出，其余 Ctrl+字母预留屏幕直达（多屏落地接 `Msg::Screen`，TODO 注释）；②Choice=`↑/↓` 移动 · `Space` 选中 · `Enter` 提交 · `1-4` 自评（数字）；③Pending=`←/→`（或 `↑/↓`）高亮选择「判对/判错」· `Enter` 确认（**新 `Msg::ConfirmArbitrate`，删 `Msg::Arbitrate(bool)`**）· `Esc` 跳过（保持待裁定桶）；`q/j/k/y/n` 全废——测试**逐字母断言 a-z 在非填空 ctx 全部 None**、填空 ctx 全部=打字文本；
+  - state 新增 `arbitration_sel`（0=判对；`apply_grade`/`Next` 复位）；render 待裁定浮层改为 `[❯判对] [判错]` 动态高亮 + 统一键位提示；完成页“按 q 退出”→“按 Ctrl+Q 退出”；
+  - **docs 先行**：docs/03 §5.3 全量重写——键位总则（禁单字母；保留 Ctrl+C/Q；终端不可达 Ctrl+I=Tab/Ctrl+H=Backspace 已避开）+ 屏幕直达表全改 Ctrl+字母（Home=Ctrl+B … Settings=Ctrl+S）+ 答题/填空/待裁定/题包各行；改进建议 #17/#18 的 `e`/`i/x` 单字母键位同步改为非字母口径。
+- **验证**：fmt/clippy 零告警；`cargo test` **313 用例全绿**（tui 32）；真机冒烟 3s：新提示行渲染出 `Space`/`Ctrl+Q`/`1-4`，旧 `j/k` 字样 0 命中，无 panic，taskkill 干净。提交 `412768e`（七步钩子 7/7）。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：键位/提示/文档三处同源（keys::hint + docs §5.3 + 键位总则入册先行）；多空模型 1 处重建口（blank_count）；测试 313 全绿含“逐字母 a-z 禁单字母”总则测试与多空切位/防御分支；文件均 ≤500 行。
+- **实际使用**：多空题不再需要记 `;` 分隔符（原 UX 最大认知负担）；裁决从“记 y/n”变成浮层高亮+Enter 确认（防误触且所见即所得）；填空打字与命令键零冲突（字母只可能是文本）；已知边缘：Ctrl+字母屏直达在多屏落地前按了无效果（恒定层已留 TODO）。
+- **代码耦合度**：依赖不变；Msg 枚举净减一个（Arbitrate(bool)→ConfirmArbitrate，路由收归 keys）；main 仍零键位特判；update 的 pending/fill/choice 三态分支都有双保险守卫。
+- **鲁棒性**：填空输入位与空数不齐时防御性报错不伪造提交；arbitration_sel 两处复位（新判分/下一题）防上题高亮泄入；单空/判分后/题型不符的切位与输入全部 no-op；Ctrl 层先行拦截保证任何 ctx 下 Ctrl+Q/C 都能退出。
+
 ### 2026-09-27 · TUI 键位统一重构：KeyCtx 唯一路由 + 填空直接编辑 + Space 多选（非阶段任务，用户手动发起）
 
 - **背景**：用户问“填空题怎么办、快捷键需要修改”，并要求“**所有快捷键统一、代码复用**”。真实痛点：①填空输入态唯一退出键 `Esc` = **直接退程序丢答案**（打字习惯性按 Esc 即炸）；②docs/03 §5.3 承诺的 `Space` 选中（多选）未实现；③键位逻辑散落三处——`key_to_msg` + main 的 `Enter→Next` 手工改写 + update 内守卫，且 render 硬编码三份提示文案（不同源，改键必漏）。
@@ -180,8 +197,8 @@ MVP_STAGE: 4/6
 
 ### M3 改进建议（M4 开工即处理，勾=完成）
 
-- [ ] 17. 讲解层①②：`GradeResult` 加 `detail`（Jev 概率分布/规则 diff 持久化）+ TUI `e` 键接 `06::explain`（文本讲解，需 LLM key；无 key 只显结构化讲解——docs/07 §5）
-- [ ] 18. 成本面板与题包屏入 TUI：`cost_summary` → Profile/Settings 展示（M3 已有门面）；题包 `i/x` 键位（承接 #13）
+- [ ] 17. 讲解层①②：`GradeResult` 加 `detail`（Jev 概率分布/规则 diff 持久化）+ TUI 讲解键接 `06::explain`（文本讲解，需 LLM key；无 key 只显结构化讲解——docs/07 §5；键位按 docs/03 §5.3 总则用非字母键，禁单字母）
+- [ ] 18. 成本面板与题包屏入 TUI：`cost_summary` → Profile/Settings 展示（M3 已有门面）；题包 `Ctrl+O` 导入 / `Ctrl+X` 导出 键位（承接 #13；docs/03 §5.3 禁单字母）
 - [ ] 19. 假对检测合流：从 attempts.timing 算用户延迟基线（p50/p90 滚动）→ `is_guess(timing, self_confidence, baseline)` 接 `srs::decide_action`（M3 已采自评键位，承接 #10 尾巴）
 - [ ] 20. 裁决增强：选择题人工裁决回流 `ChoiceBody.answer` 集（当前只回流填空 acceptable）；`arbitration.reason` 分值区分灰区/离线两态
 - [ ] 21. 资源 loader 统一：`crates/grader/assets/jev`、`data/chinglish`、`crates/{gen,grader}/assets/prompts` 三处 include_str 收口到 16-config 单入口（**仅内容类资源 chinglish/seed 允许用户目录覆盖；prompt 与判分语料永不放开**——2026-09-27 已从 data/ 移出并删除运行时覆盖；选版函数三处同构（l2 match+回退 en），一并收口）
