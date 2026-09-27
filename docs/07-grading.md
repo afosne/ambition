@@ -10,14 +10,22 @@ pub struct Thresholds { pub accept: f32, pub reject: f32 }          // M3：for_
 pub struct Grader { jev: Option<Arc<JevClient>>, llm: Option<Arc<LlmRouter>>, thresholds: Thresholds }  // AI 全可空 = 离线形态
 pub async fn grade(&self, q: &Question, answer: &Answer) -> GradeResult;   // 永不 Err：离线/网络失败 → Pending 进桶（tracing 可见）
 // ①规则命中→完；②Jev（margin≥θ）→完+错因；③LLM 粗判（只出判断）或进 arbitration 待裁定（唯一桶）
+// M4 题型补全（DESIGN §13.4）：复合题型（Cloze/Reading/SevenOfFive/GrammarFill）拆子题递归——
+//   `sub_questions(kind)` / `sub_answers(kind, answer)`（子题 qid = 父 qid + 子下标，不走内容哈希防碰撞）；
+//   子题各自走完整三级流水线，汇总 score/max=Σ、verdict=全对 Correct/全错 Wrong/否则 Partial（任一 Pending 整体 Pending）、
+//   items 带子下标、error_tags 合并去重、graded_by 取子题最重路径（Human > LlmReview > Jev > Rule）。
 ```
 
 | Kind | ①规则 | ②Jev | ③兜底 |
 |---|---|---|---|
 | SingleChoice | 选项比对 | 错因 choice | — |
 | MultiChoice | 全对/全错 | 逐项 noul 部分分 + 错因 | 低置信→Pending |
-| FillBlank/Cloze | normalize + acceptable 表 | 逐空 noul + 错因 + 严重度 | Pending |
-| Reading/Match | 子题递归 | 同左 | 同左 |
+| FillBlank | normalize + acceptable 表 | 逐空 noul + 错因 + 严重度 | Pending |
+| Cloze | 子题递归（每空 = FillBlank 子题） | 同左 | 同左 |
+| GrammarFill | 子题递归（每空 = FillBlank 子题） | 同左 | 同左 |
+| Reading | 子题递归（每题 = SingleChoice 子题） | 同左 | 同左 |
+| SevenOfFive | 子题递归（每空 = MultiChoice 子题，选项=缺口候选句） | 同左 | 同左 |
+| Match | 子题递归 | 同左 | 同左 |
 | Dictation | 词序列 diff | noul 容忍小错 | Pending |
 | Rewrite | — | noul formed/meaning_kept | LLM 复核 |
 | Translation | — | composite 4 维 + veto | LLM 复核 |
@@ -28,6 +36,9 @@ pub async fn grade(&self, q: &Question, answer: &Answer) -> GradeResult;   // �
 
 ```rust
 grade_single_choice / grade_multi_choice_rule / grade_fill_blank_rule / grade_dictation_rule
+grade_rule(kind, answers, fills) -> Option<GradeResult>   // 复合题型不在此层判（None → 拆子题递归，docs/07 §1 M4 注记）
+sub_questions(kind) -> Vec<(String, Question)>           // 复合题拆子题（子题 qid = 父 qid + 下标）
+sub_answers(kind, &Answer) -> Vec<Answer>                // 复合作答拆分（index 对齐 sub_questions）
 normalize_for_compare(s)   // core::normalize_text + 按 track 可选忽略冠词/单复数
 ```
 
@@ -78,5 +89,6 @@ pub async fn llm_arbitrate(&self, q, a) -> Result<Arbitration>;            // ac
 
 - [x] M1 三题型三路径（fake/wiremock AI）；route 灰区 → Pending；离线矩阵（Jev 无 key / LLM 无 key / 全离线）；错因归类概率阈值测试；
 - [x] 裁决回流 → 二次作答规则直判闭环（M3）；
+- [x] 复合题型递归判分（M4：Cloze/Reading/SevenOfFive/GrammarFill 子题拆解 + 汇总口径 + 任一 Pending 整体 Pending）；
 - [ ] composite 加权/档位边界（高考 25 分档/雅思 band）；veto 降档（M5）；
 - [ ] **无 LLM key 时结构化讲解完整**（错因+概率分布+规则 diff）；explain 的 prompt payload 含 Jev 错因标签（断言）（随讲解层，06::explain）。

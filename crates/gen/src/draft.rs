@@ -1,6 +1,17 @@
 //! LLM 草稿解析与落题：DraftQuestion/to_question/choice_body/parse_draft_batch（docs/06 §2）
 
 use super::*;
+use crate::draft_passage::{answer_ids, passage_blanks_body, reading_item_body};
+
+/// 阅读子题草稿（M4 题型补全，docs/06 §1）
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DraftReadingItem {
+    pub question: String,
+    #[serde(default)]
+    pub options: Vec<String>,
+    #[serde(default)]
+    pub answers: Vec<String>,
+}
 
 /// LLM 草稿题目（结构化输出的中间形态；校验后转 Question）
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -13,6 +24,12 @@ pub struct DraftQuestion {
     pub answers: Vec<String>,
     #[serde(default)]
     pub blanks: Vec<Vec<String>>,
+    /// 语篇（完形/阅读/七选五/语法填空；M4 题型补全）
+    #[serde(default)]
+    pub passage: String,
+    /// 阅读子题（M4 题型补全）
+    #[serde(default)]
+    pub items: Vec<DraftReadingItem>,
     pub difficulty: u8,
     #[serde(default)]
     pub tags: Vec<String>,
@@ -79,6 +96,69 @@ impl DraftQuestion {
                             acceptable: set.clone(),
                         })
                         .collect(),
+                })
+            }
+            // M4 题型补全：完形/语法填空（语篇 + 逐空；空位 = `___` 标记按序）
+            QuestionKindTag::Cloze => {
+                let body = passage_blanks_body(self, "cloze")?;
+                ambition_core::QuestionKind::Cloze(body)
+            }
+            QuestionKindTag::GrammarFill => {
+                let cloze = passage_blanks_body(self, "grammar_fill")?;
+                ambition_core::QuestionKind::GrammarFill(ambition_core::GrammarFillBody {
+                    passage: cloze.passage,
+                    blanks: cloze.blanks,
+                })
+            }
+            // 阅读：语篇 + 子题（每子题单选）
+            QuestionKindTag::Reading => {
+                if self.passage.trim().is_empty() {
+                    return Err(GenError::InvalidDraft("reading needs passage".into()));
+                }
+                if self.items.is_empty() {
+                    return Err(GenError::InvalidDraft("reading needs items".into()));
+                }
+                let mut items = Vec::with_capacity(self.items.len());
+                for item in &self.items {
+                    let body = reading_item_body(item)?;
+                    items.push(ambition_core::ReadingItem {
+                        question: item.question.clone(),
+                        options: body.options,
+                        answer: body.answer,
+                    });
+                }
+                ambition_core::QuestionKind::Reading(ambition_core::ReadingBody {
+                    passage: self.passage.clone(),
+                    items,
+                })
+            }
+            // 七选五：语篇（5 缺口）+ 7 候选句 + answer（按缺口顺序的选中句，长度 5）
+            QuestionKindTag::SevenOfFive => {
+                if self.passage.trim().is_empty() {
+                    return Err(GenError::InvalidDraft("seven_of_five needs passage".into()));
+                }
+                if self.options.len() < 7 {
+                    return Err(GenError::InvalidDraft(
+                        "seven_of_five needs >=7 options".into(),
+                    ));
+                }
+                let markers = self.passage.matches("___").count();
+                if markers != 5 {
+                    return Err(GenError::InvalidDraft(format!(
+                        "seven_of_five passage needs 5 blanks, got {markers}"
+                    )));
+                }
+                if self.answers.len() != 5 {
+                    return Err(GenError::InvalidDraft(format!(
+                        "seven_of_five needs 5 answers, got {}",
+                        self.answers.len()
+                    )));
+                }
+                let answer = answer_ids(&self.answers, &self.options)?;
+                ambition_core::QuestionKind::SevenOfFive(ambition_core::SevenOfFiveBody {
+                    passage: self.passage.clone(),
+                    options: self.options.clone(),
+                    answer,
                 })
             }
         };
@@ -309,6 +389,8 @@ mod tests {
             options: vec!["x".into(), "y".into(), "z".into()],
             answers: vec!["z".into(), "x".into()],
             blanks: vec![],
+            passage: String::new(),
+            items: vec![],
             difficulty: 2,
             tags: vec![],
         };
@@ -336,6 +418,8 @@ mod tests {
             options: vec!["x".into(), "y".into(), "z".into()],
             answers: vec!["z".into(), "x".into()],
             blanks: vec![],
+            passage: String::new(),
+            items: vec![],
             difficulty: 2,
             tags: vec![],
         };

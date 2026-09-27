@@ -2,12 +2,14 @@
 
 use super::*;
 
-/// 作答（M1：选择 / 填空）
+/// 作答（M1：选择 / 填空；M4 题型补全：Group 复合子题答案——Reading 递归判分）
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Answer {
     Choice(Vec<u32>),
     Fill(Vec<String>),
+    /// 复合题子题答案（逐子题递归判分，docs/07 §1 M4 注记）
+    Group(Vec<Answer>),
 }
 
 /// 计时信号（假对检测输入）

@@ -8,6 +8,8 @@ mod keys;
 mod render;
 mod state;
 mod update;
+#[cfg(test)]
+mod update_tests;
 
 pub use keys::*;
 pub use render::*;

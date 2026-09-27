@@ -4,28 +4,44 @@
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TrackId(pub String);
 
-/// 生成题型标签（prompt 与 schema 用的稳定字符串）
+/// 生成题型标签（prompt 与 schema 用的稳定字符串；M4 题型补全：完形/阅读/七选五/语法填空）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QuestionKindTag {
     SingleChoice,
     MultiChoice,
     FillBlank,
+    Cloze,
+    Reading,
+    SevenOfFive,
+    GrammarFill,
 }
 
 impl QuestionKindTag {
-    /// 稳定字符串（prompt 拼接与草稿校验共用）
+    /// 稳定字符串（prompt 拼接与草稿校验共用；docs/06 M4 注记）
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::SingleChoice => "single_choice",
             Self::MultiChoice => "multi_choice",
             Self::FillBlank => "fill_blank",
+            Self::Cloze => "cloze",
+            Self::Reading => "reading",
+            Self::SevenOfFive => "seven_of_five",
+            Self::GrammarFill => "grammar_fill",
         }
     }
 
     /// 是否选择类题型（决定质检是否问 distractor/unique）
     pub fn is_choice(&self) -> bool {
         matches!(self, Self::SingleChoice | Self::MultiChoice)
+    }
+
+    /// 是否语篇/复合题型（子题递归判分；质检不问 distractor/unique，docs/06 §2 M4 注记）
+    pub fn is_passage(&self) -> bool {
+        matches!(
+            self,
+            Self::Cloze | Self::Reading | Self::SevenOfFive | Self::GrammarFill
+        )
     }
 }
 
@@ -106,5 +122,33 @@ mod tests {
         assert!(QuestionKindTag::SingleChoice.is_choice());
         assert!(QuestionKindTag::MultiChoice.is_choice());
         assert!(!QuestionKindTag::FillBlank.is_choice());
+    }
+
+    #[test]
+    fn test_is_passage_separates_passage_from_flat_kinds() {
+        assert!(QuestionKindTag::Cloze.is_passage());
+        assert!(QuestionKindTag::Reading.is_passage());
+        assert!(QuestionKindTag::SevenOfFive.is_passage());
+        assert!(QuestionKindTag::GrammarFill.is_passage());
+        assert!(!QuestionKindTag::SingleChoice.is_passage());
+        assert!(!QuestionKindTag::MultiChoice.is_passage());
+        assert!(!QuestionKindTag::FillBlank.is_passage());
+    }
+
+    #[test]
+    fn test_as_str_and_is_passage_for_new_kinds() {
+        // M4 题型补全：新题型标签稳定串 + 语篇判定（docs/06 M4 注记）
+        assert_eq!(QuestionKindTag::Cloze.as_str(), "cloze");
+        assert_eq!(QuestionKindTag::Reading.as_str(), "reading");
+        assert_eq!(QuestionKindTag::SevenOfFive.as_str(), "seven_of_five");
+        assert_eq!(QuestionKindTag::GrammarFill.as_str(), "grammar_fill");
+        assert!(QuestionKindTag::Cloze.is_passage());
+        assert!(QuestionKindTag::Reading.is_passage());
+        assert!(QuestionKindTag::SevenOfFive.is_passage());
+        assert!(QuestionKindTag::GrammarFill.is_passage());
+        assert!(!QuestionKindTag::Cloze.is_choice());
+        assert!(!QuestionKindTag::FillBlank.is_passage());
+        let json = serde_json::to_value(QuestionKindTag::SevenOfFive).expect("序列化");
+        assert_eq!(json, serde_json::json!("seven_of_five"), "snake_case");
     }
 }

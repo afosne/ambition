@@ -113,6 +113,39 @@ pub(crate) fn qc_state(
                 .collect::<Vec<_>>(),
             "difficulty": question.difficulty,
         }),
+        // M4 题型补全：语篇题带 passage + 逐子题 reference（docs/06 §2 M4 注记）
+        (ambition_core::QuestionKind::Cloze(cloze), false) => serde_json::json!({
+            "passage": cloze.passage,
+            "acceptable_per_blank": cloze
+                .blanks
+                .iter()
+                .map(|b| &b.acceptable)
+                .collect::<Vec<_>>(),
+            "difficulty": question.difficulty,
+        }),
+        (ambition_core::QuestionKind::GrammarFill(gf), false) => serde_json::json!({
+            "passage": gf.passage,
+            "acceptable_per_blank": gf
+                .blanks
+                .iter()
+                .map(|b| &b.acceptable)
+                .collect::<Vec<_>>(),
+            "difficulty": question.difficulty,
+        }),
+        (ambition_core::QuestionKind::Reading(reading), false) => serde_json::json!({
+            "passage": reading.passage,
+            "item_questions": reading.items.iter().map(|i| &i.question).collect::<Vec<_>>(),
+            "answer_option_texts_per_item": reading.items.iter().map(|i| {
+                i.answer.iter().map(|id| i.options.iter().find(|o| o.id == *id).map(|o| o.text.clone()).unwrap_or_default()).collect::<Vec<_>>()
+            }).collect::<Vec<_>>(),
+            "difficulty": question.difficulty,
+        }),
+        (ambition_core::QuestionKind::SevenOfFive(s75), false) => serde_json::json!({
+            "passage": s75.passage,
+            "options": s75.options,
+            "answer_option_texts": s75.answer.iter().map(|id| s75.options.get(*id as usize).cloned().unwrap_or_default()).collect::<Vec<_>>(),
+            "difficulty": question.difficulty,
+        }),
         _ => serde_json::json!({"stem": question.stem}),
     };
     ambition_jev::JevState(value)
@@ -292,6 +325,8 @@ mod tests {
             options: vec!["alpha".into(), "beta".into()],
             answers: vec!["alpha".into()],
             blanks: vec![],
+            passage: String::new(),
+            items: vec![],
             difficulty: 2,
             tags: vec![],
         };

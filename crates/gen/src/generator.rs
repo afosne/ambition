@@ -102,6 +102,10 @@ impl Generator {
             ambition_core::QuestionKind::SingleChoice(_) => QuestionKindTag::SingleChoice,
             ambition_core::QuestionKind::MultiChoice(_) => QuestionKindTag::MultiChoice,
             ambition_core::QuestionKind::FillBlank(_) => QuestionKindTag::FillBlank,
+            ambition_core::QuestionKind::Cloze(_) => QuestionKindTag::Cloze,
+            ambition_core::QuestionKind::Reading(_) => QuestionKindTag::Reading,
+            ambition_core::QuestionKind::SevenOfFive(_) => QuestionKindTag::SevenOfFive,
+            ambition_core::QuestionKind::GrammarFill(_) => QuestionKindTag::GrammarFill,
         };
         let state = qc_state(question, kind_tag);
         let questions = qc_questions(kind_tag);
@@ -236,6 +240,8 @@ mod tests {
             options: vec!["run".into(), "runs".into()],
             answers: vec!["runs".into()],
             blanks: vec![],
+            passage: String::new(),
+            items: vec![],
             difficulty: 2,
             tags: vec![],
         };
@@ -261,6 +267,8 @@ mod tests {
             options: vec![],
             answers: vec![],
             blanks: vec![vec!["go".into()]],
+            passage: String::new(),
+            items: vec![],
             difficulty: 1,
             tags: vec![],
         }
@@ -354,5 +362,131 @@ mod tests {
         s.kinds.clear();
         let err = generator.generate(&s).await.expect_err("空 kinds");
         assert!(matches!(err, GenError::InvalidSpec(_)), "{err}");
+    }
+
+    #[test]
+    fn test_draft_to_question_builds_new_passage_kinds() {
+        use ambition_core::QuestionKind;
+        // 完形：passage + 逐空
+        let cloze: DraftQuestion = serde_json::from_value(serde_json::json!({
+            "kind": "cloze",
+            "stem": "Cloze exercise.",
+            "passage": "I ___ a student. She ___ daily.",
+            "blanks": [["am"], ["runs"]],
+            "difficulty": 3,
+            "tags": ["cloze"]
+        }))
+        .expect("完形草稿");
+        let q = cloze.to_question().expect("转换");
+        assert!(matches!(q.kind, QuestionKind::Cloze(_)));
+        let QuestionKind::Cloze(body) = &q.kind else {
+            panic!("cloze")
+        };
+        assert_eq!(body.blanks.len(), 2);
+        // 语法填空
+        let gf: DraftQuestion = serde_json::from_value(serde_json::json!({
+            "kind": "grammar_fill",
+            "stem": "Grammar fill.",
+            "passage": "She ___ to school.",
+            "blanks": [["goes"]],
+            "difficulty": 2,
+            "tags": ["grammar"]
+        }))
+        .expect("语法填空草稿");
+        assert!(matches!(
+            gf.to_question().expect("转换").kind,
+            QuestionKind::GrammarFill(_)
+        ));
+        // 七选五：7 候选 + 5 答案
+        let s75: DraftQuestion = serde_json::from_value(serde_json::json!({
+            "kind": "seven_of_five",
+            "stem": "Seven of five.",
+            "passage": "A ___ B ___ C ___ D ___ E ___ F",
+            "options": ["o1", "o2", "o3", "o4", "o5", "o6", "o7"],
+            "answers": ["o1", "o3", "o5", "o7", "o2"],
+            "difficulty": 4,
+            "tags": ["reading"]
+        }))
+        .expect("七选五草稿");
+        let q = s75.to_question().expect("转换");
+        let QuestionKind::SevenOfFive(body) = &q.kind else {
+            panic!("seven_of_five")
+        };
+        assert_eq!(body.options.len(), 7);
+        assert_eq!(body.answer, vec![0, 2, 4, 6, 1], "答案按文本映射回 id");
+        // 阅读：语篇 + 子题
+        let reading: DraftQuestion = serde_json::from_value(serde_json::json!({
+            "kind": "reading",
+            "stem": "Read and answer.",
+            "passage": "A short passage about cats.",
+            "items": [
+                {"question": "What?", "options": ["a", "b"], "answers": ["b"]},
+                {"question": "Why?", "options": ["x", "y", "z"], "answers": ["y"]}
+            ],
+            "difficulty": 3,
+            "tags": ["reading"]
+        }))
+        .expect("阅读草稿");
+        let q = reading.to_question().expect("转换");
+        let QuestionKind::Reading(body) = &q.kind else {
+            panic!("reading")
+        };
+        assert_eq!(body.items.len(), 2);
+        assert_eq!(body.items[0].answer, vec![1]);
+        assert_eq!(body.items[1].answer, vec![1], "三选项第二项");
+        assert_eq!(body.items[1].options.len(), 3);
+    }
+
+    #[test]
+    fn test_draft_rejects_malformed_passage_kinds() {
+        // 完形：passage 空/空位数不符 → Err
+        let no_passage = serde_json::json!({
+            "kind": "cloze", "stem": "s", "passage": "", "blanks": [["a"]],
+            "difficulty": 2, "tags": []
+        });
+        assert!(
+            serde_json::from_value::<DraftQuestion>(no_passage)
+                .expect("可反序列化")
+                .to_question()
+                .is_err(),
+            "无 passage → Err"
+        );
+        let mismatch = serde_json::json!({
+            "kind": "cloze", "stem": "s", "passage": "I ___ a.", "blanks": [["a"], ["b"]],
+            "difficulty": 2, "tags": []
+        });
+        assert!(
+            serde_json::from_value::<DraftQuestion>(mismatch)
+                .expect("可反序列化")
+                .to_question()
+                .is_err(),
+            "空位数不符 → Err"
+        );
+        // 七选五：答案不在选项 → Err
+        let bad_answer = serde_json::json!({
+            "kind": "seven_of_five", "stem": "s", "passage": "A ___ B ___ C ___ D ___ E ___ F",
+            "options": ["o1", "o2", "o3", "o4", "o5", "o6", "o7"],
+            "answers": ["o1", "o9", "o3", "o4", "o5"], "difficulty": 3, "tags": []
+        });
+        assert!(
+            serde_json::from_value::<DraftQuestion>(bad_answer)
+                .expect("可反序列化")
+                .to_question()
+                .is_err(),
+            "答案不在选项 → Err"
+        );
+        // 阅读：子题缺选项 → Err
+        let bad_item = serde_json::json!({
+            "kind": "reading", "stem": "s", "passage": "p",
+            "items": [{"question": "q", "options": ["only-one"], "answers": ["only-one"]}],
+            "difficulty": 2, "tags": []
+        });
+        assert!(
+            serde_json::from_value::<DraftQuestion>(bad_item)
+                .expect("可反序列化")
+                .to_question()
+                .is_err(),
+            "子题 <2 选项 → Err"
+        );
     }
 }

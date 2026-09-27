@@ -3,6 +3,7 @@
 > 实现顺序：**M2**（出题+质检+qpack）→ **M13**（DSL/一键出课/真题级干扰项）。并入来源：旧 `06-gen` + `39-studio` + `36-exam-realism(干扰项引擎)`。
 > 唯一出题生成口（00-overview §5）：DSL/微课/辨析/对战出题全部收口于此或其参数化插件。
 > **M2 落地范围**：`crates/gen` = GenSpec + `generate` + `qc_question`（Jev 质检 fan-out，05::evaluate）+ `build/parse/import/export qpack` + seed 加载；变式/讲解/干扰项引擎/出课随 M3+/M13。
+> **M4 落地（题型补全，DESIGN §13.4）**：`QuestionKindTag` 扩 `Cloze`/`Reading`/`SevenOfFive`/`GrammarFill`（`as_str` = `cloze`/`reading`/`seven_of_five`/`grammar_fill`，prompt/schema/qc 同源）；`DraftQuestion` 解析四新题型 → core `QuestionKind::{Cloze, Reading, SevenOfFive, GrammarFill}`（结构见 docs/02 §1 Body 族）；`qc_state`/`qc_questions` 按 `is_choice`/`is_passage` 选 state 与检查集（语篇题问 `key_correct`/`natural`/`difficulty_fit`，不问 distractor 项）；seed_gen 补四新题型题（`data/seed/en/cet4/core.qpack.json`）。LLM 出题模板 `question_gen/{en,zh}.md` 同步列新题型。
 
 ## 1. 生成规格与主流程
 
@@ -16,6 +17,8 @@ pub async fn generate(&self, spec: &GenSpec) -> Result<Vec<Question>>;   // prom
 ```
 
 ## 2. 质检回路（出题质量护城河，fan-out 单请求）
+
+> 题型适配：`is_choice()`（单/多选）问 `unique_answer`+`distractor_valid`；`is_passage()`（完形/阅读/七选五/语法填空）只问 `key_correct`/`natural`/`difficulty_fit`——语篇题无独立干扰项集，`unique_answer` 不适用；`qc_state` 对语篇题带 `passage` + 逐子题 `reference_answers`。
 
 ```rust
 pub async fn qc_question(&self, q: &Question) -> Result<QcReport>;

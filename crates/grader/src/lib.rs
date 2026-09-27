@@ -10,6 +10,8 @@ mod fill;
 mod helpers;
 mod judges;
 mod rule;
+#[cfg(test)]
+mod rule_tests;
 mod thresholds;
 
 pub use arbitrate::*;
@@ -125,12 +127,18 @@ pub fn grade_fill_blank_rule(fill: &FillBody, answers: &[String]) -> GradeResult
     }
 }
 
-/// 规则层分发：M1 题型全覆盖；None = 需要升级到 Jev（M3）
+/// 规则层分发：M1 三题型全覆盖；复合题型（Cloze/Reading/SevenOfFive/GrammarFill）不在此层判
+/// （None → `Grader::grade` 拆子题递归，docs/07 §1 M4 注记）；None = 需要升级到 Jev（M3）
 pub fn grade_rule(kind: &QuestionKind, answers: &[u32], fills: &[String]) -> Option<GradeResult> {
     match kind {
         QuestionKind::SingleChoice(body) => Some(grade_single_choice(body, answers)),
         QuestionKind::MultiChoice(body) => grade_multi_choice_rule(body, answers),
         QuestionKind::FillBlank(fill) => Some(grade_fill_blank_rule(fill, fills)),
+        // 复合题型：由 Grader::grade 递归拆子题（本层不判）
+        QuestionKind::Cloze(_)
+        | QuestionKind::Reading(_)
+        | QuestionKind::SevenOfFive(_)
+        | QuestionKind::GrammarFill(_) => None,
     }
 }
 
@@ -177,6 +185,164 @@ mod tests {
         assert_eq!(normalize_for_compare("The Student!", true), "student");
         assert_eq!(normalize_for_compare("an apple", true), "apple");
         assert_eq!(normalize_for_compare("apple", false), "apple");
+    }
+
+    fn cloze_question(blanks: usize) -> Question {
+        Question::new(
+            "I ___ a student. She ___ to school.".into(),
+            QuestionKind::Cloze(ambition_core::ClozeBody {
+                passage: "I ___ a student. She ___ to school.".into(),
+                blanks: (0..blanks)
+                    .map(|_| BlankItem {
+                        acceptable: vec!["am".into()],
+                    })
+                    .collect(),
+            }),
+            2,
+            vec!["grammar".into()],
+            ambition_core::Provenance::Seed,
+        )
+    }
+
+    fn reading_question() -> Question {
+        Question::new(
+            "Read and answer.".into(),
+            QuestionKind::Reading(ambition_core::ReadingBody {
+                passage: "Some passage.".into(),
+                items: vec![
+                    ambition_core::ReadingItem {
+                        question: "Q1?".into(),
+                        options: choice(vec![0]).options,
+                        answer: vec![0],
+                    },
+                    ambition_core::ReadingItem {
+                        question: "Q2?".into(),
+                        options: choice(vec![1]).options,
+                        answer: vec![1],
+                    },
+                ],
+            }),
+            3,
+            vec!["reading".into()],
+            ambition_core::Provenance::Seed,
+        )
+    }
+
+    fn seven_of_five_question() -> Question {
+        Question::new(
+            "Gap fill.".into(),
+            QuestionKind::SevenOfFive(ambition_core::SevenOfFiveBody {
+                passage: "A ___ B ___ C".into(),
+                options: vec!["opt1".into(), "opt2".into(), "opt3".into()],
+                answer: vec![0, 2],
+            }),
+            3,
+            vec!["seven".into()],
+            ambition_core::Provenance::Seed,
+        )
+    }
+
+    #[tokio::test]
+    async fn test_grade_cloze_recurses_blanks_and_aggregates() {
+        let grader = Grader::offline();
+        let q = cloze_question(2);
+        // 全对
+        let ok = grader
+            .grade(&q, &Answer::Fill(vec!["am".into(), "am".into()]))
+            .await;
+        assert_eq!(ok.verdict, Verdict::Correct);
+        assert_eq!((ok.score, ok.max), (2.0, 2.0), "子题分累加");
+        assert_eq!(ok.graded_by, GradedBy::Rule);
+        assert_eq!(ok.items.len(), 2, "两子题两 item");
+        // 一对一半错 → Partial
+        let partial = grader
+            .grade(&q, &Answer::Fill(vec!["am".into(), "wrong".into()]))
+            .await;
+        assert_eq!(partial.verdict, Verdict::Partial);
+        assert_eq!((partial.score, partial.max), (1.0, 2.0));
+        assert!(partial.items[0].correct && !partial.items[1].correct);
+        // 全错 → Wrong
+        let wrong = grader
+            .grade(&q, &Answer::Fill(vec!["x".into(), "y".into()]))
+            .await;
+        assert_eq!(wrong.verdict, Verdict::Wrong);
+        assert_eq!(wrong.score, 0.0);
+        // 作答位数不齐 → 防御性 Pending（不伪造判分）
+        let mismatch = grader.grade(&q, &Answer::Fill(vec!["am".into()])).await;
+        assert_eq!(mismatch.verdict, Verdict::Pending, "位数不齐防御");
+        assert_eq!(mismatch.max, 2.0, "max = 子题数");
+    }
+
+    #[tokio::test]
+    async fn test_grade_reading_recurses_group_and_aggregates() {
+        let grader = Grader::offline();
+        let q = reading_question();
+        let all_right = grader
+            .grade(
+                &q,
+                &Answer::Group(vec![Answer::Choice(vec![0]), Answer::Choice(vec![1])]),
+            )
+            .await;
+        assert_eq!(all_right.verdict, Verdict::Correct);
+        assert_eq!((all_right.score, all_right.max), (2.0, 2.0));
+        assert_eq!(all_right.items.len(), 2);
+        let one_wrong = grader
+            .grade(
+                &q,
+                &Answer::Group(vec![Answer::Choice(vec![0]), Answer::Choice(vec![0])]),
+            )
+            .await;
+        assert_eq!(one_wrong.verdict, Verdict::Partial);
+        assert!(!one_wrong.items[1].correct, "第二子题错");
+        let all_wrong = grader
+            .grade(
+                &q,
+                &Answer::Group(vec![Answer::Choice(vec![2]), Answer::Choice(vec![0])]),
+            )
+            .await;
+        assert_eq!(all_wrong.verdict, Verdict::Wrong);
+        assert_eq!(all_wrong.score, 0.0);
+        // Group 位数不齐 → 防御 Pending
+        let mismatch = grader
+            .grade(&q, &Answer::Group(vec![Answer::Choice(vec![0])]))
+            .await;
+        assert_eq!(mismatch.verdict, Verdict::Pending);
+    }
+
+    #[tokio::test]
+    async fn test_grade_seven_of_five_recurses_each_gap() {
+        let grader = Grader::offline();
+        let q = seven_of_five_question();
+        let ok = grader.grade(&q, &Answer::Choice(vec![0, 2])).await;
+        assert_eq!(ok.verdict, Verdict::Correct);
+        assert_eq!((ok.score, ok.max), (2.0, 2.0), "两缺口两子题");
+        assert!(ok.items.iter().all(|i| i.correct));
+        let half = grader.grade(&q, &Answer::Choice(vec![0, 1])).await;
+        assert_eq!(half.verdict, Verdict::Partial);
+        assert!(!half.items[1].correct);
+        let wrong = grader.grade(&q, &Answer::Choice(vec![1, 1])).await;
+        assert_eq!(wrong.verdict, Verdict::Wrong);
+        // Choice 位数不齐 → 防御 Pending
+        let mismatch = grader.grade(&q, &Answer::Choice(vec![0])).await;
+        assert_eq!(mismatch.verdict, Verdict::Pending);
+    }
+
+    #[test]
+    fn test_grade_rule_returns_none_for_composite_kinds() {
+        // 复合题不在规则层判（None → Grader::grade 递归拆子题，docs/07 §1 M4）
+        let cloze = cloze_question(1);
+        assert!(grade_rule(&cloze.kind, &[], &["am".into()]).is_none());
+        let reading = reading_question();
+        assert!(grade_rule(&reading.kind, &[0], &[]).is_none());
+        let s75 = seven_of_five_question();
+        assert!(grade_rule(&s75.kind, &[0, 2], &[]).is_none());
+        let gf = QuestionKind::GrammarFill(ambition_core::GrammarFillBody {
+            passage: "p".into(),
+            blanks: vec![BlankItem {
+                acceptable: vec!["x".into()],
+            }],
+        });
+        assert!(grade_rule(&gf, &[], &["x".into()]).is_none());
     }
 
     #[test]

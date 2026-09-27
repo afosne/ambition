@@ -5,6 +5,7 @@ mod analysis;
 mod attempt;
 mod event;
 mod ids;
+mod kind;
 mod question;
 mod taxonomy;
 mod usage;

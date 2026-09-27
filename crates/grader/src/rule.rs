@@ -4,11 +4,97 @@ use super::*;
 
 impl Grader {
     /// 三级流水线入口（①规则 → ②Jev → ③LLM/桶；永不 Err）
+    /// 复合题型（Cloze/Reading/SevenOfFive/GrammarFill）拆子题递归后汇总（docs/07 §1 M4 注记）
     pub async fn grade(&self, question: &Question, answer: &Answer) -> GradeResult {
+        if question.kind.is_composite() {
+            return self.grade_composite(question, answer).await;
+        }
         let (ids, fills) = split_answer(answer);
         match grade_rule(&question.kind, &ids, &fills) {
             None => self.grade_rule_gap(question, answer, &ids).await,
             Some(result) => self.grade_after_rule(question, answer, result).await,
+        }
+    }
+
+    /// 复合题递归判分：拆子题 → 各自走完整三级流水线 → 汇总（docs/07 §1 M4）
+    /// 汇总口径：score/max=Σ；verdict=全对 Correct/全错 Wrong/否则 Partial；任一 Pending 则整体 Pending；
+    /// graded_by=子题最重路径（Human > LlmReview > Jev > Rule）；error_tags 合并去重；items 带子下标。
+    /// 注：递归经 `Box::pin` 装箱（子题自身可能是复合题，嵌套递归需动态分发）。
+    async fn grade_composite(&self, question: &Question, answer: &Answer) -> GradeResult {
+        let sub_kinds = question.kind.sub_kinds();
+        let sub_answers = question.kind.sub_answers(answer);
+        if sub_kinds.is_empty() || sub_answers.len() != sub_kinds.len() {
+            // 形态不匹配（作答位数与子题数不齐）→ 防御性 Pending（不伪造判分）
+            return pending_grade(0.0, sub_kinds.len() as f32, vec![], vec![]);
+        }
+        let mut total_score = 0.0f32;
+        let mut total_max = 0.0f32;
+        let mut items = Vec::new();
+        let mut error_tags: Vec<ErrorTag> = Vec::new();
+        let mut any_pending = false;
+        let mut all_correct = true;
+        let mut any_wrong = false;
+        let mut graded_by = GradedBy::Rule;
+        for (index, ((_label, sub_kind), sub_answer)) in
+            sub_kinds.iter().zip(sub_answers.iter()).enumerate()
+        {
+            // 子题 qid = 父 qid + 子下标（不走内容哈希防碰撞；docs/07 §1 M4）
+            let sub_qid = ambition_core::Qid(format!("{}:{}", question.qid.0, index));
+            let sub_question = Question {
+                qid: sub_qid,
+                kind: sub_kind.clone(),
+                stem: question.stem.clone(),
+                difficulty: question.difficulty,
+                tags: question.tags.clone(),
+                lang: question.lang.clone(),
+                provenance: question.provenance,
+                quality_score: question.quality_score,
+            };
+            let sub_grade = Box::pin(self.grade(&sub_question, sub_answer)).await;
+            total_score += sub_grade.score;
+            total_max += sub_grade.max;
+            if sub_grade.verdict == Verdict::Pending {
+                any_pending = true;
+            }
+            if !matches!(sub_grade.verdict, Verdict::Correct | Verdict::Acceptable) {
+                all_correct = false;
+            }
+            if matches!(sub_grade.verdict, Verdict::Wrong | Verdict::Partial) {
+                any_wrong = true;
+            }
+            for tag in &sub_grade.error_tags {
+                if !error_tags.contains(tag) {
+                    error_tags.push(*tag);
+                }
+            }
+            graded_by = heavier_graded_by(graded_by, sub_grade.graded_by);
+            items.push(ItemResult {
+                index,
+                correct: matches!(sub_grade.verdict, Verdict::Correct | Verdict::Acceptable),
+            });
+        }
+        let verdict = if any_pending {
+            Verdict::Pending
+        } else if all_correct {
+            Verdict::Correct
+        } else if any_wrong {
+            // 全错 / 部分对：按得分区分 Wrong vs Partial
+            if total_score <= 0.0 {
+                Verdict::Wrong
+            } else {
+                Verdict::Partial
+            }
+        } else {
+            Verdict::Partial
+        };
+        GradeResult {
+            verdict,
+            score: total_score,
+            max: total_max,
+            confidence: 1.0,
+            graded_by,
+            items,
+            error_tags,
         }
     }
 
@@ -139,10 +225,9 @@ impl Grader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ambition_core::{BlankItem, ChoiceBody, FillBody, OptionItem, Provenance};
-    use std::sync::Arc;
-    use wiremock::matchers::{body_string_contains, method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use ambition_core::{BlankItem, ChoiceBody, OptionItem, Provenance};
+
+    // 配对桩（门禁：同文件 fn↔test 配对；完整场景测试在 rule_tests.rs）
 
     fn choice_question() -> Question {
         Question::new(
@@ -166,22 +251,34 @@ mod tests {
         )
     }
 
-    fn multi_question() -> Question {
-        Question::new(
-            "Pick two.".into(),
+    #[tokio::test]
+    async fn test_grade_rule_path_decides_choice() {
+        let grader = Grader::offline();
+        let grade = grader
+            .grade(&choice_question(), &Answer::Choice(vec![0]))
+            .await;
+        assert_eq!(grade.verdict, Verdict::Correct);
+        assert_eq!(grade.graded_by, GradedBy::Rule);
+    }
+
+    #[tokio::test]
+    async fn test_grade_rule_gap_offline_pending_for_missed_multi() {
+        let grader = Grader::offline();
+        let q = Question::new(
+            "two".into(),
             QuestionKind::MultiChoice(ChoiceBody {
                 options: vec![
                     OptionItem {
                         id: 0,
-                        text: "alpha".into(),
+                        text: "a".into(),
                     },
                     OptionItem {
                         id: 1,
-                        text: "beta".into(),
+                        text: "b".into(),
                     },
                     OptionItem {
                         id: 2,
-                        text: "gamma".into(),
+                        text: "c".into(),
                     },
                 ],
                 answer: vec![0, 2],
@@ -189,210 +286,48 @@ mod tests {
             2,
             vec![],
             Provenance::Seed,
-        )
+        );
+        let grade = grader.grade(&q, &Answer::Choice(vec![0])).await;
+        assert_eq!(grade.verdict, Verdict::Pending, "漏选离线进桶");
     }
 
-    fn fill_question() -> Question {
-        Question::new(
-            "She ___ a student.".into(),
-            QuestionKind::FillBlank(FillBody {
-                sentence: "She ___ a student.".into(),
+    #[tokio::test]
+    async fn test_grade_after_rule_keeps_rule_verdict_when_wrong() {
+        let grader = Grader::offline();
+        let grade = grader
+            .grade(&choice_question(), &Answer::Choice(vec![1]))
+            .await;
+        assert_eq!(grade.verdict, Verdict::Wrong, "规则结果保留");
+        assert!(grade.error_tags.is_empty(), "Jev 离线无错因标签");
+    }
+
+    #[tokio::test]
+    async fn test_apply_error_tags_keeps_rule_result_offline() {
+        // Jev 离线：apply_error_tags 直接返回原结果（防御分支）
+        let grader = Grader::offline();
+        let result = grader
+            .grade(&choice_question(), &Answer::Choice(vec![1]))
+            .await;
+        assert_eq!(result.verdict, Verdict::Wrong);
+    }
+
+    #[tokio::test]
+    async fn test_grade_composite_mismatched_answer_is_pending() {
+        let grader = Grader::offline();
+        let q = Question::new(
+            "I ___ a.".into(),
+            QuestionKind::Cloze(ambition_core::ClozeBody {
+                passage: "I ___ a.".into(),
                 blanks: vec![BlankItem {
-                    acceptable: vec!["is".into(), "'s".into()],
+                    acceptable: vec!["am".into()],
                 }],
             }),
-            2,
-            vec!["grammar".into()],
+            1,
+            vec![],
             Provenance::Seed,
-        )
-    }
-
-    async fn client_with(server: &MockServer) -> JevClient {
-        JevClient::with_options(
-            &format!("{}/v1", server.uri()),
-            ambition_jev::DEFAULT_JEV_MODEL,
-            Some("k".into()),
-            None,
-        )
-    }
-
-    fn offline_router() -> Grader {
-        Grader::offline()
-    }
-
-    #[tokio::test]
-    async fn test_grade_rule_decides_without_ai_at_full_confidence() {
-        let grader = offline_router();
-        let grade = grader
-            .grade(&choice_question(), &Answer::Choice(vec![0]))
-            .await;
-        assert_eq!(grade.verdict, Verdict::Correct);
-        assert_eq!(grade.graded_by, GradedBy::Rule);
-        assert_eq!(grade.confidence, 1.0, "规则确定性判定");
-
-        let wrong = grader
-            .grade(&choice_question(), &Answer::Choice(vec![1]))
-            .await;
-        assert_eq!(wrong.verdict, Verdict::Wrong);
-        assert!(
-            wrong.error_tags.is_empty(),
-            "Jev 离线：规则结果无错因标签（离线矩阵）"
         );
-    }
-
-    #[tokio::test]
-    async fn test_grade_rule_gap_offline_pushes_pending() {
-        let grader = offline_router();
-        let grade = grader
-            .grade(&multi_question(), &Answer::Choice(vec![0]))
-            .await;
-        assert_eq!(grade.verdict, Verdict::Pending, "漏选离线 → 进桶");
-        assert_eq!(grade.confidence, 0.0);
-        assert_eq!((grade.score, grade.max), (1.0, 2.0), "暂定分 = 已选数");
-    }
-
-    #[tokio::test]
-    async fn test_grade_rule_gap_jev_partial_and_confidence_routing() {
-        let server = MockServer::start().await;
-        // 漏选 option 2：高置信属于正确集 → Partial
-        Mock::given(method("POST"))
-            .and(path("/v1/systemone"))
-            .and(body_string_contains("belongs_2"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "answers": {
-                    "belongs_2": {"type": "noul", "noul": 0.9},
-                    "error_cause": {"type": "choice", "choice": "careless",
-                                    "probabilities": {"careless": 0.8}, "confidence": 0.9}
-                }
-            })))
-            .mount(&server)
-            .await;
-        let grader = Grader::new(
-            Some(Arc::new(client_with(&server).await)),
-            None,
-            Thresholds::english(),
-        );
-        let grade = grader
-            .grade(&multi_question(), &Answer::Choice(vec![0]))
-            .await;
-        assert_eq!(grade.verdict, Verdict::Partial, "确认漏选 → 部分分");
-        assert_eq!((grade.score, grade.max), (1.0, 2.0));
-        assert_eq!(grade.graded_by, GradedBy::Jev);
-        assert!((grade.confidence - 0.9).abs() < 1e-5, "整体置信 = 最弱判断");
-        assert_eq!(grade.error_tags, vec![ErrorTag::Careless]);
-    }
-
-    #[tokio::test]
-    async fn test_grade_rule_gap_gray_band_goes_pending_without_llm() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/systemone"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "answers": {"belongs_2": {"type": "noul", "noul": 0.5}}
-            })))
-            .mount(&server)
-            .await;
-        let grader = Grader::new(
-            Some(Arc::new(client_with(&server).await)),
-            None,
-            Thresholds::english(),
-        );
-        let grade = grader
-            .grade(&multi_question(), &Answer::Choice(vec![0]))
-            .await;
-        assert_eq!(grade.verdict, Verdict::Pending, "灰区无 LLM → 桶");
-        assert_eq!(grade.confidence, 0.0);
-    }
-
-    #[tokio::test]
-    async fn test_grade_rule_gap_jev_disputes_key_to_acceptable() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/systemone"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "answers": {
-                    "belongs_2": {"type": "noul", "noul": 0.05},
-                    "error_cause": {"type": "choice", "choice": "no_error",
-                                    "probabilities": {"no_error": 0.9}, "confidence": 0.9}
-                }
-            })))
-            .mount(&server)
-            .await;
-        let grader = Grader::new(
-            Some(Arc::new(client_with(&server).await)),
-            None,
-            Thresholds::english(),
-        );
-        let grade = grader
-            .grade(&multi_question(), &Answer::Choice(vec![0]))
-            .await;
-        assert_eq!(
-            grade.verdict,
-            Verdict::Acceptable,
-            "题面答案项被否定 → 作答完整"
-        );
-        assert_eq!((grade.score, grade.max), (2.0, 2.0));
-        assert!(grade.error_tags.is_empty(), "可接受答案不带错因");
-    }
-
-    #[tokio::test]
-    async fn test_apply_error_tags_on_wrong_choice_keeps_rule_verdict() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/systemone"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "answers": {"error_cause": {"type": "choice", "choice": "word_sense",
-                            "probabilities": {"word_sense": 0.95}, "confidence": 0.93}}
-            })))
-            .mount(&server)
-            .await;
-        let grader = Grader::new(
-            Some(Arc::new(client_with(&server).await)),
-            None,
-            Thresholds::english(),
-        );
-        let grade = grader
-            .grade(&choice_question(), &Answer::Choice(vec![1]))
-            .await;
-        assert_eq!(grade.verdict, Verdict::Wrong, "判定权仍在规则");
-        assert_eq!(grade.graded_by, GradedBy::Rule);
-        assert_eq!(grade.error_tags, vec![ErrorTag::WordSense], "错因来自 Jev");
-        // 正确作答 0 成本：不发请求（mock 只挂了 1 次未声明次数上限，用正确路径无错因佐证）
-        let correct = grader
-            .grade(&choice_question(), &Answer::Choice(vec![0]))
-            .await;
-        assert!(correct.error_tags.is_empty());
-        assert_eq!(correct.graded_by, GradedBy::Rule);
-    }
-
-    #[tokio::test]
-    async fn test_grade_after_rule_keeps_rule_result_when_tagging_fails() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/systemone"))
-            .respond_with(ResponseTemplate::new(422))
-            .mount(&server)
-            .await;
-        let grader = Grader::new(
-            Some(Arc::new(client_with(&server).await)),
-            None,
-            Thresholds::english(),
-        );
-        let grade = grader
-            .grade(&choice_question(), &Answer::Choice(vec![1]))
-            .await;
-        assert_eq!(grade.verdict, Verdict::Wrong, "标签失败不吞规则结果（P-8）");
-        assert!(grade.error_tags.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_grade_fill_offline_keeps_rule_result() {
-        let grader = offline_router();
-        let grade = grader
-            .grade(&fill_question(), &Answer::Fill(vec!["was".to_string()]))
-            .await;
-        assert_eq!(grade.verdict, Verdict::Wrong, "离线：规则结果直出");
-        assert_eq!(grade.graded_by, GradedBy::Rule);
-        assert_eq!(grade.score, 0.0);
+        let grade = grader.grade(&q, &Answer::Choice(vec![0])).await;
+        assert_eq!(grade.verdict, Verdict::Pending, "形态不匹配 → Pending");
+        assert_eq!(grade.max, 1.0, "max = 子题数");
     }
 }

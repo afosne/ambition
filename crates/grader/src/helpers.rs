@@ -25,11 +25,28 @@ pub(crate) fn min_margin(items: &[ItemJudge]) -> f32 {
     items.iter().map(|i| i.margin).fold(1.0, f32::min)
 }
 
-/// 拆作答（choice ids / fill 文本）
+/// graded_by 权重（Human > LlmReview > Jev > Rule；复合题汇总取最重路径，docs/07 §1 M4）
+pub(crate) fn heavier_graded_by(current: GradedBy, candidate: GradedBy) -> GradedBy {
+    // 路径权重（Human > LlmReview > Jev > Rule；聚合取最重）
+    let weight = |g: GradedBy| match g {
+        GradedBy::Rule => 0,
+        GradedBy::Jev => 1,
+        GradedBy::LlmReview => 2,
+        GradedBy::Human => 3,
+    };
+    if weight(candidate) > weight(current) {
+        candidate
+    } else {
+        current
+    }
+}
+
+/// 拆作答（choice ids / fill 文本；Group 复合题不在本层拆，由递归判分处理）
 pub(crate) fn split_answer(answer: &Answer) -> (Vec<u32>, Vec<String>) {
     match answer {
         Answer::Choice(ids) => (ids.clone(), Vec::new()),
         Answer::Fill(values) => (Vec::new(), values.clone()),
+        Answer::Group(_) => (Vec::new(), Vec::new()),
     }
 }
 
@@ -65,6 +82,34 @@ pub(crate) fn answer_state(question: &Question, answer: &Answer) -> JevState {
             let reference: Vec<&Vec<String>> = fill.blanks.iter().map(|b| &b.acceptable).collect();
             state.insert("reference_answers".into(), serde_json::json!(reference));
         }
+        // 复合题：Jev state 只放语篇/结构，子题各自递归判分时会重建自己的 state（docs/07 §1 M4）
+        QuestionKind::Cloze(cloze) => {
+            let reference: Vec<&Vec<String>> = cloze.blanks.iter().map(|b| &b.acceptable).collect();
+            state.insert("passage".into(), serde_json::json!(cloze.passage));
+            state.insert("reference_answers".into(), serde_json::json!(reference));
+        }
+        QuestionKind::GrammarFill(gf) => {
+            let reference: Vec<&Vec<String>> = gf.blanks.iter().map(|b| &b.acceptable).collect();
+            state.insert("passage".into(), serde_json::json!(gf.passage));
+            state.insert("reference_answers".into(), serde_json::json!(reference));
+        }
+        QuestionKind::Reading(reading) => {
+            state.insert("passage".into(), serde_json::json!(reading.passage));
+            state.insert(
+                "item_questions".into(),
+                serde_json::json!(
+                    reading
+                        .items
+                        .iter()
+                        .map(|i| &i.question)
+                        .collect::<Vec<_>>()
+                ),
+            );
+        }
+        QuestionKind::SevenOfFive(s75) => {
+            state.insert("passage".into(), serde_json::json!(s75.passage));
+            state.insert("options".into(), serde_json::json!(&s75.options));
+        }
     }
     state.insert(
         "student_answer".into(),
@@ -73,7 +118,7 @@ pub(crate) fn answer_state(question: &Question, answer: &Answer) -> JevState {
     JevState(serde_json::Value::Object(state))
 }
 
-/// 学生作答的可读形式（choice → 选项号；fill → 分号串）
+/// 学生作答的可读形式（choice → 选项号；fill → 分号串；group → 逐子题递归）
 pub(crate) fn answer_display(answer: &Answer) -> String {
     match answer {
         Answer::Choice(ids) => ids
@@ -82,6 +127,12 @@ pub(crate) fn answer_display(answer: &Answer) -> String {
             .collect::<Vec<_>>()
             .join(","),
         Answer::Fill(values) => values.join(" ; "),
+        Answer::Group(subs) => subs
+            .iter()
+            .enumerate()
+            .map(|(i, sub)| format!("{}.{}", i + 1, answer_display(sub)))
+            .collect::<Vec<_>>()
+            .join(" | "),
     }
 }
 
@@ -194,6 +245,16 @@ mod tests {
         );
         assert_eq!(answer_display(&Answer::Choice(vec![])), "", "空选为空串");
         assert_eq!(answer_display(&Answer::Fill(vec![])), "", "空填为空串");
+    }
+
+    #[test]
+    fn test_heavier_graded_by_picks_strongest_path() {
+        use GradedBy::*;
+        assert_eq!(heavier_graded_by(Rule, Jev), Jev, "Jev 重于 Rule");
+        assert_eq!(heavier_graded_by(Jev, Human), Human, "Human 最重");
+        assert_eq!(heavier_graded_by(Human, Rule), Human, "已最重不降级");
+        assert_eq!(heavier_graded_by(LlmReview, Jev), LlmReview, "不降级");
+        assert_eq!(heavier_graded_by(Rule, Rule), Rule, "相等保持");
     }
 
     #[test]

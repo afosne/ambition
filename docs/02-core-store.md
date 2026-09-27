@@ -13,14 +13,24 @@ pub struct MediaRef { pub kind: MediaKind /* Image|Audio */, pub path: String, p
 pub struct Question { pub qid: Qid, pub kind: QuestionKind, pub stem: Stem, pub media: Vec<MediaRef>,
                       pub difficulty: u8, pub tags: Vec<Tag>, pub provenance: Provenance }
 pub enum QuestionKind { SingleChoice(ChoiceBody), MultiChoice(ChoiceBody), FillBlank(FillBody), Cloze(ClozeBody),
-                        Reading(ReadingBody), Match(MatchBody), Translation(TranslationBody), Essay(EssayPrompt),
+                        Reading(ReadingBody), SevenOfFive(SevenOfFiveBody), GrammarFill(GrammarFillBody),
+                        Match(MatchBody), Translation(TranslationBody), Essay(EssayPrompt),
                         Dictation(DictationBody), Rewrite(RewriteBody) }
 // Body 族：ChoiceBody{options, answer} / FillBody{sentence, blanks:Vec<Blank>} / Blank{index, acceptable, hint_zh}
-// ReadingBody{passage, items} / MatchBody / TranslationBody{direction, source_text, reference} / EssayPrompt{prompt_zh, genre, track, rubric_id, word_range, minutes}
+// ClozeBody{passage, blanks:Vec<Blank>}（完形：语篇 + 逐空可接受表；空位 = passage 中 `___` 标记按序；
+//   作答 = Answer::Fill(逐空文本)，规则层逐空规范化比 acceptable，与 FillBlank 同路）
+// GrammarFillBody{passage, blanks:Vec<Blank>}（语法填空：同 Cloze，空更密、多考语法变形）
+// ReadingBody{passage, items:Vec<ReadingItem>}（阅读理解：子题=单选；
+//   ReadingItem{question, options:Vec<OptionItem>, answer:Vec<u32>}；作答 = Answer::Group(逐子题 Choice)——
+//   子题选项 id 各自独立 0..n，扁平 Vec<u32> 无法表达 → 新增 Answer::Group(Vec<Answer>)，
+//   规则层/Jev/LLM 三级流水线逐子题递归后汇总（docs/07 §1 M4 注记）
+// SevenOfFiveBody{passage, options:Vec<String>, answer:Vec<u32>}（七选五：段落 5 个缺口（passage 中 `___` 序）+ 7 候选句，
+//   answer = 按缺口顺序的选中句下标（长度 5）；作答 = Answer::Choice(逐缺口选中项，长度 = 缺口数)）
+// MatchBody / TranslationBody{direction, source_text, reference} / EssayPrompt{prompt_zh, genre, track, rubric_id, word_range, minutes}
 
 pub struct Attempt { pub attempt_id: AttemptId, pub qid: Qid, pub card_id: Option<CardId>, pub answer: Answer,
                      pub timing: Option<Timing>, pub self_confidence: Option<u8>, pub mode: AttemptMode, pub created_at }
-pub enum Answer { Choice(Vec<u32>), Fill(Vec<String>), Match(Vec<(u32,u32)>), Text(String), Typing{text, keystrokes} }
+pub enum Answer { Choice(Vec<u32>), Fill(Vec<String>), Group(Vec<Answer>) /*复合题子题答案（M4 题型补全：Reading 等）*/, Match(Vec<(u32,u32)>), Text(String), Typing{text, keystrokes} }
 
 pub struct GradeResult { pub attempt_id: AttemptId, pub verdict: Verdict, pub score: f32, pub max: f32,
                          pub confidence: f32, pub graded_by: GradedBy, pub error_tags: Vec<Tagged>, pub detail: GradeDetail }

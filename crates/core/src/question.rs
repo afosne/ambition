@@ -1,4 +1,4 @@
-//! 题目模型：QuestionKind/QuestionContent/Question 构造与视图（docs/02 §2）
+//! 题目模型：QuestionKind/QuestionContent/Question 构造与视图（docs/02 §2；M4 题型补全：Cloze/Reading/SevenOfFive/GrammarFill + Answer::Group）
 
 use super::*;
 
@@ -29,13 +29,54 @@ pub struct FillBody {
     pub blanks: Vec<BlankItem>,
 }
 
-/// M1 支持的题型（补全题型见 docs/06-generation）
+/// 完形填空体（语篇 + 逐空可接受表；M4 题型补全，docs/02 §1）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ClozeBody {
+    pub passage: String,
+    pub blanks: Vec<BlankItem>,
+}
+
+/// 语法填空体（同 Cloze；M4 题型补全）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct GrammarFillBody {
+    pub passage: String,
+    pub blanks: Vec<BlankItem>,
+}
+
+/// 阅读子题（M4 题型补全）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ReadingItem {
+    pub question: String,
+    pub options: Vec<OptionItem>,
+    pub answer: Vec<u32>,
+}
+
+/// 阅读理解体（语篇 + 子题；M4 题型补全，docs/07 §1 子题递归）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ReadingBody {
+    pub passage: String,
+    pub items: Vec<ReadingItem>,
+}
+
+/// 七选五体（段落 5 缺口 + 7 候选句；M4 题型补全，docs/02 §1）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SevenOfFiveBody {
+    pub passage: String,
+    pub options: Vec<String>,
+    pub answer: Vec<u32>,
+}
+
+/// 题型（M1 三型 + M4 题型补全：完形/阅读/七选五/语法填空；DESIGN §13.4）
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QuestionKind {
     SingleChoice(ChoiceBody),
     MultiChoice(ChoiceBody),
     FillBlank(FillBody),
+    Cloze(ClozeBody),
+    Reading(ReadingBody),
+    SevenOfFive(SevenOfFiveBody),
+    GrammarFill(GrammarFillBody),
 }
 
 /// 题目内容（参与 qid 寻址的字段集 —— 具名结构，schema 演化不致串位，docs/02-core-store §2）

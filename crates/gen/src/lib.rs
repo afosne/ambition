@@ -8,6 +8,7 @@ mod qpack;
 
 // 模块分层（docs/01 §组织：lib.rs 薄壳，文件 ≤500 行，pre-commit 门禁强制）
 mod draft;
+mod draft_passage;
 mod generator;
 mod prompt;
 mod qc;
