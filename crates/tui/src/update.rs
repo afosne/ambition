@@ -302,31 +302,3 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
         Msg::Screen(_) | Msg::Flip | Msg::Rate(_) => Cmd::None,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ambition_core::Verdict;
-
-    // 配对桩（门禁：同文件 fn↔test 配对；完整场景测试在 update_tests.rs）
-
-    #[test]
-    fn test_update_moves_cursor_and_submits_choice() {
-        let mut s = new_state(vec![crate::sample_question()]);
-        assert_eq!(update(&mut s, Msg::MoveDown), Cmd::None);
-        assert_eq!(s.sel, 1, "光标下移");
-        let cmd = update(&mut s, Msg::Submit);
-        assert!(matches!(cmd, Cmd::Submit(Answer::Choice(_))), "提交选择");
-        // 判分后 Submit 被忽略
-        s.grade = Some(GradeResult {
-            verdict: Verdict::Correct,
-            score: 1.0,
-            max: 1.0,
-            confidence: 1.0,
-            graded_by: ambition_core::GradedBy::Rule,
-            items: vec![],
-            error_tags: vec![],
-        });
-        assert_eq!(update(&mut s, Msg::Submit), Cmd::None, "已判分忽略提交");
-    }
-}
