@@ -27,7 +27,7 @@ MVP_STAGE: 4/6
 - **背景**：用户指出 `data/` 应只放**用户可导入的词表/题目等数据**，提示词（`data/prompts/`、`data/jev/` 判分语料）不应被用户修改；其中 `question_gen.md` 原先还带 `fs::read_to_string("data/prompts/…")` cwd 运行时覆盖——是全仓唯一“改了就生效”的提示词口子。
 - **决策（用户确认）**：①编译期内嵌资源就近放各 crate 的 `assets/`；②`question_gen.md` 运行时覆盖**彻底删除**（模板只内嵌）；③`data/seed`、`data/chinglish`（都是题目内容）**留在 data/**。
 - **改动**：资源搬家 `data/prompts/question_gen.md`→`crates/gen/assets/prompts/`、`data/prompts/arbitrate.md`→`crates/grader/assets/prompts/`、`data/jev/error_tags.json`→`crates/grader/assets/jev/`（git mv）；四处 include_str 相对路径改写；`load_prompt()` 纯 include_str、删运行时读取（测试改名 `test_load_prompt_returns_embedded_template`）；文档先行：docs/05 §1/§3、docs/16 §3 目录布局同步（data/ 树删 prompts/、jev/ 两行 + 定位声明）。`data/` 现仅剩 `seed/en/cet4/core.qpack.json`、`chinglish/en.json`。
-- **验证**：`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 干净；`cargo test` 全绿（13 组 266 用例，0 failed）；全仓 grep `data/prompts|data/jev` 仅剩历史进度记录。提交 `d7ebe00`（七步钩子 7/7）。
+- **验证**：`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 干净；`cargo test` 全绿（12 组 295 用例，0 failed）；全仓 grep `data/prompts|data/jev` 仅剩历史进度记录。提交 `d7ebe00`（七步钩子 7/7）。
 
 #### 本项代码评估（四段）
 
@@ -35,6 +35,27 @@ MVP_STAGE: 4/6
 - **实际使用**：发布形态下用户可见的 `data/` 只剩题库/错式库，提示词与判分语料编译进二进制、改源文件也不影响已装版本；边缘：仓库内改 `assets/prompts/*.md` 需重编译才生效（这是预期——内容变更本就随发版）。
 - **代码耦合度**：零依赖方向变化（仍 grader/gen 各自内嵌自己的资源）；原“三处 include_str 重复”遗留未解（见改进建议 #21），仅消除了 gen 里唯一的运行时文件 IO。
 - **鲁棒性**：净提升——删掉一条运行时读文件失败路径（cwd 不同 → 模板可能悄悄换成用户本地文件的不确定性）；模板加载现在是纯编译期常量，行为与 cwd 无关、可复现。
+
+### 2026-09-27 · 提示词 i18n：prompt/判分语料按 l2 分版（en/zh）（非阶段任务，用户手动发起）
+
+- **背景**：用户要求提示词支持中文/英文等多版本并接入 i18n（docs/16 三维度 ui_lang/l1/l2）。**决策（用户确认）**：①版本键 = **l2 目标语**（`assets/prompts/<kind>/<l2>.md`、`assets/jev/<l2>.json`）；②范围 = question_gen + arbitrate + **error_tags 判分语料**；③**缺版回退 en**；④zh 语料**按中文教学法改写 28 类**（非直译，措辞 v1 待判分负责人校订）。
+- **改动**：
+  - core：`LangTag::name_in(written_in)`（en/zh 两种书写语言 × en/zh/ja 语言名，未收录组合回退标签本身）+ `DEFAULT_L1 = "zh-Hans"`（TODO 16-config：config 落地后注入，不再取常量）；
+  - gen：`GenSpec += l2: LangTag`（serde default=en，docs/06 §1）；模板 `question_gen/{en,zh}.md`；`load_prompt(l2) -> (模板原文, 模板书写语言)` 按 l2 选版、缺版回退 en；`{{l1}}/{{l2}}` 渲染为语言名，删硬编码 `"English"`（原来 `{{l2}}` 直接写死）；
+  - grader：`arbitrate/{en,zh}.md` 按 `question.lang` 选版（system 模板占位填充）；语料 `jev/{en,zh}.json`，**新增 `instructions` 字段随语料进 Jev 请求**（不再是代码硬编码英文）；`corpus_value/error_criteria/error_cause_question/error_cause_questions/corpus_version` 全部 `lang` 参数化（每语种一对 OnceLock 单例），`merge_error_cause(lang,…)` 与 fill/rule 调用点改传 `question.lang.0`；`ERROR_TAGS_VERSION` 1.0.0 → **1.1.0**（新增 instructions + zh 版，全部语言文件同步断言）；
+  - zh 内容：question_gen/zh.md、arbitrate/zh.md 中文正文；error_tags/zh.json 28 类按中文教学法改写（article→量词误用、tense→“了/过/着”体标记、non_finite→的/地/得与修饰语位置、chinglish→直译腔…），键集仍 = `ErrorTag` 全集；
+  - 文档先行：docs/05 §1/§3、docs/06 §1、docs/07 §3/§4、docs/16 §3；改进建议新增 #23（gen qc 五问指令仍英文硬编码）。
+- **验证**：`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 干净；`cargo test` 全绿（12 组 301 用例，0 failed）；新增测试：name_in 语言名回退、gen 按 l2 选版/缺版回退/占位全替换、arbitrate 双语 system、语料逐版断言（28 键=ErrorTag 全集、en 版无 CJK/zh 版有 CJK、version 全版同步、lang 字段与版本一致、instructions 非空、ja 缺版回退 en）。提交 `a6f1542`（七步钩子 7/7）。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：文档先行四册同步；新增测试 12 个、全部公共 API 有 rustdoc；fmt/clippy 干净；zh 语料措辞标 v1 待校订，判分口径变更已按规范升 version（1.1.0）并全版同步断言钉住。
+- **实际使用**：en 轨行为完全不变（渲染后 prompt 与改前同义、语料英文原文未动）；l2=zh 时出题/复核/错因判断全走中文正文；未来 ja/de/es 等新语种先只写 en 版即可上线（占位自动注入正确语言名），新语种版到位后零代码切换——接入点只有各 crate 的 match 选版函数。
+- **代码耦合度**：依赖方向不变（gen/grader 互不依赖，共享能力下沉 core `LangTag`）；corpus 公共 API 由无参改 `lang` 参数——调用点全部在 grader 内部（rule/fill/helpers/arbitrate），无外部破坏面；`GenSpec.l2` 增字段带 serde default，旧序列化数据兼容。
+- **鲁棒性**：缺版回退与语料坏文件降级叠加（zh 版损坏 → 空 criteria 同 en 版既有行为；instructions 走 lang→en 双层回退）；OnceLock 按语种分单例无锁竞争；占位替换后测试断言无 `{{` 残留（防未替换占位漏进 LLM/Jev 请求）。
+
+**后续观察**：
+- [ ] zh 判分语料 28 类措辞 v1 需判分负责人校订（升 version 全版同步）；qc 五问指令本地化见改进建议 #23。
 
 ### 2026-09-24 · 分层重构：9 个超标文件拆模块（非阶段任务，用户手动发起）
 
@@ -144,7 +165,8 @@ MVP_STAGE: 4/6
 - [ ] 18. 成本面板与题包屏入 TUI：`cost_summary` → Profile/Settings 展示（M3 已有门面）；题包 `i/x` 键位（承接 #13）
 - [ ] 19. 假对检测合流：从 attempts.timing 算用户延迟基线（p50/p90 滚动）→ `is_guess(timing, self_confidence, baseline)` 接 `srs::decide_action`（M3 已采自评键位，承接 #10 尾巴）
 - [ ] 20. 裁决增强：选择题人工裁决回流 `ChoiceBody.answer` 集（当前只回流填空 acceptable）；`arbitration.reason` 分值区分灰区/离线两态
-- [ ] 21. 资源 loader 统一：`crates/grader/assets/jev`、`data/chinglish`、`crates/{gen,grader}/assets/prompts` 三处 include_str 收口到 16-config 单入口（**仅内容类资源 chinglish/seed 允许用户目录覆盖；prompt 与判分语料永不放开**——2026-09-27 已从 data/ 移出并删除运行时覆盖）
+- [ ] 21. 资源 loader 统一：`crates/grader/assets/jev`、`data/chinglish`、`crates/{gen,grader}/assets/prompts` 三处 include_str 收口到 16-config 单入口（**仅内容类资源 chinglish/seed 允许用户目录覆盖；prompt 与判分语料永不放开**——2026-09-27 已从 data/ 移出并删除运行时覆盖；选版函数三处同构（l2 match+回退 en），一并收口）
+- [ ] 23. 质检指令本地化：gen `qc.rs` 五问 instructions 仍英文硬编码（l2≠en 时 Jev 质检指令不随语种；与 arbitrate/error_cause 同法按 l2 分版即可）
 - [ ] 22. `evaluate_many` 消费方：M5 套卷批量判题接入（当前仅有契约测试）
 
 ### 2026-09-23 · 定时施工链路修复（自动化基建，非 MVP 阶段）
