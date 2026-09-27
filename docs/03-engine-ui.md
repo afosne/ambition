@@ -49,8 +49,8 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 // TUI（ratatui+crossterm）：App{state, screen, engine}；Msg/ update(纯) / draw；Screen=Home|Practice|Review|Wordbook|Typing|Writing|Notes|Diary|Todo|Games|Pack|Profile|Settings|Mock
 // 要点：unicode-width CJK 折行；答题组件（题干/选项/填空光标/判分视图）；打字组件复用 04-typing；游戏全 TUI 可玩
 // M2：判题失败 → 独立错误行（≠ Pending 态，P-8）；填空题输入行（采集→ Answer::Fill）；提交计时 → timing（假对检测输入，#5 半步）
-// M4：Tab 切 Practice↔Review 复习屏（Space/Enter 翻面 · 1-4 = Again/Hard/Good/Easy · Esc/Tab 返回；无 Home 屏故 `3` 直达键随 M6）；
-//   判分后 SRS 提示行（错词本入册/假对进卡/FSRS 已安排，apply_srs_hint）
+// M4：Tab 切 Practice↔Review 复习屏（Space/Enter 翻面 · 1-4 = Again/Hard/Good/Easy · Esc/Tab 返回；无 Home 屏故 `3` 直达键随 M6）——已落地：Screen::Review + KeyCtx::Review + Cmd::ReviewLoad/ReviewRate（due_list limit 20/轮，评分失败独立错误行）；
+//   判分后 SRS 提示行（错词本入册/假对进卡/FSRS 已安排，apply_srs_hint）——已落地
 // Web（React+TS，OpenAPI 生成客户端）：页面↔Screen 一一对应；TanStack Query
 ```
 
@@ -112,7 +112,7 @@ ambition                 # 进入 TUI：无需账号、无需服务、无需联�
 | Typing 打字 | `Ctrl+T` | Mock 模考 | `Ctrl+M` |
 | Writing 写作 | `Ctrl+E` | Settings | `Ctrl+S` |
 
-- 全局：**`Ctrl+Q`/`Ctrl+C` 恒退出（任何状态，含填空编辑中；单字母 `q` 退出已废除）** · `Ctrl+字母` 屏幕直达（多屏落地后接 `Msg::Screen`，当前仅 Practice 屏） · `?` 帮助 · `Tab`/`Shift+Tab` 切面板或字段 · `Esc` 返回/退出/跳过；
+- 全局：**`Ctrl+Q`/`Ctrl+C` 恒退出（任何状态，含填空编辑中；单字母 `q` 退出已废除）** · `Ctrl+字母` 屏幕直达（**M4 落地 `Msg::Screen`：`Ctrl+A`=Practice、`Ctrl+R`=Review**，其余屏随后续阶段） · `?` 帮助 · `Tab`/`Shift+Tab` 切面板或字段 · `Esc` 返回/退出/跳过；
 - **键位唯一入口（2026-09-27 统一重构）**：`crates/tui/src/keys.rs::key_to_msg(KeyCtx, key, mods)` —— `KeyCtx`（Choice / Fill{editing} / Pending / Graded / Finished）由 `AppState::key_ctx()` 计算，键位表只此一份；提示行 `hint(ctx)` 与路由同源（render 不得硬编码键位文案）；main 不做任何键位改写；
 - 答题（Choice ctx）：`↑/↓` 移动 · **`Space` 选中/取消（多选连按；未选中时按光标位提交）** · `Enter` 提交 · **`1-4` 自评把握（数字，→ Attempt.self_confidence；仅作答态）**；`j/k`/`q` 等单字母已废除；判分浮层显示错因标签 + graded_by（结构化讲解①）；
 - 填空（Fill ctx，**2026-09-27 键位修订**）：**打字即编辑（无需进入键，任何可打印字符含空格/数字直接进当前空位）** · **多空 = 每空一位独立输入行**（`Tab`/`→`/`↓` 下一空，`Shift+Tab`/`←`/`↑` 上一空，循环；**废除 `;` 分隔**） · `Enter` 提交 · **`Esc` = 退出编辑但保留已输入**（再打字直接恢复编辑；未编辑时 `Esc` 才退出程序）——修订前 `Esc` 直接退程序丢答案是坑；

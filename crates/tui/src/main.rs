@@ -5,8 +5,11 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use ambition_core::{Attempt, AttemptMode};
-use ambition_engine::Engine;
-use ambition_tui::{Cmd, apply_error, apply_grade, key_to_msg, new_state, render, update};
+use ambition_engine::{Engine, Rating};
+use ambition_tui::{
+    Cmd, ReviewCard, Screen, apply_error, apply_grade, apply_review_cards, apply_review_rated,
+    apply_srs_hint, key_to_msg, new_state, render, update,
+};
 use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -14,6 +17,14 @@ use crossterm::terminal::{
 use crossterm::{ExecutableCommand, execute};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+
+/// 当前 unix 秒（复习队列 due_list 用）
+fn now_unix() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
 
 /// 默认库路径：AMBI_DB 覆盖 → HOME/.ambition/ambition.db（docs/03 §5.6）
 fn db_path() -> PathBuf {
@@ -41,7 +52,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     execute!(stdout, EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
 
-    while !state.finished {
+    // finished（答题组完成）后仍可进复习屏（Ctrl+R/Tab），直到显式退出
+    while !state.finished || state.screen == Screen::Review {
         terminal.draw(|f| render(f, &state))?;
         let Event::Key(key) = event::read()? else {
             continue;
@@ -70,6 +82,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     Ok(outcome) => {
                         last_attempt_id = Some(attempt_id);
                         apply_grade(&mut state, outcome.grade);
+                        apply_srs_hint(&mut state, outcome.srs);
                     }
                     // 失败 = 独立错误行，绝不伪造 Pending 判分（P-8 / 改进 #6）
                     Err(err) => apply_error(&mut state, err.to_string()),
@@ -82,6 +95,35 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         Ok(grade) => apply_grade(&mut state, grade),
                         Err(err) => apply_error(&mut state, err.to_string()),
                     }
+                }
+            }
+            Cmd::ReviewLoad => {
+                // 到期队列（docs/08 §1：到期过滤 + 交错；limit 20 一轮）
+                match engine.due_list(now_unix(), 20).await {
+                    Ok(items) => {
+                        let cards = items
+                            .into_iter()
+                            .map(|item| ReviewCard {
+                                card_id: item.card.card_id.0,
+                                front: item.front,
+                                back: item.back,
+                                group: item.group,
+                            })
+                            .collect();
+                        apply_review_cards(&mut state, cards);
+                    }
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::ReviewRate(level) => {
+                // FSRS 评分（1-4 → Rating；排程 + ReviewDone 落 game_state，engine.review_answer）
+                let card_id = state.review.cards[state.review.idx].card_id.clone();
+                let Some(rating) = Rating::from_key(level) else {
+                    continue;
+                };
+                match engine.review_answer(&card_id, rating).await {
+                    Ok(card) => apply_review_rated(&mut state, card.due_at, now_unix()),
+                    Err(err) => apply_error(&mut state, err.to_string()),
                 }
             }
             Cmd::None => {}
@@ -97,6 +139,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_now_unix_returns_current_seconds() {
+        assert!(now_unix() > 1_700_000_000, "当前 unix 秒合理");
+    }
 
     #[test]
     fn test_db_path_honors_env_override_then_home() {

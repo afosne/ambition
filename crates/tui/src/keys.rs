@@ -18,15 +18,20 @@ pub enum KeyCtx {
     Graded,
     /// 全部完成
     Finished,
+    /// 复习屏（FSRS 翻卡；docs/03 §3 M4）：Space/Enter 翻面 · 1-4 评分 · Tab/Esc 返回
+    Review,
 }
 
 /// 键位 → 消息（唯一键位表；docs/03 §5.3）
 pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg> {
     // ① 恒定层：Ctrl 组合（任何上下文）——Ctrl+Q/Ctrl+C 退出；其余 Ctrl+字母 = 屏幕直达
-    //    （docs/03 §5.3，多屏落地后接 Msg::Screen）；非 Ctrl 的字母永远不进命令层
+    //    （docs/03 §5.3：Ctrl+A/Ctrl+R 直达已落地，其余屏随后续阶段）；非 Ctrl 的字母永远不进命令层
     if mods.contains(KeyModifiers::CONTROL) {
         return match code {
             KeyCode::Char('q') | KeyCode::Char('c') => Some(Msg::Quit),
+            // 屏幕直达（docs/03 §5.3 直达表落地：Practice=Ctrl+A、Review=Ctrl+R；其余屏随后续阶段）
+            KeyCode::Char('a') => Some(Msg::Screen(Screen::Practice)),
+            KeyCode::Char('r') => Some(Msg::Screen(Screen::Review)),
             _ => None,
         };
     }
@@ -36,6 +41,7 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
             return match ctx {
                 KeyCtx::Fill { editing: true } => Some(Msg::StopEdit),
                 KeyCtx::Pending => Some(Msg::Next), // 跳过本题（保持待裁定桶）
+                KeyCtx::Review => Some(Msg::Screen(Screen::Practice)), // 复习屏返回答题
                 _ => Some(Msg::Quit),
             };
         }
@@ -44,6 +50,7 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Choice | KeyCtx::Fill { .. } => Msg::Submit,
                 KeyCtx::Pending => Msg::ConfirmArbitrate,
                 KeyCtx::Graded | KeyCtx::Finished => Msg::Next,
+                KeyCtx::Review => Msg::Flip, // 复习屏 Enter=翻面
             });
         }
         _ => {}
@@ -69,6 +76,12 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
         }
         (KeyCtx::Pending, KeyCode::Down | KeyCode::Right) => Some(Msg::MoveDown),
         (KeyCtx::Pending, KeyCode::Up | KeyCode::Left) => Some(Msg::MoveUp),
+        // 复习屏（docs/03 §3 M4）：Space 翻面 · 1-4=Again/Hard/Good/Easy · Tab 返回
+        (KeyCtx::Review, KeyCode::Char(' ')) => Some(Msg::Flip),
+        (KeyCtx::Review, KeyCode::Char(c @ '1'..='4')) => {
+            Some(Msg::Rate(c.to_digit(10).unwrap_or(1) as u8))
+        }
+        (KeyCtx::Review, KeyCode::Tab) => Some(Msg::Screen(Screen::Practice)),
         _ => None,
     }
 }
@@ -86,6 +99,9 @@ pub fn hint(ctx: KeyCtx) -> &'static str {
         KeyCtx::Pending => " ←/→ 选择判对判错 · Enter 确认裁决 · Esc 跳过 · Ctrl+Q 退出",
         KeyCtx::Graded => " Enter 下一题 · Ctrl+Q 退出",
         KeyCtx::Finished => " Ctrl+Q 退出",
+        KeyCtx::Review => {
+            " Space/Enter 翻面 · 1-4 评分（Again/Hard/Good/Easy）· Tab/Esc 返回答题 · Ctrl+Q 退出"
+        }
     }
 }
 
@@ -98,7 +114,7 @@ mod tests {
         M::empty()
     }
 
-    fn all_ctxs() -> [KeyCtx; 6] {
+    fn all_ctxs() -> [KeyCtx; 7] {
         [
             KeyCtx::Choice,
             KeyCtx::Fill { editing: true },
@@ -106,6 +122,7 @@ mod tests {
             KeyCtx::Pending,
             KeyCtx::Graded,
             KeyCtx::Finished,
+            KeyCtx::Review,
         ]
     }
 
@@ -308,5 +325,71 @@ mod tests {
             hint(KeyCtx::Pending).contains("Enter 确认"),
             "待裁定提示含确认"
         );
+    }
+
+    #[test]
+    fn test_key_to_msg_review_ctx_flip_rate_and_return() {
+        use Msg::*;
+        // 翻面：Space / Enter
+        assert_eq!(key_to_msg(KeyCtx::Review, K::Char(' '), mods()), Some(Flip));
+        assert_eq!(key_to_msg(KeyCtx::Review, K::Enter, mods()), Some(Flip));
+        // 评分 1-4
+        assert_eq!(
+            key_to_msg(KeyCtx::Review, K::Char('1'), mods()),
+            Some(Rate(1))
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Review, K::Char('4'), mods()),
+            Some(Rate(4))
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Review, K::Char('5'), mods()),
+            None,
+            "5 档不存在"
+        );
+        // 返回答题：Tab / Esc
+        assert_eq!(
+            key_to_msg(KeyCtx::Review, K::Tab, mods()),
+            Some(Screen(crate::Screen::Practice))
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Review, K::Esc, mods()),
+            Some(Screen(crate::Screen::Practice)),
+            "Esc 返回而非退出"
+        );
+        // Ctrl+Q 仍恒退出
+        assert_eq!(
+            key_to_msg(KeyCtx::Review, K::Char('q'), M::CONTROL),
+            Some(Quit)
+        );
+    }
+
+    #[test]
+    fn test_key_to_msg_ctrl_direct_screen_navigation() {
+        use Msg::*;
+        // 恒定层 Ctrl+A / Ctrl+R 屏幕直达（docs/03 §5.3）
+        for ctx in all_ctxs() {
+            assert_eq!(
+                key_to_msg(ctx, K::Char('a'), M::CONTROL),
+                Some(Screen(crate::Screen::Practice)),
+                "Ctrl+A → Practice: {ctx:?}"
+            );
+            assert_eq!(
+                key_to_msg(ctx, K::Char('r'), M::CONTROL),
+                Some(Screen(crate::Screen::Review)),
+                "Ctrl+R → Review: {ctx:?}"
+            );
+        }
+        assert_eq!(key_to_msg(KeyCtx::Choice, K::Char('x'), M::CONTROL), None);
+    }
+
+    #[test]
+    fn test_hint_covers_review_ctx_uniquely() {
+        let hint_review = hint(KeyCtx::Review);
+        assert!(hint_review.contains("翻面"), "{hint_review}");
+        assert!(hint_review.contains("1-4"), "{hint_review}");
+        for ctx in [KeyCtx::Choice, KeyCtx::Graded, KeyCtx::Finished] {
+            assert_ne!(hint(ctx), hint_review, "提示互异 {ctx:?}");
+        }
     }
 }

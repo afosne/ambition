@@ -2,10 +2,12 @@
 
 use super::*;
 
-/// 屏幕（M1 只有答题流；完整 Screen 集见 docs/03-engine-ui）
+/// 屏幕（M4：Practice + Review；完整 Screen 集见 docs/03-engine-ui）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
     Practice,
+    /// 复习屏（FSRS 翻卡，docs/03 §3 M4）
+    Review,
 }
 
 /// 应用状态
@@ -35,6 +37,10 @@ pub struct AppState {
     pub checked: Vec<u32>,
     /// 复合选择题逐槽作答记录（七选五=逐缺口、阅读=逐子题；Space 记录当前槽并前进，M4 题型补全）
     pub sub_answers: Vec<u32>,
+    /// 判分后 SRS 提示行（错词本入册/假对进卡/FSRS 已安排；docs/03 §3 M4）
+    pub srs_hint: Option<String>,
+    /// 复习屏状态（M4）
+    pub review: ReviewState,
     /// 待裁定裁决高亮（0=判对 1=判错；←/→ 切换，Enter 确认）
     pub arbitration_sel: u8,
 }
@@ -59,6 +65,12 @@ pub enum Msg {
     Select,
     /// Esc 退出编辑（保留已输入；打字直接恢复编辑）
     StopEdit,
+    /// 切屏（Ctrl+A/Ctrl+R 直达、Tab 进出复习屏，docs/03 §5.3）
+    Screen(Screen),
+    /// 复习屏翻面（Space/Enter）
+    Flip,
+    /// 复习屏评分（1-4 = Again/Hard/Good/Easy）
+    Rate(u8),
 }
 
 /// 状态机输出（Quit/Submit 由 main 执行副作用）
@@ -69,6 +81,10 @@ pub enum Cmd {
     Submit(Answer),
     /// 人工裁决（main 调 engine.resolve_pending）
     Arbitrate(bool),
+    /// 加载复习队列（main 调 engine.due_list）
+    ReviewLoad,
+    /// 复习评分（main 调 engine.review_answer；u8 = 1-4 档）
+    ReviewRate(u8),
 }
 
 /// 题目空位数（填空类 = blanks 数；其它题型 = 0——inputs 长度据此重建；M4 题型补全含完形/语法填空）
@@ -99,6 +115,8 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         editing: false,
         checked: Vec::new(),
         sub_answers: Vec::new(),
+        srs_hint: None,
+        review: ReviewState::default(),
         arbitration_sel: 0,
     }
 }
@@ -111,6 +129,9 @@ impl AppState {
 
     /// 键位上下文（keys.rs 唯一路由入参；键位表只此一份）
     pub fn key_ctx(&self) -> KeyCtx {
+        if self.screen == Screen::Review {
+            return KeyCtx::Review;
+        }
         if self.finished {
             return KeyCtx::Finished;
         }
@@ -144,6 +165,16 @@ pub fn apply_grade(state: &mut AppState, grade: GradeResult) {
 /// 写入独立错误行（main 在 submit 失败后调用；P-8：绝不降级成 Pending 假判分）
 pub fn apply_error(state: &mut AppState, message: String) {
     state.error = Some(message);
+}
+
+/// 判分后 SRS 提示（入卡处置回传 UI，docs/03 §2 M4；None = 无处置清空提示）
+pub fn apply_srs_hint(state: &mut AppState, action: Option<CardAction>) {
+    state.srs_hint = action.map(|act| match act {
+        CardAction::Create => "📚 已进错词复习队列".to_string(),
+        CardAction::Bump => "📚 错词本 +1（错词提权，尽快复习）".to_string(),
+        CardAction::Schedule(_) => " FSRS 已安排下次复习".to_string(),
+        CardAction::Skip => String::new(),
+    });
 }
 
 /// 内置示例题（测试夹具；运行时题库来自 seed，docs/16-config-i18n §seed）
@@ -353,6 +384,24 @@ mod tests {
             "可覆盖"
         );
         assert!(s.error.is_none(), "成功路径不写错误行");
+    }
+
+    #[test]
+    fn test_apply_srs_hint_maps_actions_and_clears_on_none() {
+        let mut s = new_state(vec![sample_question()]);
+        apply_srs_hint(&mut s, Some(CardAction::Create));
+        assert_eq!(s.srs_hint.as_deref(), Some("📚 已进错词复习队列"));
+        apply_srs_hint(&mut s, Some(CardAction::Bump));
+        assert!(s.srs_hint.as_deref().unwrap_or("").contains("错词本 +1"));
+        apply_srs_hint(
+            &mut s,
+            Some(CardAction::Schedule(ambition_engine::Rating::Good)),
+        );
+        assert!(s.srs_hint.as_deref().unwrap_or("").contains("FSRS"));
+        apply_srs_hint(&mut s, Some(CardAction::Skip));
+        assert_eq!(s.srs_hint, Some(String::new()), "Skip 空串（渲染跳过）");
+        apply_srs_hint(&mut s, None);
+        assert!(s.srs_hint.is_none(), "None 清空");
     }
 
     #[test]

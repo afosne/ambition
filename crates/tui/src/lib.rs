@@ -6,6 +6,8 @@
 // 模块分层（docs/01 §组织：lib.rs 薄壳，文件 ≤500 行，pre-commit 门禁强制）
 mod keys;
 mod render;
+mod review_render;
+mod review_state;
 mod state;
 mod update;
 #[cfg(test)]
@@ -13,12 +15,15 @@ mod update_tests;
 
 pub use keys::*;
 pub use render::*;
+pub use review_render::*;
+pub use review_state::*;
 pub use state::*;
 pub use update::*;
 
 use std::time::Instant;
 
 use ambition_core::{Answer, GradeResult, Question, QuestionKind, Timing};
+use ambition_engine::CardAction;
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Frame;
 use ratatui::layout::Alignment;

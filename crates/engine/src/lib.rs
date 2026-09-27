@@ -19,6 +19,8 @@ mod srs_tests;
 // 各模块只承载 impl 块与 crate 内部 fns——impl 自动生效，无项可再导出
 
 pub use ai::{AiConfig, LLM_CACHE_TTL_SECS};
+/// SRS 关键类型再导出（两壳经 engine 消费，避免直接依赖 srs crate）
+pub use ambition_srs::{CardAction, Rating};
 pub use ambition_store::ArbitrationRow;
 pub use ledger::StoreLedger;
 

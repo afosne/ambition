@@ -429,4 +429,63 @@ mod tests {
             "未选子题回退光标位/已选子题按选中集"
         );
     }
+
+    #[test]
+    fn test_update_screen_switch_and_review_flow() {
+        // Ctrl+A/Ctrl+R / Tab 切屏：进 Review 触发 ReviewLoad
+        let mut s = new_state(vec![sample_question()]);
+        assert_eq!(s.screen, Screen::Practice);
+        assert_eq!(
+            update(&mut s, Msg::Screen(Screen::Review)),
+            Cmd::ReviewLoad,
+            "进复习屏 → 加载队列"
+        );
+        assert_eq!(s.screen, Screen::Review);
+        assert_eq!(
+            update(&mut s, Msg::Screen(Screen::Review)),
+            Cmd::None,
+            "同屏切换忽略"
+        );
+        // 复习屏：未翻面评分忽略（防误触）
+        assert_eq!(update(&mut s, Msg::Rate(3)), Cmd::None, "未翻面不评分");
+        // 翻面 → 评分需有卡
+        update(&mut s, Msg::Flip);
+        assert!(s.review.revealed, "翻面生效");
+        assert_eq!(update(&mut s, Msg::Rate(3)), Cmd::None, "无卡评分忽略");
+        // 载卡后评分 → ReviewRate
+        apply_review_cards(
+            &mut s,
+            vec![crate::ReviewCard {
+                card_id: "q:1".into(),
+                front: "f".into(),
+                back: "b".into(),
+                group: "g".into(),
+            }],
+        );
+        assert_eq!(update(&mut s, Msg::Rate(3)), Cmd::None, "翻面被复位后忽略");
+        update(&mut s, Msg::Flip);
+        assert_eq!(
+            update(&mut s, Msg::Rate(3)),
+            Cmd::ReviewRate(3),
+            "翻面后评分"
+        );
+        // 返回答题屏
+        assert_eq!(
+            update(&mut s, Msg::Screen(Screen::Practice)),
+            Cmd::None,
+            "回 Practice 无需加载"
+        );
+        assert_eq!(s.screen, Screen::Practice);
+        // finished 后仍可切屏
+        let mut done = new_state(vec![sample_question()]);
+        done.finished = true;
+        assert_eq!(
+            update(&mut done, Msg::Screen(Screen::Review)),
+            Cmd::ReviewLoad
+        );
+        // Practice 屏收 Review 专属消息 = 忽略
+        let mut p = new_state(vec![sample_question()]);
+        assert_eq!(update(&mut p, Msg::Flip), Cmd::None);
+        assert_eq!(update(&mut p, Msg::Rate(2)), Cmd::None);
+    }
 }

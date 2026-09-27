@@ -4,6 +4,10 @@ use super::*;
 
 /// 渲染当前状态（含判分浮层 + 错误行 + 填空输入行）
 pub fn render(frame: &mut Frame, state: &AppState) {
+    if state.screen == Screen::Review {
+        render_review(frame, state);
+        return;
+    }
     let mut text = String::from("Ambition · 拾英 —— 单机模式（本地题库）\n\n");
     if state.finished {
         text.push_str("本组完成！按 Ctrl+Q 退出。\n");
@@ -117,6 +121,15 @@ pub fn render(frame: &mut Frame, state: &AppState) {
                     .map(|set| set.first().map(String::as_str).unwrap_or(""))
                     .collect();
                 text.push_str(&format!("\n 正确答案: {}", answers.join(" ; ")));
+            }
+            // SRS 提示行（入卡处置回传，docs/03 §3 M4）
+            if let Some(hint_line) = &state.srs_hint
+                && !hint_line.is_empty()
+            {
+                text.push_str(&format!(
+                    "
+ {hint_line}"
+                ));
             }
             if grade.verdict == ambition_core::Verdict::Pending {
                 // 裁决高亮（arbitration_sel 0=判对 1=判错）+ 键位取统一键位表口径
@@ -361,6 +374,13 @@ mod tests {
         assert!(flipped.contains("❯判错"), "箭头切换高亮: {flipped:?}");
         assert!(flipped.contains("错因: 搭配"), "错因中文标签: {flipped:?}");
         assert!(flipped.contains("0.42"), "结构化讲解含概率: {flipped:?}");
+        // SRS 提示行（入卡处置回传）
+        apply_srs_hint(&mut s, Some(ambition_engine::CardAction::Create));
+        let srs_buf = render_to(&s);
+        assert!(
+            srs_buf.contains("错词复习队列"),
+            "SRS 提示行可见: {srs_buf:?}"
+        );
         // 人工裁决标记
         let mut human = grade(Verdict::Correct);
         human.graded_by = ambition_core::GradedBy::Human;

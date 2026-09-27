@@ -44,7 +44,26 @@ impl Engine {
             correct: matches!(grade.verdict, Verdict::Correct | Verdict::Acceptable),
         };
         self.settle(event).await;
+        // M4：裁决补执行 SRS 处置（提交时 Pending 不动，docs/08 §1；旁路失败 warn 不回滚裁决）
+        self.srs_settle_for(attempt_id, &grade).await;
         Ok(grade)
+    }
+
+    /// 裁决后补执行 SRS 处置（读回原作答 → 基线（排除本次）→ 假对 → 建卡/提权/调度）
+    async fn srs_settle_for(&self, attempt_id: &str, grade: &GradeResult) {
+        let attempt = match ambition_store::get_attempt(&self.pool, attempt_id).await {
+            Ok(Some(attempt)) => attempt,
+            Ok(None) => {
+                tracing::warn!(%attempt_id, "srs settle skipped: attempt not found");
+                return;
+            }
+            Err(err) => {
+                tracing::warn!(error = %err, "srs settle skipped: attempt read failed");
+                return;
+            }
+        };
+        let guess = self.is_guess_attempt(&attempt, Some(attempt_id)).await;
+        self.srs_after_attempt(&attempt, grade, guess).await;
     }
 
     /// 成本台账门面：区间 [from_unix, to_unix) 按 kind 聚合（llm_usage；docs/05 §1）
@@ -205,6 +224,58 @@ mod tests {
             matches!(repeat, Err(EngineError::NotFound(_))),
             "重复裁决不静默"
         );
+    }
+
+    #[tokio::test]
+    async fn test_srs_settle_for_runs_after_arbitration() {
+        // 裁决补执行 SRS：reject → Wrong 建卡；accept → Correct 非假对无卡 = 不入卡（docs/08 §1）
+        let engine = Engine::open_memory().await.expect("打开");
+        let m = multi_pick_two();
+        engine.add_question(&m).await.expect("注入");
+        engine
+            .submit_answer(&attempt_for(m.qid.clone(), vec![0], "sf-1"))
+            .await
+            .expect("提交");
+        engine
+            .submit_answer(&attempt_for(m.qid.clone(), vec![2], "sf-2"))
+            .await
+            .expect("提交");
+        // accept（Correct 非假对无卡 → Skip 不入卡）
+        engine.resolve_pending("sf-1", true).await.expect("裁决");
+        let card_id = ambition_core::CardId::from_source(&ambition_core::CardSource::Question {
+            qid: m.qid.clone(),
+        });
+        assert!(
+            ambition_store::get_card(&engine.pool, &card_id.0)
+                .await
+                .expect("读卡")
+                .is_none(),
+            "accept 答对无卡不入卡"
+        );
+        // reject（Wrong → 建卡）
+        engine.resolve_pending("sf-2", false).await.expect("裁决");
+        let card = ambition_store::get_card(&engine.pool, &card_id.0)
+            .await
+            .expect("读卡")
+            .expect("存在");
+        assert_eq!(card.wrong_count, 1, "裁决判错建卡");
+        // attempt 缺失 → 跳过不 panic（旁路降级）
+        engine
+            .srs_settle_for("ghost-attempt", &attempt_grade())
+            .await;
+    }
+
+    /// srs_settle_for 测试用裁决后判分（Human Wrong）
+    fn attempt_grade() -> GradeResult {
+        GradeResult {
+            verdict: Verdict::Wrong,
+            score: 0.0,
+            max: 1.0,
+            confidence: 1.0,
+            graded_by: ambition_core::GradedBy::Human,
+            items: vec![],
+            error_tags: vec![],
+        }
     }
 
     #[tokio::test]

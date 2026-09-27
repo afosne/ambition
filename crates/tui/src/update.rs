@@ -4,6 +4,36 @@ use super::*;
 
 /// 纯状态机：键位语义见 keys.rs（唯一键位表），本层只做状态转移与防误触双保险
 pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
+    // 屏幕切换（任何状态可用：Ctrl+A/Ctrl+R 直达、Tab 进出复习屏；进 Review 触发队列加载）
+    if let Msg::Screen(target) = msg {
+        if state.screen == target {
+            return Cmd::None;
+        }
+        state.screen = target;
+        return if target == Screen::Review {
+            Cmd::ReviewLoad
+        } else {
+            Cmd::None
+        };
+    }
+    // 复习屏独立状态机（docs/03 §3 M4：翻面 → 1-4 评分；未翻面评分忽略防误触）
+    if state.screen == Screen::Review {
+        return match msg {
+            Msg::Quit => Cmd::Quit,
+            Msg::Flip => {
+                state.review.revealed = true;
+                Cmd::None
+            }
+            Msg::Rate(level) => {
+                if state.review.revealed && state.review.cards.get(state.review.idx).is_some() {
+                    Cmd::ReviewRate(level)
+                } else {
+                    Cmd::None
+                }
+            }
+            _ => Cmd::None,
+        };
+    }
     if state.finished {
         return if matches!(msg, Msg::Quit) {
             Cmd::Quit
@@ -255,6 +285,7 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             state.editing = false;
             state.checked.clear();
             state.sub_answers.clear();
+            state.srs_hint = None;
             state.arbitration_sel = 0;
             state.started_at = Instant::now();
             if state.idx + 1 >= state.questions.len() {
@@ -267,6 +298,8 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             }
             Cmd::None
         }
+        // 复习屏专属消息在 Practice 屏忽略（Review 分支已在顶部拦截；防误触）
+        Msg::Screen(_) | Msg::Flip | Msg::Rate(_) => Cmd::None,
     }
 }
 
