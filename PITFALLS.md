@@ -121,4 +121,4 @@
 - **症状**：`cargo check --all-targets` 报 `E0425 cannot find value DEFAULT_L1 in crate ambition_core` / `E0599 no method name_in`——但源码 grep 明明有、`cargo test` 301 用例全绿、`cargo check -p <单包>` 也绿；`touch` 源文件重跑无效。
 - **根因**：`target/debug/deps` 里该 crate 残留旧/损坏的 `.rmeta`（现场有 0 字节文件，来自中断构建）；`--all-targets` 的单元图命中了改动前的旧元数据（与单包构建选择的产物不同），于是"按旧接口"编译下游。
 - **解决**：`cargo clean -p ambition-core`（清 1886 文件/412MB）后 `cargo check --all-targets` 立即通过；全量 test/clippy 复核绿。
-- **预防**：凡"源码有、check 找不到，但 test 反而绿"的矛盾 → 先 `cargo clean -p <crate>`（必要时全量 `cargo clean`），不要去改源码；`deps/` 出现 0 字节 `.rlib/.rmeta` 即坏产物信号。编辑器（rust-analyzer）同症状时重启 RA 即可。
+- **预防**：凡"源码有、check 找不到，但 test 反而绿"的矛盾 → 先 `cargo clean -p <crate>`，反复复现则全量 `cargo clean`（2026-09-27 实测清 13GB 后连跑多次 check/build/test 全绿），**不要去改源码**。判据是「check 与 test 结果矛盾」——**不能**单凭 `deps/` 有 0 字节 `.rmeta` 判坏（健康 `cargo test` 后每 crate 也会留一个，当时误把它当主因写进过本条）。编辑器（rust-analyzer）里还飘红 = RA 持有旧分析缓存，重启语言窗口/Reload Window 即可；CLI 绿、编辑器红时先重启 RA 再查代码。
