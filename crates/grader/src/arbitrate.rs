@@ -94,7 +94,7 @@ fn arbitrate_payload(question: &Question, answer: &Answer) -> String {
 fn arbitrate_request(question: &Question, answer: &Answer) -> GenRequest {
     let mut request = GenRequest::new(
         LlmKind::Arbitrate,
-        include_str!("../../../data/prompts/arbitrate.md"),
+        include_str!("../assets/prompts/arbitrate.md"),
         arbitrate_payload(question, answer),
     );
     request.schema = Some(arbitrate_schema());

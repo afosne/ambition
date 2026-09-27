@@ -20,7 +20,7 @@ impl LlmRouter {
 }
 pub enum LlmError { Http{status, retryable}, InvalidOutput{attempts}, QuotaExceeded, Offline, BreakerOpen /*M3 熔断快速失败*/ }
 ```
-- prompt 模板 `data/prompts/<kind>.md`（`{{l2}}/{{l1}}` 占位，M2 内嵌默认 + data/ 目录可覆盖，用户目录覆盖随 16-config）；判分内容字段必须 l2 原文；
+- prompt 模板（`{{l2}}/{{l1}}` 占位）源文件放**各 crate 的 `assets/prompts/`**（gen=`crates/gen/assets/prompts/question_gen.md`、grader=`crates/grader/assets/prompts/arbitrate.md`），编译期 `include_str!` 内嵌、**无运行时文件读取——用户不可修改**；`data/` 只放用户可导入内容（词表/题包等，docs/16 §3）；判分内容字段必须 l2 原文；
 - `llm_cache` key=hash(content+kind+params)（素材/讲解/范文共用，00-overview S7）；`llm_usage` 记账——两表由 store 提供读写函数，**trait `AiLedger` 定义在 llm，SQLite 实现经 engine 装配**（保持 05 不依赖 store 的方向）。
 - **M2 落地范围**：`OpenAiCompat`/`Anthropic` 两实现 + `LlmRouter::structured/text` + wiremock 双协议契约测试（记账落 `llm_usage` 行）。
 - **M3 落地范围**：`usage_summary(from_unix, to_unix)`（数据源 `AiLedger::usage_summary`，SQLite 实现 = engine::StoreLedger 经 `Engine::cost_summary` 门面）；**生成全局熔断**——连续失败 ≥`BREAKER_FAIL_LIMIT`(5) → 快速失败 `BREAKER_SKIP_LIMIT`(10) 次不发请求 → 放行 1 次试探，成功即关闸，返回 `LlmError::BreakerOpen`（`Offline` 不计入、缓存命中不计数）；`LlmKind::Arbitrate`（07 三级复核的判断型 prompt）；`llm_cache` TTL 淘汰 = store `cache_purge_before`（TTL 7 天，engine open 时执行一次）；`ProxyLlm` 仍随 M7。
@@ -60,8 +60,8 @@ pub fn route_by_confidence(ans: &JevAnswer, accept: f32, reject: f32) -> Route; 
 | en | 0.75 / 0.35 | 规则 → Jev → LLM 复核 |
 | 其它 | 0.85 / 0.20 | 规则 → Jev（仅参考）→ LLM 粗判 + 低置信待裁定；分数 UI 明示"参考值"、只同 lang 比较 |
 
-- 固定判断语料（`data/jev/error_tags.json`、rubric `levels_en`）**措辞即判分口径**，变更必升 version。
-  **M3 落地**：`data/jev/error_tags.json`（`schema_version=1`、`version=1.0.0`，28 个 criteria 键 = `core::ErrorTag` snake_case 全集，description **全英文**——中文永不进 Jev 请求）由 07 `error_criteria()` 内嵌加载；改措辞必须同时升 `version` 常量（测试断言文件 version == 代码常量）。
+- 固定判断语料（`crates/grader/assets/jev/error_tags.json`、rubric `levels_en`）**措辞即判分口径**，变更必升 version；语料**不进 data/**（编译期内嵌、用户不可改，docs/16 §3）。
+  **M3 落地**：`crates/grader/assets/jev/error_tags.json`（`schema_version=1`、`version=1.0.0`，28 个 criteria 键 = `core::ErrorTag` snake_case 全集，description **全英文**——中文永不进 Jev 请求）由 07 `error_criteria()` 内嵌加载；改措辞必须同时升 `version` 常量（测试断言文件 version == 代码常量）。
 
 ## 4. 验证点
 

@@ -1,8 +1,8 @@
-//! prompt 渲染与 JSON Schema：render_prompt/load_prompt/draft_schema（data/prompts 可覆盖）
+//! prompt 渲染与 JSON Schema：render_prompt/load_prompt/draft_schema（模板编译期内嵌）
 
 use super::*;
 
-/// prompt 模板渲染（data/prompts 可覆盖，内嵌兜底；{{l2}} 等占位 docs/05 §1）
+/// prompt 模板渲染（模板编期内嵌、无运行时读取；{{l2}} 等占位 docs/05 §1）
 pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) -> String {
     let template = load_prompt();
     let kinds = spec
@@ -62,10 +62,9 @@ pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) ->
     out
 }
 
-/// prompt 模板：优先 data/prompts/question_gen.md（cwd 相对），否则内嵌同名文件
+/// prompt 模板：编译期内嵌（`crates/gen/assets/prompts/question_gen.md`——不读运行时文件，用户不可修改）
 pub(crate) fn load_prompt() -> String {
-    std::fs::read_to_string("data/prompts/question_gen.md")
-        .unwrap_or_else(|_| include_str!("../../../data/prompts/question_gen.md").to_string())
+    include_str!("../assets/prompts/question_gen.md").to_string()
 }
 
 /// 草稿 JSON Schema（llm response_format 约束）
@@ -135,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_prompt_falls_back_to_embedded_template() {
+    fn test_load_prompt_returns_embedded_template() {
         let text = load_prompt();
         assert!(text.contains("{{count}}"), "模板占位在场");
         assert!(text.contains("English"), "英文模板");

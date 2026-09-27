@@ -1,4 +1,4 @@
-//! 判分语料加载：`data/jev/error_tags.json` 内嵌 + 校验（docs/05 §3：措辞即判分口径，变更必升 version）
+//! 判分语料加载：`crates/grader/assets/jev/error_tags.json` 内嵌 + 校验（docs/05 §3：措辞即判分口径，变更必升 version）
 //! criteria 键 = `core::ErrorTag` snake_case 全集；description 全英文（中文永不进 Jev 请求）。
 
 use std::collections::BTreeMap;
@@ -10,7 +10,7 @@ use ambition_jev::{ChoiceQ, JevAnswer, JevAnswers, JevQuestion, JevQuestions};
 /// 代码侧语料版本（与 json 文件 `version` 同步——测试断言，改措辞必须同时改这里）
 pub const ERROR_TAGS_VERSION: &str = "1.0.0";
 
-const ERROR_TAGS_JSON: &str = include_str!("../../../data/jev/error_tags.json");
+const ERROR_TAGS_JSON: &str = include_str!("../assets/jev/error_tags.json");
 
 /// 解析语料文件（损坏 → 空对象，criteria 变空表；error_cause_question 兜底可见）
 fn corpus_value() -> &'static serde_json::Value {

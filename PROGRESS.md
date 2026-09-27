@@ -22,6 +22,20 @@ MVP_STAGE: 4/6
 
 ## 进度日志
 
+### 2026-09-27 · data/ 目录净化：prompt/判分语料移出 data/（非阶段任务，用户手动发起）
+
+- **背景**：用户指出 `data/` 应只放**用户可导入的词表/题目等数据**，提示词（`data/prompts/`、`data/jev/` 判分语料）不应被用户修改；其中 `question_gen.md` 原先还带 `fs::read_to_string("data/prompts/…")` cwd 运行时覆盖——是全仓唯一“改了就生效”的提示词口子。
+- **决策（用户确认）**：①编译期内嵌资源就近放各 crate 的 `assets/`；②`question_gen.md` 运行时覆盖**彻底删除**（模板只内嵌）；③`data/seed`、`data/chinglish`（都是题目内容）**留在 data/**。
+- **改动**：资源搬家 `data/prompts/question_gen.md`→`crates/gen/assets/prompts/`、`data/prompts/arbitrate.md`→`crates/grader/assets/prompts/`、`data/jev/error_tags.json`→`crates/grader/assets/jev/`（git mv）；四处 include_str 相对路径改写；`load_prompt()` 纯 include_str、删运行时读取（测试改名 `test_load_prompt_returns_embedded_template`）；文档先行：docs/05 §1/§3、docs/16 §3 目录布局同步（data/ 树删 prompts/、jev/ 两行 + 定位声明）。`data/` 现仅剩 `seed/en/cet4/core.qpack.json`、`chinglish/en.json`。
+- **验证**：`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 干净；`cargo test` 全绿（13 组 266 用例，0 failed）；全仓 grep `data/prompts|data/jev` 仅剩历史进度记录。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：改动 6 文件 +15/-14，测试全绿；文档先于代码（05/16 分册同步）；无新增公共 API。
+- **实际使用**：发布形态下用户可见的 `data/` 只剩题库/错式库，提示词与判分语料编译进二进制、改源文件也不影响已装版本；边缘：仓库内改 `assets/prompts/*.md` 需重编译才生效（这是预期——内容变更本就随发版）。
+- **代码耦合度**：零依赖方向变化（仍 grader/gen 各自内嵌自己的资源）；原“三处 include_str 重复”遗留未解（见改进建议 #21），仅消除了 gen 里唯一的运行时文件 IO。
+- **鲁棒性**：净提升——删掉一条运行时读文件失败路径（cwd 不同 → 模板可能悄悄换成用户本地文件的不确定性）；模板加载现在是纯编译期常量，行为与 cwd 无关、可复现。
+
 ### 2026-09-24 · 分层重构：9 个超标文件拆模块（非阶段任务，用户手动发起）
 
 - **背景**：用户指出代码全挤单文件、可读性差；docs/01 §组织本就规定 `lib.rs` 薄壳 + 文件 ≤500 行，但执行走样（9 个文件超 500，最大 pipeline.rs 1463 行 = 2.9×）。
@@ -130,7 +144,7 @@ MVP_STAGE: 4/6
 - [ ] 18. 成本面板与题包屏入 TUI：`cost_summary` → Profile/Settings 展示（M3 已有门面）；题包 `i/x` 键位（承接 #13）
 - [ ] 19. 假对检测合流：从 attempts.timing 算用户延迟基线（p50/p90 滚动）→ `is_guess(timing, self_confidence, baseline)` 接 `srs::decide_action`（M3 已采自评键位，承接 #10 尾巴）
 - [ ] 20. 裁决增强：选择题人工裁决回流 `ChoiceBody.answer` 集（当前只回流填空 acceptable）；`arbitration.reason` 分值区分灰区/离线两态
-- [ ] 21. 资源 loader 统一：`data/jev`、`data/chinglish`、`data/prompts` 三处 include_str 收口到 16-config 单入口（用户目录可覆盖）
+- [ ] 21. 资源 loader 统一：`crates/grader/assets/jev`、`data/chinglish`、`crates/{gen,grader}/assets/prompts` 三处 include_str 收口到 16-config 单入口（**仅内容类资源 chinglish/seed 允许用户目录覆盖；prompt 与判分语料永不放开**——2026-09-27 已从 data/ 移出并删除运行时覆盖）
 - [ ] 22. `evaluate_many` 消费方：M5 套卷批量判题接入（当前仅有契约测试）
 
 ### 2026-09-23 · 定时施工链路修复（自动化基建，非 MVP 阶段）

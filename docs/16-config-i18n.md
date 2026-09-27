@@ -24,10 +24,12 @@ pub trait TextNormalizer { fn normalize(&self, s: &str) -> String; }  // en 大�
 
 ## 3. 目录布局（data/）
 
+> **data/ 只放用户可导入/可读的内容资源**（词表、题包、错式库、听力材料…）与随包内置内容；**prompt 模板与判分语料不进 data/**——源文件在各 crate 的 `assets/`（`crates/gen/assets/prompts/`、`crates/grader/assets/{prompts,jev}/`），编译期 `include_str!` 内嵌、**无运行时文件读取，用户改了不生效也不允许**（措辞即判分口径，docs/05 §3）。
+
 ```
 stages/<lang>/<track>.json   词表 wordlists/   rubric rubrics/   模板 templates/   句式 patterns/<lang>/
 错式库 chinglish/   观点库 arguments/<lang>/   中国文化 culture/   听力材料 listening/<lang>/   场景 scenes/<lang>/
-打字课程 typing/   判断措辞 jev/（error_tags.json=判分口径，改必升 version）   prompts/（{{l2}}/{{l1}} 占位）
+打字课程 typing/
 qpack.schema.json   importers/（Anki/CSV 映射 profile）
 seed/<lang>/<track>/       # 内置离线内容包：种子题库（每轨 ≥200 题）——内容三级保障①，零 AI 零网核心功能可用；M2 格式=qpack（*.qpack.json），open() 幂等导入
 lexicon/<lang>/            # **词库资源**（EC-DICT 构建产物：JSONL+索引）；词库不进 SQLite（02-core-store 分层）；M4 内置 senses.json（义项，根带 schema_version=1）
