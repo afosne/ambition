@@ -11,6 +11,7 @@ ambition-grader = { path = "../grader" }
 ambition-jev = { path = "../jev" }
 ambition-llm = { path = "../llm" }
 ambition-store = { path = "../store" }
+ambition-srs = { path = "../srs" }
 async-trait = "0.1"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
 thiserror = "2"

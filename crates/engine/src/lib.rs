@@ -13,6 +13,9 @@ mod lifecycle;
 mod packs;
 mod pending;
 mod practice;
+mod srs;
+#[cfg(test)]
+mod srs_tests;
 // 各模块只承载 impl 块与 crate 内部 fns——impl 自动生效，无项可再导出
 
 pub use ai::{AiConfig, LLM_CACHE_TTL_SECS};
@@ -40,13 +43,19 @@ pub enum EngineError {
     Offline,
     #[error("seed import failed: {0}")]
     Seed(String),
+    #[error("srs: {0}")]
+    Srs(#[from] ambition_srs::SrsError),
+    #[error("vocab: {0}")]
+    Vocab(String),
 }
 
-/// 一次提交的产出：判分结果 + 游戏效果
+/// 一次提交的产出：判分结果 + 游戏效果 + 入卡处置回传（M4，docs/03 §2）
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubmitOutcome {
     pub grade: GradeResult,
     pub effects: Vec<ambition_gamify::GameEffect>,
+    /// SRS 旁路处置（None = 不入卡：Skip/Pending/旁路失败降级，UI 提示用）
+    pub srs: Option<ambition_srs::CardAction>,
 }
 
 /// 题包导入结果（docs/06 §6 ImportReport）
@@ -70,7 +79,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_submit_outcome_carries_grade_and_effects() {
+    fn test_submit_outcome_carries_grade_effects_and_srs() {
         let outcome = SubmitOutcome {
             grade: GradeResult {
                 verdict: Verdict::Correct,
@@ -82,9 +91,14 @@ mod tests {
                 error_tags: vec![],
             },
             effects: vec![ambition_gamify::GameEffect::Xp(2)],
+            srs: None,
         };
         assert_eq!(outcome.grade.verdict, Verdict::Correct);
         assert_eq!(outcome.effects.len(), 1);
+        assert!(
+            outcome.srs.is_none(),
+            "srs 处置可空（Skip/Pending/旁路失败）"
+        );
     }
 
     #[test]

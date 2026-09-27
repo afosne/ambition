@@ -36,6 +36,7 @@ dependencies = [
  "ambition-grader",
  "ambition-jev",
  "ambition-llm",
+ "ambition-srs",
  "ambition-store",
  "async-trait",
  "serde_json",

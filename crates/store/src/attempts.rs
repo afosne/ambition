@@ -76,20 +76,27 @@ pub async fn get_attempt(
 }
 
 /// 近 N 次作答计时（假对基线原料：total_ms 滚动样本，docs/08 §2；按创建时间倒序取 N）
-/// SQL 层过滤无计时行（同秒写入时 LIMIT 不会命中 timing=null 的行——见 P-18 边界）
+/// SQL 层过滤无计时行（同秒写入时 LIMIT 不会命中 timing=null 的行）；
+/// `exclude` = 排除的 attempt_id（基线不含本次作答——docs/03 §1「insert 前取样」的裁决路径等价表达）
 pub async fn recent_timings(
     pool: &SqlitePool,
     limit: i64,
+    exclude: Option<&str>,
 ) -> Result<Vec<ambition_core::Timing>, sqlx::Error> {
     // attempts.answer 是完整 Attempt JSON（含 timing）；json_extract 过滤 null
-    let payloads: Vec<String> = sqlx::query_scalar(
+    let mut sql = String::from(
         "SELECT answer FROM attempts
-         WHERE json_extract(answer, '$.timing') IS NOT NULL
-         ORDER BY created_at DESC, attempt_id DESC LIMIT ?",
-    )
-    .bind(limit)
-    .fetch_all(pool)
-    .await?;
+         WHERE json_extract(answer, '$.timing') IS NOT NULL",
+    );
+    if exclude.is_some() {
+        sql.push_str(" AND attempt_id != ?");
+    }
+    sql.push_str(" ORDER BY created_at DESC, attempt_id DESC LIMIT ?");
+    let mut query = sqlx::query_scalar(&sql);
+    if let Some(id) = exclude {
+        query = query.bind(id);
+    }
+    let payloads: Vec<String> = query.bind(limit).fetch_all(pool).await?;
     let mut timings = Vec::with_capacity(payloads.len());
     for payload in payloads {
         // 坏行跳过（只取样本用途；get_attempt 才显式上抛坏载荷）
@@ -248,12 +255,21 @@ mod tests {
                         .await
                         .expect("事务");
                 }
-                let timings = recent_timings(&pool, 10).await.expect("取样本");
+                let timings = recent_timings(&pool, 10, None).await.expect("取样本");
                 assert_eq!(timings.len(), 2, "无计时作答不进样本");
                 assert!(timings.iter().any(|t| t.total_ms == 1_000));
-                let capped = recent_timings(&pool, 1).await.expect("限量");
+                let capped = recent_timings(&pool, 1, None).await.expect("限量");
                 assert_eq!(capped.len(), 1, "limit 生效");
-                assert!(recent_timings(&pool, 0).await.expect("零").is_empty());
+                assert!(recent_timings(&pool, 0, None).await.expect("零").is_empty());
+                // exclude：基线不含指定作答（docs/03 §1 insert 前取样等价）
+                let excluded = recent_timings(&pool, 10, Some("rt-2"))
+                    .await
+                    .expect("排除")
+                    .into_iter()
+                    .map(|t| t.total_ms)
+                    .collect::<Vec<_>>();
+                assert!(!excluded.contains(&3_000), "rt-2 被排除");
+                assert_eq!(excluded.len(), 1, "剩 rt-1");
             });
     }
 

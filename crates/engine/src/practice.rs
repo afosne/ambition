@@ -27,13 +27,18 @@ impl Engine {
         buffer.push(event.clone());
     }
 
-    /// 提交作答：三级判题（规则 → Jev → 桶）→ 单事务落库 → 事件/游戏旁路结算
+    /// 提交作答：三级判题（规则 → Jev → 桶）→ 基线取样（insert 前，不含本次）→ 单事务落库 →
+    /// 事件/游戏旁路结算 → SRS 旁路（建卡/提权/调度；失败 warn 不回滚，docs/03 §1 M4）
     pub async fn submit_answer(&self, attempt: &Attempt) -> Result<SubmitOutcome, EngineError> {
         let question = ambition_store::get_question(&self.pool, &attempt.qid)
             .await?
             .ok_or_else(|| EngineError::NotFound(attempt.qid.0.clone()))?;
         // 永不 Err：离线/灰区 → Pending（verdict=pending 同事务进 arbitration 桶）
         let grade = self.grader.grade(&question, &attempt.answer).await;
+        // 假对基线取样必须在 insert 前（不含本次作答，docs/03 §1 / docs/08 §2）
+        let guess = self
+            .is_guess_attempt(attempt, Some(&attempt.attempt_id))
+            .await;
         ambition_store::insert_attempt_tx(&self.pool, attempt, &grade).await?;
         let event = DomainEvent::AttemptGraded {
             attempt_id: attempt.attempt_id.clone(),
@@ -42,7 +47,12 @@ impl Engine {
             correct: matches!(grade.verdict, Verdict::Correct | Verdict::Acceptable),
         };
         let effects = self.settle(event).await;
-        Ok(SubmitOutcome { grade, effects })
+        let srs = self.srs_after_attempt(attempt, &grade, guess).await;
+        Ok(SubmitOutcome {
+            grade,
+            effects,
+            srs,
+        })
     }
 
     /// 旁路结算：事件广播 → 游戏效果取走 → 游戏状态落库（提交与人工裁决共用）
