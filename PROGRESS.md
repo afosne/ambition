@@ -27,7 +27,7 @@ MVP_STAGE: 4/6
 - **背景**：用户指出 `data/` 应只放**用户可导入的词表/题目等数据**，提示词（`data/prompts/`、`data/jev/` 判分语料）不应被用户修改；其中 `question_gen.md` 原先还带 `fs::read_to_string("data/prompts/…")` cwd 运行时覆盖——是全仓唯一“改了就生效”的提示词口子。
 - **决策（用户确认）**：①编译期内嵌资源就近放各 crate 的 `assets/`；②`question_gen.md` 运行时覆盖**彻底删除**（模板只内嵌）；③`data/seed`、`data/chinglish`（都是题目内容）**留在 data/**。
 - **改动**：资源搬家 `data/prompts/question_gen.md`→`crates/gen/assets/prompts/`、`data/prompts/arbitrate.md`→`crates/grader/assets/prompts/`、`data/jev/error_tags.json`→`crates/grader/assets/jev/`（git mv）；四处 include_str 相对路径改写；`load_prompt()` 纯 include_str、删运行时读取（测试改名 `test_load_prompt_returns_embedded_template`）；文档先行：docs/05 §1/§3、docs/16 §3 目录布局同步（data/ 树删 prompts/、jev/ 两行 + 定位声明）。`data/` 现仅剩 `seed/en/cet4/core.qpack.json`、`chinglish/en.json`。
-- **验证**：`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 干净；`cargo test` 全绿（13 组 266 用例，0 failed）；全仓 grep `data/prompts|data/jev` 仅剩历史进度记录。
+- **验证**：`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 干净；`cargo test` 全绿（13 组 266 用例，0 failed）；全仓 grep `data/prompts|data/jev` 仅剩历史进度记录。提交 `d7ebe00`（七步钩子 7/7）。
 
 #### 本项代码评估（四段）
 
