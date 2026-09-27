@@ -34,10 +34,9 @@ for f in crates/*/src/*.rs crates/*/src/**/*.rs crates/*/examples/*.rs crates/*/
     pair_fail=1
   fi
 done
-# 配对：同 crate 的 src/（2026-09-27 用户裁定：测试可拆到 *_tests.rs 跨文件配对，取消同文件配对桩；检查目的不变——每个 fn 必须有测试）
+# 配对：仅同文件（2026-09-27 用户裁定恢复强制配对桩——被测 fn 所在文件必须留 test_ 前缀配对）
 for f in crates/*/src/*.rs crates/*/src/**/*.rs; do
   [ -f "$f" ] || continue
-  crate_src="$(echo "$f" | cut -d/ -f1-2)/src"
   names=$(awk '
     /^mod tests/ { skip = 1; next }
     skip && /^}/ { skip = 0; next }
@@ -48,8 +47,8 @@ for f in crates/*/src/*.rs crates/*/src/**/*.rs; do
       if (s != "main" && s !~ /^test_/) print s
     }' "$f" | sort -u)
   for n in $names; do
-    if ! grep -qrE "fn test_${n}(_|[ (])" "$crate_src"; then
-      echo "  ✗ 缺少测试: $f :: fn $n  →  同 crate 需要 fn test_${n}_..."
+    if ! grep -qE "fn test_${n}(_|[ (])" "$f"; then
+      echo "  ✗ 缺少测试: $f :: fn $n  →  需要同文件 fn test_${n}_...（配对桩，2026-09-27 恢复强制）"
       pair_fail=1
     fi
   done

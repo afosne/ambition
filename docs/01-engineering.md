@@ -28,7 +28,7 @@
 ## 3. 质量检测与门禁
 
 - 本地 pre-commit（fmt/clippy 快检/gitleaks）→ PR CI → 发布；clippy `-D warnings` + deny `unwrap_used/expect_used/panic/todo!/dbg!`；`clippy.toml`：too-many-arguments=5、判分路径禁无序 HashMap；
-- **pre-commit 七步门禁**（`.githooks/pre-commit`，全过才允许提交）：①`cargo fmt --check` ②`cargo clippy -D warnings`（含未使用参数/未使用导入）③禁占位参数 grep ④**结构门禁**（内联函数↔测试配对：每个非测试 fn 必须存在 `fn test_<fn名>_…`——扫描范围 = **同 crate 的 `src/`**（2026-09-27 用户裁定：测试可拆到 `*_tests.rs` 跨文件配对，**取消同文件配对桩要求**；检查目的不变：每个 fn 必须有测试）+ **全仓 .rs 文件 ≤500 行**（src 与 examples，钉住本文件 §组织规范））⑤`cargo test` 全绿 ⑥未使用包（cargo-machete，可选）⑦通过；`commit-msg` 强制 Conventional Commits；
+- **pre-commit 七步门禁**（`.githooks/pre-commit`，全过才允许提交）：①`cargo fmt --check` ②`cargo clippy -D warnings`（含未使用参数/未使用导入）③禁占位参数 grep ④**结构门禁**（内联函数↔测试配对：每个非测试 fn 必须在**同文件**存在 `fn test_<fn名>_…`（**2026-09-27 用户裁定恢复强制配对桩**——测试虽可拆到 `*_tests.rs`，被测 fn 所在文件仍须留同名前缀配对测试；当日早前的「同 crate 跨文件配对」试行版作废）+ **全仓 .rs 文件 ≤500 行**（src 与 examples，钉住本文件 §组织规范））⑤`cargo test` 全绿 ⑥未使用包（cargo-machete，可选）⑦通过；`commit-msg` 强制 Conventional Commits；
 - 测试金字塔：单元（核心库 grader/adaptive/vocab/typing 覆盖率 ≥80%，全仓 ≥70%）/ 属性（proptest：qpack hash、canonical JSON、SRS 单调、CAT 收敛）/ 契约（wiremock + fixture：Jev 三形态、schema 重试）/ 集成（S1–S8）/ E2E（TUI 快照 insta、Web Playwright）；**测试需求来源 = 各分册「验证点」**；doc test 必过；`cargo-llvm-cov` 门禁；
 - 供应链：cargo-deny 许可证白名单（MIT/Apache-2.0/BSD-3；与 PolyForm-NC 兼容、禁 GPL/AGPL）、cargo-audit、lockfile 入库、gitleaks、SQL 一律参数化；
 - 资源/安全：图 ≤20MB、qpack ≤50MB、入 LLM ≤32k tokens 显式截断；日志脱敏（key/日记正文禁入 log）；
