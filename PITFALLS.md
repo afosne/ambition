@@ -115,3 +115,10 @@
 - **根因**：a) Rust 可见性按模块收口，同文件私有项拆开即失效；b) 钩子规则是 `fn test_<name>` **前缀**匹配（`test_rating_as_str...` 不匹配 `fn as_str`）；c) 测试块 use 是按「原文件全集」写的，拆后各模块只用子集；d) 名字带 `test_` 前缀的 fixture 被拆分器当测试分配，而非跨模块 helper。
 - **解决**：①跨模块的 impl 方法/字段/辅助 fn 统一 `pub(crate)`（可见性最小化红线内）；②补一个名字合规的小测试（不改钩子）；③按编译器 unused 告警逐文件裁剪 use；④拆分器加 `helpers` 白名单强制某些 `test_` 前缀 fn 作为共享 fixture 传递闭包复制。
 - **预防**：拆分前先按「配对测试名 = fn 名前缀」分组（同名 fn 如 `as_str`/`new` 放同文件或逐一配测试）；测试 helper 用非 `test_` 前缀命名；拆完先 `cargo clippy --all-targets -- -D warnings` 再跑测试，告警即修不留到提交。
+
+## P-17 target/ 陈旧/损坏元数据：check 说"找不到"，test 却全绿
+
+- **症状**：`cargo check --all-targets` 报 `E0425 cannot find value DEFAULT_L1 in crate ambition_core` / `E0599 no method name_in`——但源码 grep 明明有、`cargo test` 301 用例全绿、`cargo check -p <单包>` 也绿；`touch` 源文件重跑无效。
+- **根因**：`target/debug/deps` 里该 crate 残留旧/损坏的 `.rmeta`（现场有 0 字节文件，来自中断构建）；`--all-targets` 的单元图命中了改动前的旧元数据（与单包构建选择的产物不同），于是"按旧接口"编译下游。
+- **解决**：`cargo clean -p ambition-core`（清 1886 文件/412MB）后 `cargo check --all-targets` 立即通过；全量 test/clippy 复核绿。
+- **预防**：凡"源码有、check 找不到，但 test 反而绿"的矛盾 → 先 `cargo clean -p <crate>`（必要时全量 `cargo clean`），不要去改源码；`deps/` 出现 0 字节 `.rlib/.rmeta` 即坏产物信号。编辑器（rust-analyzer）同症状时重启 RA 即可。
