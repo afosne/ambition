@@ -22,6 +22,25 @@ MVP_STAGE: 4/6
 
 ## 进度日志
 
+### 2026-09-27 · TUI 键位统一重构：KeyCtx 唯一路由 + 填空直接编辑 + Space 多选（非阶段任务，用户手动发起）
+
+- **背景**：用户问“填空题怎么办、快捷键需要修改”，并要求“**所有快捷键统一、代码复用**”。真实痛点：①填空输入态唯一退出键 `Esc` = **直接退程序丢答案**（打字习惯性按 Esc 即炸）；②docs/03 §5.3 承诺的 `Space` 选中（多选）未实现；③键位逻辑散落三处——`key_to_msg` + main 的 `Enter→Next` 手工改写 + update 内守卫，且 render 硬编码三份提示文案（不同源，改键必漏）。
+- **决策（用户确认）**：Esc=退出编辑**保留已输入**、**打字直接恢复编辑（不设 i 进入键）**、退出程序改 `Ctrl+Q`/`Ctrl+C`；一并做 Space 选中 + 多选支持。
+- **改动**：
+  - **docs 先行**：docs/03 §5.3 键位表修订（2026-09-27 修订注记 + 唯一入口声明）；
+  - `input.rs → keys.rs`：`KeyCtx`（Choice / Fill{editing} / Pending / Graded / Finished，由 `AppState::key_ctx()` 计算）+ `key_to_msg(ctx, key, mods)` **两层路由**（①恒定层：Ctrl+Q/Ctrl+C 任何上下文退出 ②上下文层选表）——**Enter→下一题也入表，main 删掉 Enter 改写特判**；`hint(ctx)` 与路由同源，render 三处硬编码提示全部改取 hint（Paragraph 加 wrap 防长提示截断）；
+  - state：新增 `editing`/`checked` 字段、`key_ctx()`；`is_fill_input → is_fill_pending`（待答 ≠ 编辑中，两者解耦）；
+  - update：Char/Backspace **打字即进编辑**（首键恢复，无需进入键）、`StopEdit` 退出编辑保留文本、`Select` 多选切换（单选不建选中集、光标即答案；多选提交选中集优先、空则回退光标位——兼容旧行为）、Next 复位 editing/checked；
+  - render：选项 `✓` 选中标记（光标 ❯ 分离）；提示行随 ctx 实时变化（编辑/浏览/待裁定各自不同）。
+- **验证**：fmt/clippy 干净；`cargo test` **309 用例全绿**（tui 29：keys 7 测试（恒退出/Esc 作用域/Enter 统一/填空吞字/作答表/待裁定表/提示同源互异）+ Select/StopEdit/checked 渲染 + is_fill_pending/key_ctx 分拆路由测试）；**真实冒烟**（P-14 产物断言法）：ambition.exe 启动 3s → 渲染 `[1/203]` 与新提示行「j/k 移动 · Space 选中 · Enter 提交…」→ 无 panic、taskkill 干净。提交 `bc82a47`（七步钩子 7/7）。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：键位逻辑从 3 处收敛到 1 处（keys.rs 单一事实源，提示文案同函数导出）；文档先于代码；测试全绿、clippy -D warnings 零告警；文件均 ≤500 行（update 427 最大）。
+- **实际使用**：填空“打字即答、Esc 不丢答案、Ctrl+Q 必能退出”是真实可用的最小闭环；多选题首次能选全（旧版单光标提交多选必错）；已知边缘：单选 Space 无效果（光标即答案，预期行为）；`?` 帮助屏仍欠（docs 承诺，见改进建议 #24）。
+- **代码耦合度**：依赖方向不变；main 进一步变薄（只剩 I/O + 副作用执行，键位/语义零特判）；KeyCtx 是 state→keys 单向计算，update 仍双保险守卫（键位层错了也不越权）。
+- **鲁棒性**：Ctrl+Q/Ctrl+C 恒退出保底（raw mode 无 SIGINT，防“困在输入态”）；StopEdit/Select/Char 均有判分后/题型不符的忽略分支（防误触）；Enter 语义入表后不再依赖 main 执行顺序（旧版特判漏掉即卡死下一题的隐患消除）。
+
 ### 2026-09-27 · data/ 目录净化：prompt/判分语料移出 data/（非阶段任务，用户手动发起）
 
 - **背景**：用户指出 `data/` 应只放**用户可导入的词表/题目等数据**，提示词（`data/prompts/`、`data/jev/` 判分语料）不应被用户修改；其中 `question_gen.md` 原先还带 `fs::read_to_string("data/prompts/…")` cwd 运行时覆盖——是全仓唯一“改了就生效”的提示词口子。
@@ -167,6 +186,7 @@ MVP_STAGE: 4/6
 - [ ] 20. 裁决增强：选择题人工裁决回流 `ChoiceBody.answer` 集（当前只回流填空 acceptable）；`arbitration.reason` 分值区分灰区/离线两态
 - [ ] 21. 资源 loader 统一：`crates/grader/assets/jev`、`data/chinglish`、`crates/{gen,grader}/assets/prompts` 三处 include_str 收口到 16-config 单入口（**仅内容类资源 chinglish/seed 允许用户目录覆盖；prompt 与判分语料永不放开**——2026-09-27 已从 data/ 移出并删除运行时覆盖；选版函数三处同构（l2 match+回退 en），一并收口）
 - [ ] 23. 质检指令本地化：gen `qc.rs` 五问 instructions 仍英文硬编码（l2≠en 时 Jev 质检指令不随语种；与 arbitrate/error_cause 同法按 l2 分版即可）
+- [ ] 24. TUI 帮助屏：`?` 弹出键位帮助（docs/03 §5.3 承诺未实现；文案直接复用 `keys::hint` 全表，禁止硬编码）
 - [ ] 22. `evaluate_many` 消费方：M5 套卷批量判题接入（当前仅有契约测试）
 
 ### 2026-09-23 · 定时施工链路修复（自动化基建，非 MVP 阶段）
