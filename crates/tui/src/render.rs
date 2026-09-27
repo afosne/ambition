@@ -15,18 +15,56 @@ pub fn render(frame: &mut Frame, state: &AppState) {
             state.questions.len(),
             q.stem
         ));
-        if let QuestionKind::SingleChoice(body) | QuestionKind::MultiChoice(body) = &q.kind {
-            for (i, opt) in body.options.iter().enumerate() {
-                let cursor = if state.sel == i { "❯" } else { " " };
-                let tick = if state.checked.contains(&(i as u32)) {
-                    "✓"
-                } else {
-                    " "
-                };
-                text.push_str(&format!("  {}{} {}. {}\n", cursor, tick, i + 1, opt.text));
+        // 选择类题型（单/多选 + 七选五缺口候选；M4 题型补全）
+        match &q.kind {
+            QuestionKind::SingleChoice(body) | QuestionKind::MultiChoice(body) => {
+                for (i, opt) in body.options.iter().enumerate() {
+                    let cursor = if state.sel == i { "❯" } else { " " };
+                    let tick = if state.checked.contains(&(i as u32)) {
+                        "✓"
+                    } else {
+                        " "
+                    };
+                    text.push_str(&format!("  {}{} {}. {}\n", cursor, tick, i + 1, opt.text));
+                }
             }
+            QuestionKind::SevenOfFive(body) => {
+                // 语篇先行（缺口用 ___ 标注）
+                text.push_str(&format!("  {}\n\n", body.passage.replace("___", "［＿］")));
+                for (i, opt) in body.options.iter().enumerate() {
+                    let cursor = if state.sel == i { "❯" } else { " " };
+                    let tick = if state.checked.contains(&(i as u32)) {
+                        "✓"
+                    } else {
+                        " "
+                    };
+                    text.push_str(&format!("  {}{} {}. {}\n", cursor, tick, i + 1, opt));
+                }
+            }
+            QuestionKind::Reading(body) => {
+                text.push_str(&format!("  {}\n\n", body.passage.replace("\n", "\n  ")));
+                for (i, item) in body.items.iter().enumerate() {
+                    // 已作答子题标 ✓（checked 按子题下标；M4 题型补全）
+                    let tick = if state.checked.contains(&(i as u32)) {
+                        "✓"
+                    } else {
+                        " "
+                    };
+                    text.push_str(&format!("  {}{}. {}\n", tick, i + 1, item.question));
+                    for opt in &item.options {
+                        text.push_str(&format!("     {}. {}\n", opt.id + 1, opt.text));
+                    }
+                }
+            }
+            QuestionKind::Cloze(body) => {
+                text.push_str(&format!("  {}\n", body.passage.replace("___", "＿＿＿")));
+            }
+            QuestionKind::GrammarFill(body) => {
+                text.push_str(&format!("  {}\n", body.passage.replace("___", "＿＿＿")));
+            }
+            QuestionKind::FillBlank(_) => {}
         }
-        if matches!(q.kind, QuestionKind::FillBlank(_)) && state.grade.is_none() {
+        if q.kind.is_fill() && state.grade.is_none() {
             // 每空一位独立输入行；❯+▍ 标当前编辑位（单空不编号）
             for (i, field) in state.inputs.iter().enumerate() {
                 let cursor = if state.blank_sel == i { "❯" } else { " " };
@@ -42,7 +80,7 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         // 键位提示：与路由同源（keys.rs::hint，禁止硬编码）
         text.push_str(&format!("\n{}\n", hint(state.key_ctx())));
         if state.grade.is_none()
-            && !matches!(q.kind, QuestionKind::FillBlank(_))
+            && !q.kind.is_fill()
             && let Some(level) = state.self_confidence
         {
             text.push_str(&format!(" 自评把握: {level}/4\n"));
@@ -72,7 +110,7 @@ pub fn render(frame: &mut Frame, state: &AppState) {
                     grade.confidence
                 ));
             }
-            if matches!(q.kind, QuestionKind::FillBlank(_)) {
+            if q.kind.is_fill() {
                 let sets = fill_answers(&q.kind);
                 let answers: Vec<&str> = sets
                     .iter()
@@ -330,5 +368,92 @@ mod tests {
         let human_buf = render_to(&s);
         assert!(human_buf.contains("人工裁决"), "裁决后可见: {human_buf:?}");
         assert!(!human_buf.contains("待裁定"), "已裁决不显示待裁定行");
+    }
+
+    #[test]
+    fn test_render_draws_passage_kinds() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+        use unicode_width::UnicodeWidthStr;
+
+        fn render_to(s: &AppState) -> String {
+            let mut terminal = Terminal::new(TestBackend::new(76, 24)).expect("terminal");
+            terminal.draw(|f| render(f, s)).expect("draw");
+            let cells = &terminal.backend().buffer().content;
+            let mut out = String::new();
+            let mut i = 0;
+            while i < cells.len() {
+                let sym = cells[i].symbol();
+                out.push_str(sym);
+                i += 1 + usize::from(sym.width() == 2);
+            }
+            out
+        }
+
+        // 完形：语篇 + 逐空输入行（M4 题型补全）
+        let cloze = Question::new(
+            "Cloze.".into(),
+            QuestionKind::Cloze(ambition_core::ClozeBody {
+                passage: "I ___ a student.".into(),
+                blanks: vec![BlankItem {
+                    acceptable: vec!["am".into()],
+                }],
+            }),
+            2,
+            vec!["cloze".into()],
+            Provenance::Seed,
+        );
+        let mut s = new_state(vec![cloze]);
+        let buf = render_to(&s);
+        assert!(buf.contains("I ＿＿＿ a student."), "语篇可见: {buf:?}");
+        assert!(buf.contains("答案"), "填空输入行: {buf:?}");
+        update(&mut s, Msg::Char('a'));
+        let typed = render_to(&s);
+        assert!(typed.contains("a"), "输入可见: {typed:?}");
+        // 七选五：语篇缺口标注 + 候选项
+        let s75 = Question::new(
+            "Seven.".into(),
+            QuestionKind::SevenOfFive(ambition_core::SevenOfFiveBody {
+                passage: "A ___ B".into(),
+                options: vec!["opt one".into(), "opt two".into()],
+                answer: vec![0],
+            }),
+            3,
+            vec!["reading".into()],
+            Provenance::Seed,
+        );
+        let s = new_state(vec![s75]);
+        let buf = render_to(&s);
+        assert!(buf.contains("［＿］"), "缺口标注: {buf:?}");
+        assert!(buf.contains("opt one"), "候选句可见: {buf:?}");
+        // 阅读：语篇 + 子题
+        let reading = Question::new(
+            "Read.".into(),
+            QuestionKind::Reading(ambition_core::ReadingBody {
+                passage: "A passage about cats.".into(),
+                items: vec![ambition_core::ReadingItem {
+                    question: "What do cats eat?".into(),
+                    options: vec![
+                        ambition_core::OptionItem {
+                            id: 0,
+                            text: "fish".into(),
+                        },
+                        ambition_core::OptionItem {
+                            id: 1,
+                            text: "rock".into(),
+                        },
+                    ],
+                    answer: vec![0],
+                }],
+            }),
+            3,
+            vec!["reading".into()],
+            Provenance::Seed,
+        );
+        let s = new_state(vec![reading]);
+        let buf = render_to(&s);
+        assert!(buf.contains("cats"), "语篇可见: {buf:?}");
+        assert!(buf.contains("What do cats eat?"), "子题可见: {buf:?}");
+        assert!(buf.contains("fish"), "子题选项可见: {buf:?}");
     }
 }

@@ -49,18 +49,30 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             if state.grade.is_some() {
                 return Cmd::None;
             }
-            if matches!(
-                &state.questions[state.idx].kind,
-                QuestionKind::MultiChoice(_)
-            ) {
-                let id = state.sel as u32;
-                if let Some(pos) = state.checked.iter().position(|&x| x == id) {
-                    state.checked.remove(pos);
-                } else {
-                    state.checked.push(id);
-                    state.checked.sort_unstable();
+            match &state.questions[state.idx].kind {
+                // 多选：切换选中集（M1 既有）
+                QuestionKind::MultiChoice(_) => {
+                    let id = state.sel as u32;
+                    if let Some(pos) = state.checked.iter().position(|&x| x == id) {
+                        state.checked.remove(pos);
+                    } else {
+                        state.checked.push(id);
+                        state.checked.sort_unstable();
+                    }
+                    state.revisions += 1;
                 }
-                state.revisions += 1;
+                // 七选五/阅读：逐槽作答——记录当前槽选中项并前进到下一槽（M4 题型补全）
+                QuestionKind::SevenOfFive(body) if state.sub_answers.len() < body.answer.len() => {
+                    state.sub_answers.push(state.sel as u32);
+                    state.sel = 0;
+                    state.revisions += 1;
+                }
+                QuestionKind::Reading(body) if state.sub_answers.len() < body.items.len() => {
+                    state.sub_answers.push(state.sel as u32);
+                    state.sel = 0;
+                    state.revisions += 1;
+                }
+                _ => {}
             }
             Cmd::None
         }
@@ -109,7 +121,15 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                 return Cmd::None;
             }
             let kind = &state.questions[state.idx].kind;
-            let option_count = kind.option_count();
+            // 阅读：光标在「当前子题」的选项间移动（逐槽作答，M4 题型补全）
+            let option_count = match kind {
+                QuestionKind::Reading(body) => body
+                    .items
+                    .get(state.sub_answers.len())
+                    .map(|item| item.options.len())
+                    .unwrap_or(0),
+                other => other.option_count(),
+            };
             if option_count == 0 {
                 return Cmd::None;
             }
@@ -193,21 +213,27 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                             .collect(),
                     ))
                 }
-                // 七选五：逐缺口选中（checked = 各缺口选中项；未选中回退光标位）
+                // 七选五：逐缺口（sub_answers 逐槽记录；未记录槽回退光标位）
                 QuestionKind::SevenOfFive(body) => {
                     let gaps = body.answer.len();
                     let mut ids = Vec::with_capacity(gaps);
                     for gap in 0..gaps {
-                        ids.push(state.checked.get(gap).copied().unwrap_or(state.sel as u32));
+                        ids.push(
+                            state
+                                .sub_answers
+                                .get(gap)
+                                .copied()
+                                .unwrap_or(state.sel as u32),
+                        );
                     }
                     Cmd::Submit(Answer::Choice(ids))
                 }
-                // 阅读：逐子题选中（checked = 各子题选中项；未选中回退光标位）
+                // 阅读：逐子题 → Answer::Group（未记录子题回退光标位并钳制到选项范围）
                 QuestionKind::Reading(body) => {
                     let mut subs = Vec::with_capacity(body.items.len());
                     for (i, item) in body.items.iter().enumerate() {
                         let pick = state
-                            .checked
+                            .sub_answers
                             .get(i)
                             .copied()
                             .unwrap_or(state.sel as u32)
@@ -228,6 +254,7 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             state.self_confidence = None;
             state.editing = false;
             state.checked.clear();
+            state.sub_answers.clear();
             state.arbitration_sel = 0;
             state.started_at = Instant::now();
             if state.idx + 1 >= state.questions.len() {

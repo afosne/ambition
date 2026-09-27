@@ -309,4 +309,124 @@ mod tests {
         assert!(s.editing, "判分后 StopEdit 忽略（标志不变）");
         assert_eq!(s.key_ctx(), KeyCtx::Graded, "编辑标志不影响已判分 ctx");
     }
+
+    #[test]
+    fn test_update_submits_passage_kind_answers() {
+        use ambition_core::{
+            ClozeBody, GrammarFillBody, OptionItem, ReadingBody, ReadingItem, SevenOfFiveBody,
+        };
+        // 完形：逐空输入 → Answer::Fill（M4 题型补全）
+        let cloze = Question::new(
+            "Cloze.".into(),
+            QuestionKind::Cloze(ClozeBody {
+                passage: "I ___ a.".into(),
+                blanks: vec![BlankItem {
+                    acceptable: vec!["am".into()],
+                }],
+            }),
+            2,
+            vec![],
+            Provenance::Seed,
+        );
+        let mut s = new_state(vec![cloze]);
+        assert_eq!(s.inputs.len(), 1, "完形一位");
+        assert!(s.is_fill_pending(), "完形是填空待答");
+        update(&mut s, Msg::Char('a'));
+        update(&mut s, Msg::Char('m'));
+        assert_eq!(
+            update(&mut s, Msg::Submit),
+            Cmd::Submit(Answer::Fill(vec!["am".to_string()])),
+            "完形提交逐空"
+        );
+        // 语法填空同路
+        let gf = Question::new(
+            "G.".into(),
+            QuestionKind::GrammarFill(GrammarFillBody {
+                passage: "She ___ .".into(),
+                blanks: vec![BlankItem {
+                    acceptable: vec!["goes".into()],
+                }],
+            }),
+            2,
+            vec![],
+            Provenance::Seed,
+        );
+        let s = new_state(vec![gf]);
+        assert_eq!(s.inputs.len(), 1);
+        // 七选五：Space 选中 → 逐缺口 Choice
+        let s75 = Question::new(
+            "S.".into(),
+            QuestionKind::SevenOfFive(SevenOfFiveBody {
+                passage: "A ___ B ___ C".into(),
+                options: vec!["o1".into(), "o2".into(), "o3".into()],
+                answer: vec![0, 2],
+            }),
+            3,
+            vec![],
+            Provenance::Seed,
+        );
+        let mut s = new_state(vec![s75]);
+        assert_eq!(s.inputs.len(), 0, "七选五无输入位");
+        update(&mut s, Msg::Select); // 缺口1 = 光标位 0
+        update(&mut s, Msg::MoveDown);
+        update(&mut s, Msg::MoveDown);
+        update(&mut s, Msg::Select); // 缺口2 = 选项2
+        assert_eq!(
+            update(&mut s, Msg::Submit),
+            Cmd::Submit(Answer::Choice(vec![0, 2])),
+            "逐缺口提交"
+        );
+        // 阅读：逐子题选中 → Answer::Group
+        let reading = Question::new(
+            "R.".into(),
+            QuestionKind::Reading(ReadingBody {
+                passage: "p".into(),
+                items: vec![
+                    ReadingItem {
+                        question: "q1".into(),
+                        options: vec![
+                            OptionItem {
+                                id: 0,
+                                text: "a".into(),
+                            },
+                            OptionItem {
+                                id: 1,
+                                text: "b".into(),
+                            },
+                        ],
+                        answer: vec![1],
+                    },
+                    ReadingItem {
+                        question: "q2".into(),
+                        options: vec![
+                            OptionItem {
+                                id: 0,
+                                text: "x".into(),
+                            },
+                            OptionItem {
+                                id: 1,
+                                text: "y".into(),
+                            },
+                        ],
+                        answer: vec![0],
+                    },
+                ],
+            }),
+            3,
+            vec![],
+            Provenance::Seed,
+        );
+        let mut s = new_state(vec![reading]);
+        assert_eq!(s.inputs.len(), 0, "阅读无输入位");
+        update(&mut s, Msg::MoveDown);
+        update(&mut s, Msg::Select); // 子题1 选 b（sel=1）
+        assert_eq!(
+            update(&mut s, Msg::Submit),
+            Cmd::Submit(Answer::Group(vec![
+                Answer::Choice(vec![1]),
+                Answer::Choice(vec![0])
+            ])),
+            "未选子题回退光标位/已选子题按选中集"
+        );
+    }
 }

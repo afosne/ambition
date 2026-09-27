@@ -33,6 +33,8 @@ pub struct AppState {
     pub editing: bool,
     /// 选择题已选中集合（Space 切换；空 = 未显式选中，提交回退光标位）
     pub checked: Vec<u32>,
+    /// 复合选择题逐槽作答记录（七选五=逐缺口、阅读=逐子题；Space 记录当前槽并前进，M4 题型补全）
+    pub sub_answers: Vec<u32>,
     /// 待裁定裁决高亮（0=判对 1=判错；←/→ 切换，Enter 确认）
     pub arbitration_sel: u8,
 }
@@ -96,6 +98,7 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         self_confidence: None,
         editing: false,
         checked: Vec::new(),
+        sub_answers: Vec::new(),
         arbitration_sel: 0,
     }
 }
@@ -174,10 +177,12 @@ pub fn sample_question() -> Question {
     )
 }
 
-/// 填空题各空的可接受答案表（渲染正确答案用；非填空 → 空）
+/// 填空题各空的可接受答案表（渲染正确答案用；非填空 → 空；M4 题型补全含完形/语法填空）
 pub fn fill_answers(kind: &QuestionKind) -> Vec<Vec<String>> {
     match kind {
         QuestionKind::FillBlank(fill) => fill.blanks.iter().map(|b| b.acceptable.clone()).collect(),
+        QuestionKind::Cloze(cloze) => cloze.blanks.iter().map(|b| b.acceptable.clone()).collect(),
+        QuestionKind::GrammarFill(gf) => gf.blanks.iter().map(|b| b.acceptable.clone()).collect(),
         _ => Vec::new(),
     }
 }
@@ -361,5 +366,32 @@ mod tests {
             fill_answers(&sample_question().kind).is_empty(),
             "非填空为空"
         );
+        // M4 题型补全：完形/语法填空同路
+        let cloze = Question::new(
+            "c".into(),
+            QuestionKind::Cloze(ambition_core::ClozeBody {
+                passage: "I ___ a.".into(),
+                blanks: vec![ambition_core::BlankItem {
+                    acceptable: vec!["am".into()],
+                }],
+            }),
+            2,
+            vec![],
+            Provenance::Seed,
+        );
+        assert_eq!(fill_answers(&cloze.kind), vec![vec!["am".to_string()]]);
+        let gf = Question::new(
+            "g".into(),
+            QuestionKind::GrammarFill(ambition_core::GrammarFillBody {
+                passage: "She ___ .".into(),
+                blanks: vec![ambition_core::BlankItem {
+                    acceptable: vec!["goes".into()],
+                }],
+            }),
+            2,
+            vec![],
+            Provenance::Seed,
+        );
+        assert_eq!(fill_answers(&gf.kind), vec![vec!["goes".to_string()]]);
     }
 }

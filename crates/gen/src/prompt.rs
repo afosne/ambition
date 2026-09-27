@@ -88,11 +88,13 @@ pub(crate) fn draft_schema() -> JsonSchema {
                     "type": "object",
                     "required": ["kind", "stem", "answers", "difficulty", "tags"],
                     "properties": {
-                        "kind": {"type": "string", "enum": ["single_choice", "multi_choice", "fill_blank"]},
+                        "kind": {"type": "string", "enum": ["single_choice", "multi_choice", "fill_blank", "cloze", "reading", "seven_of_five", "grammar_fill"]},
                         "stem": {"type": "string"},
                         "options": {"type": "array", "items": {"type": "string"}},
                         "answers": {"type": "array", "items": {"type": "string"}},
                         "blanks": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
+                        "passage": {"type": "string"},
+                        "items": {"type": "array", "items": {"type": "object", "required": ["question", "options", "answers"], "properties": {"question": {"type": "string"}, "options": {"type": "array", "items": {"type": "string"}}, "answers": {"type": "array", "items": {"type": "string"}}}}},
                         "difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
                         "tags": {"type": "array", "items": {"type": "string"}}
                     }
