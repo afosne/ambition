@@ -1,8 +1,9 @@
 {
   "schema_version": 1,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "lang": "en",
-  "note": "Jev error_cause choice criteria. Keys = core::ErrorTag snake_case (all 28). Descriptions ARE the grading wording: any wording change must bump `version` in sync with crates/grader ERROR_TAGS_VERSION.",
+  "note": "Jev error_cause choice criteria (en edition; one file per l2, missing editions fall back to en). Keys = core::ErrorTag snake_case (all 28). instructions + descriptions ARE the grading wording: any wording change must bump `version` in sync across ALL language files with crates/grader ERROR_TAGS_VERSION.",
+  "instructions": "Classify the mistake in the student's answer. If the answer is correct choose no_error; if the mistake fits none of the categories choose other.",
   "criteria": {
     "word_sense": "The student used the wrong meaning (sense) of a word for this context.",
     "confusable": "The student confused two easily mixed-up words (e.g. affect/effect, adapt/adopt, rise/raise).",

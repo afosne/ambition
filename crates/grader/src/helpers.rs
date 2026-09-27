@@ -33,10 +33,10 @@ pub(crate) fn split_answer(answer: &Answer) -> (Vec<u32>, Vec<String>) {
     }
 }
 
-/// 追加 error_cause 判断到集合
-pub(crate) fn merge_error_cause(mut questions: JevQuestions) -> JevQuestions {
+/// 追加 error_cause 判断到集合（按 l2 选语料版）
+pub(crate) fn merge_error_cause(lang: &str, mut questions: JevQuestions) -> JevQuestions {
     use crate::corpus::error_cause_question;
-    questions.insert("error_cause".into(), error_cause_question());
+    questions.insert("error_cause".into(), error_cause_question(lang));
     questions
 }
 
@@ -205,7 +205,7 @@ mod tests {
                 instructions: "fits".into(),
             }),
         );
-        let merged = merge_error_cause(questions);
+        let merged = merge_error_cause("en", questions);
         assert!(merged.contains_key("error_cause"));
         assert!(merged.contains_key("acceptable"));
     }

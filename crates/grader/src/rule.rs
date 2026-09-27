@@ -123,7 +123,7 @@ impl Grader {
             return result; // 调用方已挡；防御性保留（独立调用不 panic）
         };
         let state = answer_state(question, answer);
-        let questions = error_cause_questions(vec![]);
+        let questions = error_cause_questions(&question.lang.0, vec![]);
         match jev.evaluate(state, &questions).await {
             Ok(answers) => {
                 result.error_tags = tag_error_cause(&answers, self.thresholds.accept);

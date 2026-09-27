@@ -57,10 +57,33 @@ impl CardId {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LangTag(pub String);
 
+/// 母语默认标签（docs/16 §1：l1=zh-Hans；TODO(16-config)：config 落地后由调用方注入，占位不再取常量）
+pub const DEFAULT_L1: &str = "zh-Hans";
+
 impl LangTag {
     /// 默认目标语 en（M1 单语默认，多语种随 M9）
     pub fn english() -> Self {
         Self("en".into())
+    }
+
+    /// 语言名，用 `written_in` 语言书写（prompt 占位 `{{l1}}/{{l2}}` 用，docs/05 §1）。
+    /// 收录 en/zh 两种书写语言 × en/zh/ja；未收录组合回退语言标签本身（如 "fr"）。
+    pub fn name_in(&self, written_in: &str) -> String {
+        let target = if matches!(self.0.as_str(), "zh" | "zh-Hans" | "zh-Hant") {
+            "zh"
+        } else {
+            self.0.as_str()
+        };
+        let name = match (written_in, target) {
+            ("en", "en") => "English",
+            ("en", "zh") => "Chinese",
+            ("en", "ja") => "Japanese",
+            ("zh", "en") => "英语",
+            ("zh", "zh") => "中文",
+            ("zh", "ja") => "日语",
+            _ => return self.0.clone(),
+        };
+        name.to_string()
     }
 }
 
@@ -114,6 +137,19 @@ mod tests {
     fn test_english_lang_tag_is_en() {
         assert_eq!(LangTag::english().0, "en");
         assert_eq!(LangTag::default(), LangTag::english());
+    }
+
+    #[test]
+    fn test_name_in_renders_requested_language_with_tag_fallback() {
+        let en = LangTag::english();
+        assert_eq!(en.name_in("en"), "English");
+        assert_eq!(en.name_in("zh"), "英语");
+        let zh = LangTag(DEFAULT_L1.into());
+        assert_eq!(zh.name_in("en"), "Chinese", "zh-Hans 归 zh 谱系");
+        assert_eq!(zh.name_in("zh"), "中文");
+        assert_eq!(LangTag("ja".into()).name_in("en"), "Japanese");
+        assert_eq!(LangTag("fr".into()).name_in("en"), "fr", "未收录回退标签");
+        assert_eq!(DEFAULT_L1, "zh-Hans", "l1 默认随 docs/16 §1");
     }
 
     #[test]

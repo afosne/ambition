@@ -44,6 +44,9 @@ pub struct GenSpec {
     pub source_words: Option<WordSet>,
     pub weak_points: Vec<ambition_core::ErrorTag>,
     pub seed_qid: Option<ambition_core::Qid>,
+    /// 目标语：prompt 按 l2 分版 + `{{l2}}` 占位，缺版回退 en（docs/05 §1）
+    #[serde(default)]
+    pub l2: ambition_core::LangTag,
 }
 
 impl GenSpec {
@@ -58,6 +61,7 @@ impl GenSpec {
             source_words: None,
             weak_points: Vec::new(),
             seed_qid: None,
+            l2: ambition_core::LangTag::english(),
         }
     }
 }
@@ -84,6 +88,7 @@ mod tests {
         assert!(s.topic.is_none());
         assert!(s.weak_points.is_empty());
         assert!(s.seed_qid.is_none());
+        assert_eq!(s.l2, ambition_core::LangTag::english(), "默认目标语 en");
     }
 
     #[test]

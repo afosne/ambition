@@ -125,7 +125,7 @@ impl Grader {
                 instructions: "The student's answer fits the sentence grammatically and preserves the intended meaning of the blank.".into(),
             }),
         );
-        let questions = merge_error_cause(questions);
+        let questions = merge_error_cause(&question.lang.0, questions);
         let answers = jev.evaluate(state, &questions).await?;
         let yes_prob = answers
             .get("acceptable")
@@ -173,7 +173,7 @@ impl Grader {
                 }),
             ));
         }
-        let questions = error_cause_questions(extra);
+        let questions = error_cause_questions(&question.lang.0, extra);
         let answers = jev.evaluate(state, &questions).await?;
         let mut items = Vec::with_capacity(missed.len());
         for id in missed {

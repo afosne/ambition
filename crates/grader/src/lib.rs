@@ -1,6 +1,6 @@
 //! Ambition grader：三级判题流水线（docs/07-grading）
 //! M1 规则层（本文件纯函数）；M3 落地 `pipeline::Grader`（规则 → Jev → LLM 复核/待裁定桶）
-//! 与 `corpus`（assets/jev/error_tags.json 判分语料 + 错因归类口）。
+//! 与 `corpus`（assets/jev/<l2>.json 判分语料 + 错因归类口）。
 
 mod corpus;
 mod pipeline;

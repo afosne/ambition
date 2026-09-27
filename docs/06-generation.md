@@ -8,7 +8,8 @@
 
 ```rust
 pub struct GenSpec { pub track: TrackId, pub kinds: Vec<QuestionKindTag>, pub count: u32, pub difficulty: (u8,u8) /*必来自 08::cat*/,
-                     pub topic: Option<String>, pub source_words: Option<WordSet>, pub weak_points: Vec<ErrorTag>, pub seed_qid: Option<Qid> }
+                     pub topic: Option<String>, pub source_words: Option<WordSet>, pub weak_points: Vec<ErrorTag>, pub seed_qid: Option<Qid>,
+                     pub l2: LangTag /*目标语（默认 en）：prompt 按 l2 分版 + {{l2}} 占位，缺版回退 en（05 §1）*/ }
 pub async fn generate(&self, spec: &GenSpec) -> Result<Vec<Question>>;   // prompt → llm.structured → 校验(qid=内容哈希) → 质检回路(≤2 轮) → 交 engine 入库
 // quality_score 已是 Question 字段（qc_report 回写）；引擎落库时存 quality 列（00-overview §2：回包经适配层→engine 落库）
 // M2：结构化输出 = JSON Schema 约束的题草稿数组（DraftQuestion，字段同统一模型）；重生成 ≤2 轮后仍不合格 → 丢弃并记 tracing::warn

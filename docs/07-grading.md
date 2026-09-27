@@ -39,12 +39,13 @@ pub async fn jev_multi_items(&self, q, sel) -> Result<MultiJudge>;    // 逐项 
 pub async fn jev_composite(&self, state, dims: &[RubricDim]) -> Result<CompositeJudge>;  // M5：每维 score + veto×3
 pub fn compose_scores(dims: &[DimScore], weights, band_map) -> f32;   // M5：加权→档位（rubric 版本化）
 pub fn tag_error_cause(answers: &JevAnswers) -> Vec<ErrorTag>;        // 唯一错因归类口（M3：error_cause choice → ErrorTag；未知 key tracing::warn 跳过）
+pub fn error_cause_question(lang: &str) -> JevQuestion;               // error_cause 判断集：criteria+instructions 按题目 l2 选版、缺版回退 en（05 §3，M3→i18n）
 ```
 
 ## 4. 第三级：LLM 复核与待裁定桶
 
 ```rust
-pub async fn llm_arbitrate(&self, q, a) -> Result<Arbitration>;            // acceptable+error_tag+brief_reason（判断，不打分，M3 落地：LlmKind::Arbitrate）
+pub async fn llm_arbitrate(&self, q, a) -> Result<Arbitration>;            // acceptable+error_tag+brief_reason（判断，不打分，M3 落地：LlmKind::Arbitrate；prompt 按题目 l2 分版、缺版回退 en——05 §1）
 // 仍不定夺/离线 → arbitration 表（唯一桶，store 迁移 v2）；人工裁决 resolve → grades 更新（graded_by=human）
 //   + 填空题 typed 答案回流 Blank.acceptable（add_blank_acceptable）→ 同类题规则直判（规则增强闭环）
 // engine 门面（M3 落地）：pending_bucket() / resolve_pending(attempt_id, accept)

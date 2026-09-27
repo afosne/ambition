@@ -24,7 +24,7 @@ pub trait TextNormalizer { fn normalize(&self, s: &str) -> String; }  // en 大�
 
 ## 3. 目录布局（data/）
 
-> **data/ 只放用户可导入/可读的内容资源**（词表、题包、错式库、听力材料…）与随包内置内容；**prompt 模板与判分语料不进 data/**——源文件在各 crate 的 `assets/`（`crates/gen/assets/prompts/`、`crates/grader/assets/{prompts,jev}/`），编译期 `include_str!` 内嵌、**无运行时文件读取，用户改了不生效也不允许**（措辞即判分口径，docs/05 §3）。
+> **data/ 只放用户可导入/可读的内容资源**（词表、题包、错式库、听力材料…）与随包内置内容；**prompt 模板与判分语料不进 data/**——源文件在各 crate 的 `assets/`（`crates/gen/assets/prompts/`、`crates/grader/assets/{prompts,jev}/`），编译期 `include_str!` 内嵌、**无运行时文件读取，用户改了不生效也不允许**（措辞即判分口径，docs/05 §3）；assets 内容按 **l2 目标语分版**（`<kind>/<l2>.md`、`jev/<l2>.json`），**缺版回退 en**（§1 语言包缺失降级同款）。
 
 ```
 stages/<lang>/<track>.json   词表 wordlists/   rubric rubrics/   模板 templates/   句式 patterns/<lang>/

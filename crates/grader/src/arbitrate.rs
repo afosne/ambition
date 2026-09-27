@@ -63,7 +63,7 @@ impl Grader {
     }
 }
 
-/// 第三级 prompt 的 user 载荷（英文；判断所需上下文齐全）
+/// 第三级 prompt 的 user 载荷（结构标签恒为英文，内容随题目 l2；判断所需上下文齐全）
 fn arbitrate_payload(question: &Question, answer: &Answer) -> String {
     let mut lines = vec![format!("Question: {}", question.stem)];
     if let QuestionKind::SingleChoice(body) | QuestionKind::MultiChoice(body) = &question.kind {
@@ -90,11 +90,26 @@ fn arbitrate_payload(question: &Question, answer: &Answer) -> String {
     lines.join("\n")
 }
 
+/// 第三级 prompt：按题目 l2 分版、缺版回退 en（返回「模板原文、模板书写语言」；编译期内嵌，docs/05 §1）
+fn arbitrate_template(lang: &ambition_core::LangTag) -> (&'static str, &'static str) {
+    match lang.0.as_str() {
+        "zh" | "zh-Hans" | "zh-Hant" => (include_str!("../assets/prompts/arbitrate/zh.md"), "zh"),
+        "en" => (include_str!("../assets/prompts/arbitrate/en.md"), "en"),
+        _ => (include_str!("../assets/prompts/arbitrate/en.md"), "en"),
+    }
+}
+
 /// 第三级请求（kind=Arbitrate；temperature 0 —— 判断不采样；schema 约束三字段）
 fn arbitrate_request(question: &Question, answer: &Answer) -> GenRequest {
+    let (template, name_lang) = arbitrate_template(&question.lang);
+    // {{l1}}/{{l2}} → 语言名（用模板自身语言书写；l1 现取常量，TODO(16-config)：随 config 注入）
+    let l1 = ambition_core::LangTag(ambition_core::DEFAULT_L1.into());
+    let system = template
+        .replace("{{l1}}", &l1.name_in(name_lang))
+        .replace("{{l2}}", &question.lang.name_in(name_lang));
     let mut request = GenRequest::new(
         LlmKind::Arbitrate,
-        include_str!("../assets/prompts/arbitrate.md"),
+        system,
         arbitrate_payload(question, answer),
     );
     request.schema = Some(arbitrate_schema());
@@ -200,8 +215,45 @@ mod tests {
         assert_eq!(request.temperature, 0.0, "判断不采样");
         assert!(request.schema.is_some(), "schema 约束三字段");
         assert!(request.system.contains("never score"), "内嵌 prompt 生效");
+        assert!(
+            request.system.contains("English answer judge"),
+            "{{l2}} → 语言名"
+        );
+        assert!(!request.system.contains("{{"), "占位全部替换");
         assert!(request.user.contains("Student answer"), "载荷含作答");
         assert!(ERROR_TAGS_VERSION.starts_with('1'), "语料版本随判分口径");
+    }
+
+    #[test]
+    fn test_arbitrate_template_picks_l2_edition_with_en_fallback() {
+        let (en, en_lang) = arbitrate_template(&ambition_core::LangTag::english());
+        assert!(en.contains("never score"), "en 版正文");
+        assert_eq!(en_lang, "en");
+        let (zh, zh_lang) = arbitrate_template(&ambition_core::LangTag("zh".into()));
+        assert!(zh.contains("判官"), "zh 版中文正文");
+        assert_eq!(zh_lang, "zh");
+        let (miss, miss_lang) = arbitrate_template(&ambition_core::LangTag("ja".into()));
+        assert!(miss.contains("never score"), "缺版回退 en");
+        assert_eq!(miss_lang, "en");
+
+        let mut ja_q = choice_question();
+        ja_q.lang = ambition_core::LangTag("ja".into());
+        let request = arbitrate_request(&ja_q, &Answer::Choice(vec![1]));
+        assert!(
+            request.system.contains("Japanese answer judge"),
+            "en 模板用英文名写实际 l2"
+        );
+        assert!(!request.system.contains("{{"), "占位全部替换");
+
+        let mut zh_q = choice_question();
+        zh_q.lang = ambition_core::LangTag("zh".into());
+        let zh_request = arbitrate_request(&zh_q, &Answer::Choice(vec![1]));
+        assert!(zh_request.system.contains("作答判官"), "zh 模板生效");
+        assert!(
+            zh_request.system.contains("中文"),
+            "zh 模板 {{l2}} 用中文名"
+        );
+        assert!(!zh_request.system.contains("{{"), "占位全部替换");
     }
 
     #[test]

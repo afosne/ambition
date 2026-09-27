@@ -1,10 +1,10 @@
-//! prompt 渲染与 JSON Schema：render_prompt/load_prompt/draft_schema（模板编译期内嵌）
+//! prompt 渲染与 JSON Schema：render_prompt/load_prompt/draft_schema（模板按 l2 分版、编译期内嵌）
 
 use super::*;
 
-/// prompt 模板渲染（模板编期内嵌、无运行时读取；{{l2}} 等占位 docs/05 §1）
+/// prompt 模板渲染（模板按 l2 分版、缺版回退 en；{{l1}}/{{l2}} 占位替换为语言名，docs/05 §1）
 pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) -> String {
-    let template = load_prompt();
+    let (template, name_lang) = load_prompt(&spec.l2);
     let kinds = spec
         .kinds
         .iter()
@@ -27,6 +27,8 @@ pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) ->
                 .join("\n")
         )
     };
+    // {{l1}}/{{l2}} → 语言名（用模板自身语言书写；l1 现取常量，TODO(16-config)：随 config 注入）
+    let l1 = ambition_core::LangTag(ambition_core::DEFAULT_L1.into());
     let mut out = template
         .replace("{{count}}", &needed.to_string())
         .replace("{{kinds}}", &kinds)
@@ -35,7 +37,8 @@ pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) ->
             "{{difficulty}}",
             &format!("{}-{}", spec.difficulty.0, spec.difficulty.1),
         )
-        .replace("{{l2}}", "English")
+        .replace("{{l1}}", &l1.name_in(name_lang))
+        .replace("{{l2}}", &spec.l2.name_in(name_lang))
         .replace("{{topic_line}}", &topic_line)
         .replace("{{feedback_line}}", &feedback_line);
     if let Some(words) = &spec.source_words {
@@ -62,9 +65,15 @@ pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) ->
     out
 }
 
-/// prompt 模板：编译期内嵌（`crates/gen/assets/prompts/question_gen.md`——不读运行时文件，用户不可修改）
-pub(crate) fn load_prompt() -> String {
-    include_str!("../assets/prompts/question_gen.md").to_string()
+/// prompt 模板选择：按 l2 分版、缺版回退 en（返回「模板原文、模板书写语言」；编译期内嵌不读运行时文件，docs/05 §1）
+pub(crate) fn load_prompt(l2: &ambition_core::LangTag) -> (&'static str, &'static str) {
+    match l2.0.as_str() {
+        "zh" | "zh-Hans" | "zh-Hant" => {
+            (include_str!("../assets/prompts/question_gen/zh.md"), "zh")
+        }
+        "en" => (include_str!("../assets/prompts/question_gen/en.md"), "en"),
+        _ => (include_str!("../assets/prompts/question_gen/en.md"), "en"),
+    }
 }
 
 /// 草稿 JSON Schema（llm response_format 约束）
@@ -122,7 +131,8 @@ mod tests {
         assert!(prompt.contains("dormitory"));
         assert!(prompt.contains("deadbeef"));
         assert!(prompt.contains("tense"));
-        assert!(prompt.contains("English"));
+        assert!(prompt.contains("English"), "{{l2}} → 语言名");
+        assert!(prompt.contains("Chinese"), "{{l1}} → 语言名（模板语言 en）");
 
         let clean = render_prompt(
             &GenSpec::new("gaokao", vec![QuestionKindTag::FillBlank], 1),
@@ -135,9 +145,44 @@ mod tests {
 
     #[test]
     fn test_load_prompt_returns_embedded_template() {
-        let text = load_prompt();
+        let (text, lang) = load_prompt(&ambition_core::LangTag::english());
         assert!(text.contains("{{count}}"), "模板占位在场");
-        assert!(text.contains("English"), "英文模板");
+        assert!(text.contains("{{l2}}"), "模板只带占位，语言名渲染时注入");
+        assert_eq!(lang, "en");
+    }
+
+    #[test]
+    fn test_load_prompt_picks_l2_edition_with_en_fallback() {
+        let (zh, zh_lang) = load_prompt(&ambition_core::LangTag("zh".into()));
+        assert!(zh.contains("命题"), "zh 版中文正文");
+        assert_eq!(zh_lang, "zh");
+        let (miss, miss_lang) = load_prompt(&ambition_core::LangTag("ja".into()));
+        assert!(miss.contains("Question generation"), "缺版回退 en");
+        assert_eq!(miss_lang, "en");
+    }
+
+    #[test]
+    fn test_render_prompt_uses_l2_edition_and_name_language() {
+        let mut zh = GenSpec::new("zh_track", vec![QuestionKindTag::FillBlank], 1);
+        zh.l2 = ambition_core::LangTag("zh".into());
+        let zh_prompt = render_prompt(&zh, 1, &[]);
+        assert!(zh_prompt.contains("命题"), "zh 版正文");
+        assert!(
+            zh_prompt.contains("中文"),
+            "zh 模板里 {{l2}}/{{l1}} 用中文名"
+        );
+        assert!(!zh_prompt.contains("{{"), "占位全部替换");
+
+        let mut ja = GenSpec::new("jlpt", vec![QuestionKindTag::FillBlank], 1);
+        ja.l2 = ambition_core::LangTag("ja".into());
+        let ja_prompt = render_prompt(&ja, 1, &[]);
+        assert!(
+            ja_prompt.contains("Question generation"),
+            "缺版回退 en 正文"
+        );
+        assert!(ja_prompt.contains("Japanese"), "en 模板用英文名写实际 l2");
+        assert!(ja_prompt.contains("Chinese"), "{{l1}} 仍为母语名");
+        assert!(!ja_prompt.contains("{{"), "占位全部替换");
     }
 
     #[test]
