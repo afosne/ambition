@@ -9,6 +9,7 @@ mod ai;
 mod ledger;
 
 // 模块分层（docs/01 §组织：lib.rs 薄壳，文件 ≤500 行，pre-commit 门禁强制）
+mod lexicon;
 mod lifecycle;
 mod packs;
 mod pending;
@@ -23,6 +24,7 @@ pub use ai::{AiConfig, LLM_CACHE_TTL_SECS};
 pub use ambition_srs::{CardAction, Rating};
 pub use ambition_store::ArbitrationRow;
 pub use ledger::StoreLedger;
+pub use lexicon::{ExamplePair, Pattern, Sense};
 
 use std::path::Path;
 use std::sync::Mutex;

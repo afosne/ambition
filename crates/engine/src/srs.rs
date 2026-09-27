@@ -161,7 +161,7 @@ impl Engine {
     }
 
     /// 组复习条目（front=题面，back=正确答案，group=交错分组=首标签/源族，docs/08 §1）
-    async fn review_item(&self, card: Card) -> Result<ReviewItem, EngineError> {
+    pub(crate) async fn review_item(&self, card: Card) -> Result<ReviewItem, EngineError> {
         let (front, back, group) = match &card.source {
             CardSource::Question { qid } => {
                 let question = ambition_store::get_question(&self.pool, qid)
@@ -175,16 +175,21 @@ impl Engine {
                 let back = question_back(&question.kind);
                 (question.stem, back, group)
             }
-            CardSource::WordSense { word_id, .. } => (
-                word_id.clone(),
-                "word sense review".to_string(),
-                "word".to_string(),
-            ),
-            CardSource::Pattern { pattern_id } => (
-                pattern_id.clone(),
-                "pattern review".to_string(),
-                "pattern".to_string(),
-            ),
+            CardSource::WordSense { word_id, sense_id } => {
+                // 正面=词条，背面=该义项释义（09 义项查询；未知义项退词条名不 panic）
+                let detail = self.word_detail(word_id).await.unwrap_or_default();
+                let back = detail
+                    .iter()
+                    .find(|sense| sense.sense_id == *sense_id)
+                    .map(|sense| format!("{} — {}", sense.def_zh, sense.def_en))
+                    .unwrap_or_else(|| word_id.clone());
+                (word_id.clone(), back, "word".to_string())
+            }
+            CardSource::Pattern { pattern_id } => {
+                let back =
+                    crate::lexicon::pattern_note(pattern_id).unwrap_or_else(|| pattern_id.clone());
+                (pattern_id.clone(), back, "pattern".to_string())
+            }
             other => (format!("{other:?}"), String::new(), "misc".to_string()),
         };
         Ok(ReviewItem {
@@ -363,15 +368,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_due_list_empty_on_fresh_db() {
+    async fn test_due_list_empty_before_any_due_time() {
+        // open 即入内置卡（due_at=装配时刻），unix 0 之前无到期
         let engine = Engine::open_memory().await.expect("打开");
-        assert!(
-            engine
-                .due_list(now_unix() + 1, 10)
-                .await
-                .expect("队列")
-                .is_empty()
-        );
+        assert!(engine.due_list(0, 10).await.expect("队列").is_empty());
     }
 
     #[tokio::test]

@@ -39,6 +39,7 @@ dependencies = [
  "ambition-srs",
  "ambition-store",
  "async-trait",
+ "serde",
  "serde_json",
  "sqlx",
  "thiserror",

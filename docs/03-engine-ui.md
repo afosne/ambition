@@ -14,7 +14,7 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 // 落库规则：主事务提交后旁路逐个执行，各自幂等（旁路失败不回滚，tracing 记录可补偿）
 // M2：core::EventBus trait 落地，engine 只 publish 不直调 gamify（解耦改进 #3）；gamify 效果经 save_game_state 落库（#1）
 // M4：submit 后 SRS 旁路（insert 前取基线 → is_guess → decide_action → 建卡/提权/调度；旁路失败 warn 不回滚）
-//   + assemble 幂等入卡内置义项/句式（data/lexicon、data/patterns，坏文件仅 warn 不阻断 open）+ ReviewDone 经 settle 落 game_state
+//   + assemble 幂等入卡内置义项/句式（data/lexicon、data/patterns，坏文件仅 warn 不阻断 open——已落地 enroll_builtin_cards）+ ReviewDone 经 settle 落 game_state（已落地）
 ```
 
 ## 2. use-case 门面（函数全集，按域）
@@ -28,7 +28,7 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 //   add_chinglish_drills(limit)（中式英语改错训练题注入，data/chinglish/，DESIGN §13.6 归 M3）
 //   M4 落地：SubmitOutcome{grade, effects, srs: Option<CardAction>}（入卡处置回传 UI 提示）；
 //   due_list(now_unix, limit) -> Vec<ReviewItem>（到期+交错）；review_answer(card_id, rating) -> Card（FSRS 调度 + ReviewDone）；
-//   wrong_wordbook() -> Vec<WrongWordRow>（错词本：错因标签+次数+题干）；word_detail(lemma) -> Vec<Sense>（09 义项查询）；
+//   wrong_wordbook() -> Vec<WrongWordRow>（错词本：错因标签+次数+题干，已落地）；word_detail(lemma) -> Vec<Sense>（09 义项查询，已落地：engine::lexicon）；
 //   （weekly_quiz / vocab_probe_* / spelling_material 随 M5+，docs/08 §1 注记）
 // 复习/词汇（S2）：due_list / review_answer / enroll_words / wrong_wordbook / word_detail / vocab_probe_* / weekly_quiz
 // 出题/题包（S4/S6）：generate / variant_drill / export_pack / import_pack / share_code / pack_updates

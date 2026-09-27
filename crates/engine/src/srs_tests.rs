@@ -8,7 +8,7 @@ mod tests {
         Answer, Attempt, AttemptMode, BlankItem, CardSource, ChoiceBody, ErrorTag, FillBody,
         GradeResult, OptionItem, Provenance, Question, QuestionKind, Timing, Verdict,
     };
-    use ambition_srs::{CardAction, Rating};
+    use ambition_srs::{Card, CardAction, Rating};
 
     fn choice_question(tag: &str) -> Question {
         Question::new(
@@ -158,11 +158,12 @@ mod tests {
         };
         engine.srs_after_attempt(&wrong, &grade, false).await;
         let due = engine.due_list(now_unix() + 1, 10).await.expect("队列");
-        assert_eq!(due.len(), 1, "到期一卡");
-        assert_eq!(due[0].front, "She is quick.", "front=题干");
+        // 错词卡（wrong_count 提权）排在装配的内置卡之前（docs/08 §1 排序）
+        assert!(!due.is_empty(), "至少错词卡到期");
+        assert_eq!(due[0].front, "She is quick.", "front=题干（错词提权序）");
         assert_eq!(due[0].back, "quick", "back=正确答案");
         assert_eq!(due[0].group, "grammar", "group=首标签");
-        // 空队列
+        // 未到期为空（unix 0 早于一切卡）
         let empty = engine.due_list(0, 10).await.expect("更早");
         assert!(empty.is_empty(), "未到期为空");
         // 复习评分 → FSRS 调度 + ReviewDone 落 game_state（Xp(1)）
@@ -175,9 +176,9 @@ mod tests {
         assert!(card.fsrs.is_some(), "FSRS 状态写入");
         assert!(card.due_at > now_unix(), "Good 推后到期（{}）", card.due_at);
         assert_eq!(engine.game_state().xp, before + 1, "ReviewDone → Xp(1)");
-        // 错词本
+        // 错词本（内置卡 wrong_count=0 不进）
         let rows = engine.wrong_wordbook().await.expect("错词本");
-        assert_eq!(rows.len(), 1);
+        assert_eq!(rows.len(), 1, "仅错词卡入册");
         assert_eq!(rows[0].wrong_count, 1);
         assert_eq!(rows[0].error_tags, vec![ErrorTag::Tense]);
         assert_eq!(rows[0].title, "She is quick.", "题干展示");
@@ -289,5 +290,53 @@ mod tests {
             })),
             "y"
         );
+    }
+
+    #[tokio::test]
+    async fn test_review_item_covers_word_sense_and_pattern_sources() {
+        let engine = Engine::open_memory().await.expect("打开");
+        // 义项卡：正面=词条，背面=该义项释义
+        let sense_card = Card::new(
+            CardSource::WordSense {
+                word_id: "bank".into(),
+                sense_id: 1,
+            },
+            1,
+        );
+        let item = engine.review_item(sense_card).await.expect("义项条目");
+        assert_eq!(item.front, "bank");
+        assert!(item.back.contains("银行"), "中文释义: {}", item.back);
+        assert_eq!(item.group, "word");
+        // 未知义项 id：退词条名不 panic
+        let ghost = Card::new(
+            CardSource::WordSense {
+                word_id: "bank".into(),
+                sense_id: 999,
+            },
+            1,
+        );
+        let item = engine.review_item(ghost).await.expect("义项条目");
+        assert_eq!(item.back, "bank", "未知义项退词条名");
+        // 句式卡：正面=句式 id，背面=中文讲解 + form
+        let pattern_card = Card::new(
+            CardSource::Pattern {
+                pattern_id: "not_only_but_also".into(),
+            },
+            1,
+        );
+        let item = engine.review_item(pattern_card).await.expect("句式条目");
+        assert_eq!(item.front, "not_only_but_also");
+        assert!(item.back.contains("不但"), "句式讲解: {}", item.back);
+        assert!(item.back.contains("not only"), "句式形式: {}", item.back);
+        assert_eq!(item.group, "pattern");
+        // 未知句式 id：退源键
+        let unknown = Card::new(
+            CardSource::Pattern {
+                pattern_id: "ghost".into(),
+            },
+            1,
+        );
+        let item = engine.review_item(unknown).await.expect("句式条目");
+        assert_eq!(item.back, "ghost", "未知句式退源键");
     }
 }

@@ -2,7 +2,7 @@
 
 > 实现顺序：**M4（词库/义项/句式）→ M13（幽灵义项/辨析卡）**。并入来源：旧 `08-vocab` + `20-patterns-polysemy` + `37-vocab-depth`。
 > 边界：本册 = 词汇与句式的数据+训练；记忆材料（谐音/词源）在 19-memory-cards。
-> **M4 落地（最小可用）**：`crates/vocab` 纯函数库——内置义项 `data/lexicon/en/senses.json` + 句式 `data/patterns/en/patterns.json`（根带 schema_version=1）加载与校验 + 经 `CardSource::WordSense/Pattern` 入 08 复习队列（engine.assemble 幂等入卡）。EC-DICT 全量导入 / LexiconSource 插件 / 五模式训练 / 词汇量测试 / 幽灵义项 随 M5+。
+> **M4 落地（最小可用，已实现）**：`engine::lexicon` 模块——内置义项 `data/lexicon/en/senses.json`（31 义项/11 词）+ 句式 `data/patterns/en/patterns.json`（8 句式，根带 schema_version=1，`include_str` 编译期内嵌 + schema 校验，坏文件仅 warn 不阻断 open）+ `word_detail(lemma)` 义项查询 + 经 `CardSource::WordSense/Pattern` 入 08 复习队列（engine.assemble `enroll_builtin_cards` 幂等入卡：已有卡不覆盖调度进度）。EC-DICT 全量导入 / LexiconSource 插件 / 五模式训练 / 词汇量测试 / 幽灵义项 随 M5+（`crates/vocab` 独立 crate 也随后续——M4 收敛在 engine::lexicon 避免过早分 crate）。
 
 ## 1. 词库数据（LexiconSource 插件，16-config-i18n）
 
@@ -52,7 +52,8 @@ pub struct PatternService;   // library(track,kind) / next_drill(weak) / check_u
 
 ## 5. 验证点
 
-- [x] 义项拆分抽检（bank/light/run：每词 ≥2 义项、def 互异——M4 内置数据，test_builtin_senses_split_polysemy）
+- [x] 义项拆分抽检（bank/light/run：每词 ≥2 义项、def 互异——M4 内置数据，engine `test_parse_senses_validates_schema_and_content`）
+- [x] 句式入卡与复习条目（pattern_note 中文讲解+form、幂等入卡不覆盖调度，`test_pattern_note_returns_note_with_form` / `test_enroll_builtin_cards_is_idempotent_and_keeps_schedule` / `test_review_item_covers_word_sense_and_pattern_sources`）
 - [ ] EC-DICT 导入幂等；干扰项防双正确；
 - [ ] 幽灵义项真实性（qc 拦生造义）；辨析卡三栏齐全；毕业判定（部分义项过 ≠ 毕业）；
 - [ ] 句式 traps 反例判负（`*I suggest him to go`）；check_use 拦原意走样；pattern_of 与人工标注一致；词汇量测试收敛。

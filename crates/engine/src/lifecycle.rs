@@ -62,6 +62,8 @@ impl Engine {
         engine
             .import_seed(include_str!("../../../data/seed/en/cet4/core.qpack.json"))
             .await?;
+        // M4：内置义项/句式幂等入卡（坏文件仅 warn 不阻断 open，docs/03 §1）
+        engine.enroll_builtin_cards().await;
         Ok(engine)
     }
 }

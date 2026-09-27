@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "lang": "en",
+  "patterns": [
+    {
+      "pattern_id": "not_only_but_also",
+      "form": "not only {A} but also {B}",
+      "kind": "connect",
+      "level_tags": ["cet4"],
+      "note_zh": "不但…而且…（连接两个对等成分；A/B 词性须一致）",
+      "examples": [
+        { "plain": "He is clever and he works hard.", "patterned": "He is not only clever but also hard-working." },
+        { "plain": "The movie was exciting and it was moving.", "patterned": "The movie was not only exciting but also moving." }
+      ],
+      "traps": ["*He not only likes sports but also football.", "*She is smart but also kind."]
+    },
+    {
+      "pattern_id": "either_or",
+      "form": "either {A} or {B}",
+      "kind": "connect",
+      "level_tags": ["cet4"],
+      "note_zh": "要么…要么…（就近谓语：谓语与 B 一致）",
+      "examples": [
+        { "plain": "You can take the bus or the subway.", "patterned": "Either the bus or the subway takes you there." },
+        { "plain": "He is either lying or mistaken.", "patterned": "Either he is lying or he is mistaken." }
+      ],
+      "traps": ["*Either you or I are right.", "*He either likes tea and coffee."]
+    },
+    {
+      "pattern_id": "no_sooner_than",
+      "form": "no sooner had {A} than {B}",
+      "kind": "invert",
+      "level_tags": ["cet6", "kaoyan"],
+      "note_zh": "一…就…（no sooner 置首须部分倒装；than 引导后半句）",
+      "examples": [
+        { "plain": "As soon as he arrived, the meeting began.", "patterned": "No sooner had he arrived than the meeting began." },
+        { "plain": "Hardly had she left when it started to rain.", "patterned": "No sooner had she left than it started to rain." }
+      ],
+      "traps": ["*No sooner he arrived than the meeting began.", "*No sooner had he arrived than the meeting started to rain."]
+    },
+    {
+      "pattern_id": "would_rather_than",
+      "form": "would rather {A} than {B}",
+      "kind": "compare",
+      "level_tags": ["cet4"],
+      "note_zh": "宁愿…也不…（than 前后动词形式一致）",
+      "examples": [
+        { "plain": "He prefers walking to taking the bus.", "patterned": "He would rather walk than take the bus." },
+        { "plain": "She likes staying home better than going out.", "patterned": "She would rather stay home than go out." }
+      ],
+      "traps": ["*He would rather walk than to take the bus.", "*I would rather to stay than going."]
+    },
+    {
+      "pattern_id": "it_is_high_time",
+      "form": "it is high time {A} did {B}",
+      "kind": "subjunctive",
+      "level_tags": ["cet6", "kaoyan"],
+      "note_zh": "早该…了（从句用过去时表虚拟）",
+      "examples": [
+        { "plain": "We should take action now.", "patterned": "It is high time we took action." },
+        { "plain": "He needs to leave now.", "patterned": "It is high time he left." }
+      ],
+      "traps": ["*It is high time we take action.", "*It is high time that we will take action."]
+    },
+    {
+      "pattern_id": "not_until",
+      "form": "not until {A} did {B}",
+      "kind": "invert",
+      "level_tags": ["cet4"],
+      "note_zh": "直到…才…（not until 置首主句部分倒装）",
+      "examples": [
+        { "plain": "He did not realize the truth until much later.", "patterned": "Not until much later did he realize the truth." },
+        { "plain": "She did not go home until midnight.", "patterned": "Not until midnight did she go home." }
+      ],
+      "traps": ["*Not until much later he realized the truth.", "*Until much later did he realize the truth."]
+    },
+    {
+      "pattern_id": "the_more_the_more",
+      "form": "the more {A}, the more {B}",
+      "kind": "compare",
+      "level_tags": ["cet4"],
+      "note_zh": "越…越…（定冠词 the 不可省，前后结构平行）",
+      "examples": [
+        { "plain": "If you practise more, you will improve faster.", "patterned": "The more you practise, the faster you will improve." },
+        { "plain": "Books become more useful when they are read more.", "patterned": "The more books are read, the more useful they become." }
+      ],
+      "traps": ["*More you practise, faster you improve.", "*The more you read, faster you write."]
+    },
+    {
+      "pattern_id": "as_long_as",
+      "form": "as long as {A}",
+      "kind": "connect",
+      "level_tags": ["cet4"],
+      "note_zh": "只要（引导条件从句，时态用一般现在时表将来）",
+      "examples": [
+        { "plain": "You will succeed if you keep trying.", "patterned": "You will succeed as long as you keep trying." },
+        { "plain": "If the weather is fine, we will go.", "patterned": "As long as the weather is fine, we will go." }
+      ],
+      "traps": ["*As long as the weather will be fine, we will go.", "*As long as keep trying, you will succeed."]
+    }
+  ]
+}
