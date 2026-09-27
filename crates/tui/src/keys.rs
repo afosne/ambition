@@ -20,6 +20,8 @@ pub enum KeyCtx {
     Finished,
     /// 复习屏（FSRS 翻卡；docs/03 §3 M4）：Space/Enter 翻面 · 1-4 评分 · Tab/Esc 返回
     Review,
+    /// 选题面板（F1；docs/03 §5.3 2026-09-27）：↑↓ 选择 · Enter 跳转 · Esc/F1 返回
+    Picker,
 }
 
 /// 键位 → 消息（唯一键位表；docs/03 §5.3）
@@ -42,6 +44,7 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Fill { editing: true } => Some(Msg::StopEdit),
                 KeyCtx::Pending => Some(Msg::Next), // 跳过本题（保持待裁定桶）
                 KeyCtx::Review => Some(Msg::Screen(Screen::Practice)), // 复习屏返回答题
+                KeyCtx::Picker => Some(Msg::TogglePicker), // 面板返回答题
                 _ => Some(Msg::Quit),
             };
         }
@@ -51,6 +54,7 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Pending => Msg::ConfirmArbitrate,
                 KeyCtx::Graded | KeyCtx::Finished => Msg::Next,
                 KeyCtx::Review => Msg::Flip, // 复习屏 Enter=翻面
+                KeyCtx::Picker => Msg::Jump, // 面板 Enter=跳转到选中题
             });
         }
         _ => {}
@@ -82,6 +86,17 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
             Some(Msg::Rate(c.to_digit(10).unwrap_or(1) as u8))
         }
         (KeyCtx::Review, KeyCode::Tab) => Some(Msg::Screen(Screen::Practice)),
+        // 翻题：→ 跳过/下一题（不判分）、← 上一题（Choice/Graded，docs/03 §5.3 2026-09-27）
+        (KeyCtx::Choice | KeyCtx::Graded, KeyCode::Right) => Some(Msg::Skip),
+        (KeyCtx::Choice | KeyCtx::Graded, KeyCode::Left) => Some(Msg::Prev),
+        // F1 选题面板（Choice/Graded/Finished 可呼出；面板内 F1 关闭）
+        (KeyCtx::Choice | KeyCtx::Graded | KeyCtx::Finished, KeyCode::F(1)) => {
+            Some(Msg::TogglePicker)
+        }
+        (KeyCtx::Picker, KeyCode::F(1)) => Some(Msg::TogglePicker),
+        // 面板内列表导航
+        (KeyCtx::Picker, KeyCode::Down) => Some(Msg::MoveDown),
+        (KeyCtx::Picker, KeyCode::Up) => Some(Msg::MoveUp),
         _ => None,
     }
 }
@@ -89,7 +104,9 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
 /// 提示行文案（与路由同源；render 直接取用，禁止硬编码键位）
 pub fn hint(ctx: KeyCtx) -> &'static str {
     match ctx {
-        KeyCtx::Choice => " ↑/↓ 移动 · Space 选中 · Enter 提交 · 1-4 自评把握 · Ctrl+Q 退出",
+        KeyCtx::Choice => {
+            " ↑/↓ 移动 · Space 勾选 · Enter 提交 · → 跳过 · F1 选题 · 1-4 自评把握 · Ctrl+Q 退出"
+        }
         KeyCtx::Fill { editing: true } => {
             " 打字作答 · Enter 提交 · Tab/→ 下一空（Shift+Tab/← 上一空）· Esc 退出编辑（保留输入）· Ctrl+Q 退出"
         }
@@ -97,11 +114,12 @@ pub fn hint(ctx: KeyCtx) -> &'static str {
             " 打字恢复编辑（已输入保留）· Enter 提交 · Esc/Ctrl+Q 退出"
         }
         KeyCtx::Pending => " ←/→ 选择判对判错 · Enter 确认裁决 · Esc 跳过 · Ctrl+Q 退出",
-        KeyCtx::Graded => " Enter 下一题 · Ctrl+Q 退出",
+        KeyCtx::Graded => " Enter/→ 下一题 · ← 上一题 · F1 选题 · Ctrl+Q 退出",
         KeyCtx::Finished => " Ctrl+Q 退出",
         KeyCtx::Review => {
             " Space/Enter 翻面 · 1-4 评分（Again/Hard/Good/Easy）· Tab/Esc 返回答题 · Ctrl+Q 退出"
         }
+        KeyCtx::Picker => " ↑/↓ 选择题目 · Enter 跳转 · Esc/F1 返回 · Ctrl+Q 退出",
     }
 }
 
@@ -114,7 +132,7 @@ mod tests {
         M::empty()
     }
 
-    fn all_ctxs() -> [KeyCtx; 7] {
+    fn all_ctxs() -> [KeyCtx; 8] {
         [
             KeyCtx::Choice,
             KeyCtx::Fill { editing: true },
@@ -123,6 +141,7 @@ mod tests {
             KeyCtx::Graded,
             KeyCtx::Finished,
             KeyCtx::Review,
+            KeyCtx::Picker,
         ]
     }
 
@@ -286,10 +305,47 @@ mod tests {
         assert_eq!(key_to_msg(p, K::Up, mods()), Some(Msg::MoveUp));
         assert_eq!(key_to_msg(p, K::Enter, mods()), Some(Msg::ConfirmArbitrate));
         assert_eq!(key_to_msg(p, K::Char('1'), mods()), None, "裁决态无自评");
+        // 判分后 → = 跳过/下一题（2026-09-27 翻题键新契约；裁决态箭头仍归高亮）
         assert_eq!(
             key_to_msg(KeyCtx::Graded, K::Right, mods()),
-            None,
-            "已判分不切高亮"
+            Some(Msg::Skip),
+            "已判分 → 下一题"
+        );
+    }
+
+    #[test]
+    fn test_key_to_msg_navigation_and_picker_keys() {
+        use Msg::*;
+        // 翻题：→ Skip / ← Prev（Choice 与 Graded）
+        for ctx in [KeyCtx::Choice, KeyCtx::Graded] {
+            assert_eq!(key_to_msg(ctx, K::Right, mods()), Some(Skip), "{ctx:?} →");
+            assert_eq!(key_to_msg(ctx, K::Left, mods()), Some(Prev), "{ctx:?} ←");
+        }
+        // F1 面板开合
+        for ctx in [KeyCtx::Choice, KeyCtx::Graded, KeyCtx::Finished] {
+            assert_eq!(
+                key_to_msg(ctx, K::F(1), mods()),
+                Some(TogglePicker),
+                "F1 开面板: {ctx:?}"
+            );
+        }
+        assert_eq!(
+            key_to_msg(KeyCtx::Picker, K::F(1), mods()),
+            Some(TogglePicker),
+            "面板内 F1 关闭"
+        );
+        assert_eq!(key_to_msg(KeyCtx::Picker, K::Down, mods()), Some(MoveDown));
+        assert_eq!(key_to_msg(KeyCtx::Picker, K::Up, mods()), Some(MoveUp));
+        assert_eq!(key_to_msg(KeyCtx::Picker, K::Enter, mods()), Some(Jump));
+        assert_eq!(
+            key_to_msg(KeyCtx::Picker, K::Esc, mods()),
+            Some(TogglePicker),
+            "面板 Esc 关闭"
+        );
+        // 填空态 F1 不开面板（键位归文本/切空位）
+        assert_eq!(
+            key_to_msg(KeyCtx::Fill { editing: false }, K::F(1), mods()),
+            None
         );
     }
 

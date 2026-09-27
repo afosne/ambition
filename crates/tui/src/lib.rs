@@ -5,15 +5,22 @@
 
 // 模块分层（docs/01 §组织：lib.rs 薄壳，文件 ≤500 行，pre-commit 门禁强制）
 mod keys;
+mod passage_render;
+mod picker_render;
 mod render;
+#[cfg(test)]
+mod render_passage_tests;
 mod review_render;
 mod review_state;
 mod state;
 mod update;
 #[cfg(test)]
+mod update_passage_tests;
+#[cfg(test)]
 mod update_tests;
 
 pub use keys::*;
+pub use picker_render::*;
 pub use render::*;
 pub use review_render::*;
 pub use review_state::*;

@@ -41,6 +41,10 @@ pub struct AppState {
     pub srs_hint: Option<String>,
     /// 复习屏状态（M4）
     pub review: ReviewState,
+    /// 选题面板开合（F1；docs/03 §5.3 2026-09-27）
+    pub picker_open: bool,
+    /// 面板光标（题库下标）
+    pub picker_cursor: usize,
     /// 待裁定裁决高亮（0=判对 1=判错；←/→ 切换，Enter 确认）
     pub arbitration_sel: u8,
 }
@@ -71,6 +75,14 @@ pub enum Msg {
     Flip,
     /// 复习屏评分（1-4 = Again/Hard/Good/Easy）
     Rate(u8),
+    /// 跳过/下一题（→，不判分；docs/03 §5.3 2026-09-27 修订）
+    Skip,
+    /// 上一题（←，状态复位已作答不保留）
+    Prev,
+    /// F1 选题面板开/关
+    TogglePicker,
+    /// 面板内跳转（Enter）
+    Jump,
 }
 
 /// 状态机输出（Quit/Submit 由 main 执行副作用）
@@ -117,6 +129,8 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         sub_answers: Vec::new(),
         srs_hint: None,
         review: ReviewState::default(),
+        picker_open: false,
+        picker_cursor: 0,
         arbitration_sel: 0,
     }
 }
@@ -131,6 +145,9 @@ impl AppState {
     pub fn key_ctx(&self) -> KeyCtx {
         if self.screen == Screen::Review {
             return KeyCtx::Review;
+        }
+        if self.picker_open {
+            return KeyCtx::Picker;
         }
         if self.finished {
             return KeyCtx::Finished;
