@@ -76,11 +76,25 @@ CREATE TABLE IF NOT EXISTS arbitration (
 CREATE INDEX IF NOT EXISTS idx_arbitration_status ON arbitration(status);
 "#;
 
+/// v3：M4 复习卡队列（docs/02 §2 迁移 v3；单写者 = 08-adaptive 经 engine）
+/// `due_at` 用整数 unix 秒（避开 `datetime()` NULL 静默坑，P-15）；`wrong_count` 为错词本查询列
+const MIGRATION_V3: &str = r#"
+CREATE TABLE IF NOT EXISTS srs_queue (
+    card_id     TEXT PRIMARY KEY,
+    source      TEXT NOT NULL,
+    payload     TEXT NOT NULL,
+    due_at      INTEGER NOT NULL,
+    wrong_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_srs_queue_due ON srs_queue(due_at);
+CREATE INDEX IF NOT EXISTS idx_srs_queue_wrong ON srs_queue(wrong_count);
+"#;
+
 /// 迁移清单（只增不改；序号 = 目标版本）
-const MIGRATIONS: &[(i32, &str)] = &[(1, MIGRATION_V1), (2, MIGRATION_V2)];
+const MIGRATIONS: &[(i32, &str)] = &[(1, MIGRATION_V1), (2, MIGRATION_V2), (3, MIGRATION_V3)];
 
 /// 当前目标 schema 版本（清单最大号）
-pub const SCHEMA_VERSION: i32 = 2;
+pub const SCHEMA_VERSION: i32 = 3;
 
 /// 建库 + 迁移（幂等：已到目标版本则跳过；docs/02-core-store §2）
 pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {

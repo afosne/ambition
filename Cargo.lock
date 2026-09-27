@@ -126,6 +126,7 @@ name = "ambition-store"
 version = "0.1.0"
 dependencies = [
  "ambition-core",
+ "ambition-srs",
  "serde_json",
  "sqlx",
  "tokio",

@@ -5,6 +5,7 @@
 // 模块分层（docs/01 §组织：lib.rs 薄壳，文件 ≤500 行，pre-commit 门禁强制）
 mod arbitration;
 mod attempts;
+mod cards;
 mod kv;
 mod migration;
 mod question_repo;
@@ -12,6 +13,7 @@ mod usage;
 
 pub use arbitration::*;
 pub use attempts::*;
+pub use cards::*;
 pub use kv::*;
 pub use migration::*;
 pub use question_repo::*;

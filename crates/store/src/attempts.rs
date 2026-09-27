@@ -56,6 +56,52 @@ pub async fn insert_attempt_tx(
     Ok(())
 }
 
+/// 读回整条 Attempt（attempts.answer 列存完整 Attempt JSON；docs/02 §2 迁移 v3）
+pub async fn get_attempt(
+    pool: &SqlitePool,
+    attempt_id: &str,
+) -> Result<Option<Attempt>, sqlx::Error> {
+    let answer: Option<String> =
+        sqlx::query_scalar("SELECT answer FROM attempts WHERE attempt_id = ?")
+            .bind(attempt_id)
+            .fetch_optional(pool)
+            .await?;
+    let Some(payload) = answer else {
+        return Ok(None);
+    };
+    let attempt: Attempt = serde_json::from_str(&payload).map_err(|err| {
+        sqlx::Error::Decode(format!("attempt 载荷损坏（{attempt_id}）: {err}").into())
+    })?;
+    Ok(Some(attempt))
+}
+
+/// 近 N 次作答计时（假对基线原料：total_ms 滚动样本，docs/08 §2；按创建时间倒序取 N）
+/// SQL 层过滤无计时行（同秒写入时 LIMIT 不会命中 timing=null 的行——见 P-18 边界）
+pub async fn recent_timings(
+    pool: &SqlitePool,
+    limit: i64,
+) -> Result<Vec<ambition_core::Timing>, sqlx::Error> {
+    // attempts.answer 是完整 Attempt JSON（含 timing）；json_extract 过滤 null
+    let payloads: Vec<String> = sqlx::query_scalar(
+        "SELECT answer FROM attempts
+         WHERE json_extract(answer, '$.timing') IS NOT NULL
+         ORDER BY created_at DESC, attempt_id DESC LIMIT ?",
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    let mut timings = Vec::with_capacity(payloads.len());
+    for payload in payloads {
+        // 坏行跳过（只取样本用途；get_attempt 才显式上抛坏载荷）
+        if let Ok(attempt) = serde_json::from_str::<Attempt>(&payload)
+            && let Some(t) = attempt.timing
+        {
+            timings.push(t);
+        }
+    }
+    Ok(timings)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,6 +185,75 @@ mod tests {
                     .expect("error_tags 计数");
                 assert_eq!(grades, 1);
                 assert_eq!(tags, 1);
+            });
+    }
+
+    #[test]
+    fn test_get_attempt_reads_back_full_attempt_or_none() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let pool = memory_pool().await;
+                let q = sample_question();
+                insert_question(&pool, &q).await.expect("写题");
+                let mut attempt = sample_attempt(q.qid.clone());
+                attempt.attempt_id = "ga-1".into();
+                attempt.timing = Some(ambition_core::Timing {
+                    total_ms: 4_200,
+                    revision_count: 1,
+                });
+                let grade = sample_grade(Verdict::Correct);
+                insert_attempt_tx(&pool, &attempt, &grade)
+                    .await
+                    .expect("事务");
+                let got = get_attempt(&pool, "ga-1")
+                    .await
+                    .expect("读回")
+                    .expect("存在");
+                assert_eq!(got, attempt, "整条 Attempt 往返无损");
+                assert_eq!(got.timing.expect("计时").total_ms, 4_200);
+                assert!(
+                    get_attempt(&pool, "nope").await.expect("查询").is_none(),
+                    "不存在 → None"
+                );
+            });
+    }
+
+    #[test]
+    fn test_recent_timings_returns_latest_samples_with_timing() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let pool = memory_pool().await;
+                let q = sample_question();
+                insert_question(&pool, &q).await.expect("写题");
+                // 三条作答：两条带计时、一条无计时（timing=None 不进样本）
+                for (id, ms) in [
+                    ("rt-1", Some(1_000u64)),
+                    ("rt-2", Some(3_000)),
+                    ("rt-3", None),
+                ] {
+                    let mut attempt = sample_attempt(q.qid.clone());
+                    attempt.attempt_id = id.into();
+                    attempt.timing = ms.map(|total_ms| ambition_core::Timing {
+                        total_ms,
+                        revision_count: 0,
+                    });
+                    let grade = sample_grade(Verdict::Correct);
+                    insert_attempt_tx(&pool, &attempt, &grade)
+                        .await
+                        .expect("事务");
+                }
+                let timings = recent_timings(&pool, 10).await.expect("取样本");
+                assert_eq!(timings.len(), 2, "无计时作答不进样本");
+                assert!(timings.iter().any(|t| t.total_ms == 1_000));
+                let capped = recent_timings(&pool, 1).await.expect("限量");
+                assert_eq!(capped.len(), 1, "limit 生效");
+                assert!(recent_timings(&pool, 0).await.expect("零").is_empty());
             });
     }
 
