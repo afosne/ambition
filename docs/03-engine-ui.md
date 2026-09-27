@@ -101,23 +101,25 @@ ambition                 # 进入 TUI：无需账号、无需服务、无需联�
 
 ### 5.3 屏幕与默认键位（可配，`?` 打开帮助屏）
 
+> **键位总则（2026-09-27 用户裁定）**：**禁止单字母快捷键**——字母键只做填空输入文本；命令一律走「非字母键（方向 / Enter / Space / Esc / Tab / 数字）+ `Ctrl` 组合」。屏幕直达统一 `Ctrl+字母`（避开保留：`Ctrl+C`/`Ctrl+Q`=退出；终端不可达：`Ctrl+I`=Tab、`Ctrl+H`=Backspace）。
+
 | 屏 | 键 | 屏 | 键 |
 |---|---|---|---|
-| Home 今日 | `1` | Games 游戏 | `6` |
-| Practice 答题 | `2` | Notes/Diary/Todo | `7/8/9` |
-| Review 复习 | `3`（M4：`Tab` 从答题屏切入） | Pack 题包 | `o` |
-| Wordbook 单词 | `4` | Profile 画像 | `p` |
-| Typing 打字 | `5` | Mock 模考 | `m` |
-| Writing 写作 | `w` | Settings | `s` |
+| Home 今日 | `Ctrl+B` | Games 游戏 | `Ctrl+G` |
+| Practice 答题 | `Ctrl+A` | Notes/Diary/Todo | `Ctrl+N`/`Ctrl+D`/`Ctrl+K` |
+| Review 复习 | `Ctrl+R`（M4：`Tab` 从答题屏切入） | Pack 题包 | `Ctrl+O` |
+| Wordbook 单词 | `Ctrl+V` | Profile 画像 | `Ctrl+P` |
+| Typing 打字 | `Ctrl+T` | Mock 模考 | `Ctrl+M` |
+| Writing 写作 | `Ctrl+E` | Settings | `Ctrl+S` |
 
-- 全局：`q` 退出（非编辑态）· **`Ctrl+Q`/`Ctrl+C` 恒退出（任何状态，含填空编辑中）** · `?` 帮助 · `Tab` 切面板 · `Esc` 返回/退出；
-- **键位唯一入口（2026-09-27 统一重构）**：`crates/tui/src/keys.rs::key_to_msg(KeyCtx, key, mods)` —— `KeyCtx`（Choice / Fill{editing} / Pending / Graded / Finished）由 `AppState::key_ctx()` 计算，键位表只此一份；提示行 `hint(ctx)` 与路由同源（render 不得硬编码键位文案）；main 不做任何键位改写（Enter→下一题也在表内）；
-- 答题（Choice ctx）：`j/k` 移动 · **`Space` 选中/取消（多选连按；未选中时按光标位提交，M3 落地）** · `Enter` 提交 · `e` 看讲解（改进 #17 未接）· **`1-4` 自评把握（→ Attempt.self_confidence，假对检测输入；仅作答态）**；判分浮层显示错因标签 + graded_by（结构化讲解①）；
-- 填空（Fill ctx，**2026-09-27 键位修订**）：**打字即编辑（无需进入键，任何可打印字符含空格/`;`/数字直接进输入行）** · `;` 分隔多空 · `Enter` 提交 · **`Esc` = 退出编辑但保留已输入**（再打字直接恢复编辑；未编辑时 `Esc` 才退出程序）——修订前 `Esc` 直接退程序丢答案是坑；
-- 待裁定：`y/n` 人工裁决（**裁决回流规则层**，同类题下次直判；M3 落地：verdict=pending 显示「待裁定」行，y=判对/n=判错，resolve 后浮层变 graded_by=human）；
+- 全局：**`Ctrl+Q`/`Ctrl+C` 恒退出（任何状态，含填空编辑中；单字母 `q` 退出已废除）** · `Ctrl+字母` 屏幕直达（多屏落地后接 `Msg::Screen`，当前仅 Practice 屏） · `?` 帮助 · `Tab`/`Shift+Tab` 切面板或字段 · `Esc` 返回/退出/跳过；
+- **键位唯一入口（2026-09-27 统一重构）**：`crates/tui/src/keys.rs::key_to_msg(KeyCtx, key, mods)` —— `KeyCtx`（Choice / Fill{editing} / Pending / Graded / Finished）由 `AppState::key_ctx()` 计算，键位表只此一份；提示行 `hint(ctx)` 与路由同源（render 不得硬编码键位文案）；main 不做任何键位改写；
+- 答题（Choice ctx）：`↑/↓` 移动 · **`Space` 选中/取消（多选连按；未选中时按光标位提交）** · `Enter` 提交 · **`1-4` 自评把握（数字，→ Attempt.self_confidence；仅作答态）**；`j/k`/`q` 等单字母已废除；判分浮层显示错因标签 + graded_by（结构化讲解①）；
+- 填空（Fill ctx，**2026-09-27 键位修订**）：**打字即编辑（无需进入键，任何可打印字符含空格/数字直接进当前空位）** · **多空 = 每空一位独立输入行**（`Tab`/`→`/`↓` 下一空，`Shift+Tab`/`←`/`↑` 上一空，循环；**废除 `;` 分隔**） · `Enter` 提交 · **`Esc` = 退出编辑但保留已输入**（再打字直接恢复编辑；未编辑时 `Esc` 才退出程序）——修订前 `Esc` 直接退程序丢答案是坑；
+- 待裁定（Pending ctx，**2026-09-27 裁决键修订**）：**`←/→`（或 `↑/↓`）高亮选择「判对/判错」· `Enter` 确认裁决 · `Esc` 跳过（保持待裁定桶）**；裁决回流规则层（同类题下次直判，resolve 后浮层变 graded_by=human）；单字母 `y/n` 已废除；
 - 复习翻卡：`Space`/`Enter` 翻面 · `1/2/3/4` = Again/Hard/Good/Easy（FSRS，M4 落地：`Tab` 进入/退出复习屏，空队列显「暂无到期卡片」）；
 - 打字：直接输入，`Esc` 结束结算 WPM；
-- 题包：`i` 导入（文件/口令码）· `x` 导出 · `f` 关注更新。
+- 题包：`Ctrl+O` 导入（文件/口令码）· `Ctrl+X` 导出 · `Ctrl+F` 关注更新。
 
 ### 5.4 单机的一天（walkthrough）
 

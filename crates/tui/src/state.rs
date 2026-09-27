@@ -17,8 +17,10 @@ pub struct AppState {
     pub sel: usize,
     pub grade: Option<GradeResult>,
     pub finished: bool,
-    /// 填空输入行（多空用 `;` 分隔）
-    pub input: String,
+    /// 每空一位的输入文本（与题面 blanks 等长；多空分行作答，废除 `;` 分隔）
+    pub inputs: Vec<String>,
+    /// 当前编辑的空位（0 基；Tab/→/↓ 切换，blank_sel 仅填空待答时有效）
+    pub blank_sel: usize,
     /// 判分/提交失败的独立错误行（P-8：错误 ≠ Pending）
     pub error: Option<String>,
     /// 本题起始时刻（提交计时 → Timing，假对检测输入）
@@ -31,6 +33,8 @@ pub struct AppState {
     pub editing: bool,
     /// 选择题已选中集合（Space 切换；空 = 未显式选中，提交回退光标位）
     pub checked: Vec<u32>,
+    /// 待裁定裁决高亮（0=判对 1=判错；←/→ 切换，Enter 确认）
+    pub arbitration_sel: u8,
 }
 
 /// 输入消息
@@ -45,11 +49,11 @@ pub enum Msg {
     Char(char),
     /// 填空输入行退格
     Backspace,
-    /// 人工裁决（待裁定态：y=判对 / n=判错）
-    Arbitrate(bool),
+    /// 人工裁决：确认当前高亮的待裁定裁决（arbitration_sel 0=判对 / 1=判错 → Cmd::Arbitrate）
+    ConfirmArbitrate,
     /// 自评把握 1-4
     Confidence(u8),
-    /// Space 选中/取消（选择题；单选=替换选中集，多选=切换）
+    /// Space 选中/取消（选择题；单选无意义，多选=切换）
     Select,
     /// Esc 退出编辑（保留已输入；打字直接恢复编辑）
     StopEdit,
@@ -65,9 +69,21 @@ pub enum Cmd {
     Arbitrate(bool),
 }
 
+/// 题目空位数（填空 = blanks 数；其它题型 = 0——inputs 长度据此重建）
+pub(crate) fn blank_count(kind: &QuestionKind) -> usize {
+    match kind {
+        QuestionKind::FillBlank(body) => body.blanks.len(),
+        _ => 0,
+    }
+}
+
 /// 构造初始状态（空题库直接 finished）
 pub fn new_state(questions: Vec<Question>) -> AppState {
     let finished = questions.is_empty();
+    let inputs = questions
+        .first()
+        .map(|q| vec![String::new(); blank_count(&q.kind)])
+        .unwrap_or_default();
     AppState {
         screen: Screen::Practice,
         questions,
@@ -75,13 +91,15 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         sel: 0,
         grade: None,
         finished,
-        input: String::new(),
+        inputs,
+        blank_sel: 0,
         error: None,
         started_at: Instant::now(),
         revisions: 0,
         self_confidence: None,
         editing: false,
         checked: Vec::new(),
+        arbitration_sel: 0,
     }
 }
 
@@ -119,9 +137,10 @@ impl AppState {
     }
 }
 
-/// 写入判分结果（main 在 submit 成功后调用）
+/// 写入判分结果（main 在 submit 成功后调用；裁决高亮复位到默认档）
 pub fn apply_grade(state: &mut AppState, grade: GradeResult) {
     state.grade = Some(grade);
+    state.arbitration_sel = 0;
 }
 
 /// 写入独立错误行（main 在 submit 失败后调用；P-8：绝不降级成 Pending 假判分）
@@ -218,11 +237,24 @@ mod tests {
         assert_eq!(s.sel, 0);
         assert!(s.grade.is_none());
         assert!(!s.finished);
-        assert!(s.input.is_empty());
+        assert!(s.inputs.is_empty(), "选择题无输入位");
+        assert_eq!(s.blank_sel, 0);
         assert!(s.error.is_none());
         assert_eq!(s.revisions, 0);
         assert!(new_state(vec![]).finished, "空题库直接结束");
         assert_eq!(s.screen, Screen::Practice);
+    }
+
+    #[test]
+    fn test_blank_count_by_kind() {
+        assert_eq!(blank_count(&sample_question().kind), 0, "选择题 0 位");
+        assert_eq!(blank_count(&fill_question(1).kind), 1, "单词 1 位");
+        assert_eq!(blank_count(&fill_question(2).kind), 2, "多空 2 位");
+        assert_eq!(
+            new_state(vec![fill_question(2)]).inputs.len(),
+            2,
+            "构造时按空数建输入位"
+        );
     }
 
     #[test]
@@ -238,9 +270,9 @@ mod tests {
         );
         assert!(fill.editing, "首键进入编辑态");
         assert_eq!(update(&mut fill, Msg::StopEdit), Cmd::None, "Esc 退出编辑");
-        assert!(!fill.editing && fill.input == "a", "退出编辑保留输入");
+        assert!(!fill.editing && fill.inputs[0] == "a", "退出编辑保留输入");
         update(&mut fill, Msg::Char('b'));
-        assert!(fill.editing && fill.input == "ab", "打字直接恢复编辑");
+        assert!(fill.editing && fill.inputs[0] == "ab", "打字直接恢复编辑");
         apply_grade(&mut fill, grade(Verdict::Correct));
         assert!(!fill.is_fill_pending(), "判分后退出待答");
         fill.finished = true;

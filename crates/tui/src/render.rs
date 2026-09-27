@@ -6,7 +6,7 @@ use super::*;
 pub fn render(frame: &mut Frame, state: &AppState) {
     let mut text = String::from("Ambition · 拾英 —— 单机模式（本地题库）\n\n");
     if state.finished {
-        text.push_str("本组完成！按 q 退出。\n");
+        text.push_str("本组完成！按 Ctrl+Q 退出。\n");
     } else {
         let q = &state.questions[state.idx];
         text.push_str(&format!(
@@ -27,7 +27,17 @@ pub fn render(frame: &mut Frame, state: &AppState) {
             }
         }
         if matches!(q.kind, QuestionKind::FillBlank(_)) && state.grade.is_none() {
-            text.push_str(&format!("\n  答案: {}▍\n", state.input));
+            // 每空一位独立输入行；❯+▍ 标当前编辑位（单空不编号）
+            for (i, field) in state.inputs.iter().enumerate() {
+                let cursor = if state.blank_sel == i { "❯" } else { " " };
+                let label = if state.inputs.len() == 1 {
+                    "答案".to_string()
+                } else {
+                    format!("答案 {}", i + 1)
+                };
+                let caret = if state.blank_sel == i { "▍" } else { " " };
+                text.push_str(&format!("\n  {} {}: {}{}\n", cursor, label, field, caret));
+            }
         }
         // 键位提示：与路由同源（keys.rs::hint，禁止硬编码）
         text.push_str(&format!("\n{}\n", hint(state.key_ctx())));
@@ -71,7 +81,15 @@ pub fn render(frame: &mut Frame, state: &AppState) {
                 text.push_str(&format!("\n 正确答案: {}", answers.join(" ; ")));
             }
             if grade.verdict == ambition_core::Verdict::Pending {
-                text.push_str("\n ⏳ 待裁定：y 判对 / n 判错（裁决回流规则层）\n");
+                // 裁决高亮（arbitration_sel 0=判对 1=判错）+ 键位取统一键位表口径
+                let (a, b) = if state.arbitration_sel == 0 {
+                    ("[❯判对]", "[ 判错]")
+                } else {
+                    ("[ 判对]", "[❯判错]")
+                };
+                text.push_str(&format!(
+                    "\n ⏳ 待裁定：{a} {b} · ←/→ 选择 · Enter 确认 · Esc 跳过（裁决回流规则层）\n"
+                ));
             }
         }
     }
@@ -224,6 +242,14 @@ mod tests {
         update(&mut f, Msg::StopEdit);
         let bbuf = render_to(&f);
         assert!(bbuf.contains("打字恢复编辑"), "提示随 ctx 变化: {bbuf:?}");
+        // 多空：每空一位独立行 + 编号
+        let mut m = new_state(vec![fill_question(2)]);
+        update(&mut m, Msg::Char('a'));
+        update(&mut m, Msg::MoveDown);
+        update(&mut m, Msg::Char('b'));
+        let mbuf = render_to(&m);
+        assert!(mbuf.contains("答案 1"), "多空编号 1: {mbuf:?}");
+        assert!(mbuf.contains("答案 2"), "多空编号 2: {mbuf:?}");
     }
 
     #[test]
@@ -283,16 +309,20 @@ mod tests {
         update(&mut s, Msg::Confidence(3));
         let hinted = render_to(&s);
         assert!(hinted.contains("3/4"), "档位可见: {hinted:?}");
-        // 待裁定：y/n 裁决提示 + 错因标签 + 人工裁决标记
+        // 待裁定：箭头选择高亮 + 键位提示 + 错因标签 + 人工裁决标记
         let mut pending = grade(Verdict::Pending);
         pending.error_tags = vec![ambition_core::ErrorTag::Collocation];
         pending.confidence = 0.42;
         apply_grade(&mut s, pending);
         let buf = render_to(&s);
         assert!(buf.contains("待裁定"), "待裁定行可见: {buf:?}");
-        assert!(buf.contains("y 判对"), "裁决键提示: {buf:?}");
-        assert!(buf.contains("错因: 搭配"), "错因中文标签: {buf:?}");
-        assert!(buf.contains("0.42"), "结构化讲解含概率: {buf:?}");
+        assert!(buf.contains("❯判对"), "默认高亮判对: {buf:?}");
+        assert!(buf.contains("Enter 确认"), "裁决键提示: {buf:?}");
+        update(&mut s, Msg::MoveDown);
+        let flipped = render_to(&s);
+        assert!(flipped.contains("❯判错"), "箭头切换高亮: {flipped:?}");
+        assert!(flipped.contains("错因: 搭配"), "错因中文标签: {flipped:?}");
+        assert!(flipped.contains("0.42"), "结构化讲解含概率: {flipped:?}");
         // 人工裁决标记
         let mut human = grade(Verdict::Correct);
         human.graded_by = ambition_core::GradedBy::Human;

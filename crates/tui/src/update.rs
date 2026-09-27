@@ -14,18 +14,24 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
     match msg {
         Msg::Quit => Cmd::Quit,
         Msg::Char(c) => {
-            // 打字即编辑（无需进入键）：首键进入编辑态（keys.rs Fill ctx 路由）
+            // 打字即编辑（无需进入键）：首键进入编辑态，字符落当前空位（keys.rs Fill ctx 路由）
             if state.is_fill_pending() {
                 state.editing = true;
-                state.input.push(c);
-                state.revisions += 1;
+                if let Some(field) = state.inputs.get_mut(state.blank_sel) {
+                    field.push(c);
+                    state.revisions += 1;
+                }
             }
             Cmd::None
         }
         Msg::Backspace => {
             if state.is_fill_pending() {
                 state.editing = true;
-                if state.input.pop().is_some() {
+                if state
+                    .inputs
+                    .get_mut(state.blank_sel)
+                    .is_some_and(|field| field.pop().is_some())
+                {
                     state.revisions += 1;
                 }
             }
@@ -58,14 +64,14 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             }
             Cmd::None
         }
-        Msg::Arbitrate(accept) => {
-            // 仅待裁定态响应裁决键；其余状态忽略（防误触）
+        Msg::ConfirmArbitrate => {
+            // 仅待裁定态生效：确认当前高亮裁决（0=判对 1=判错）；其余状态忽略（防误触）
             if state
                 .grade
                 .as_ref()
                 .is_some_and(|g| g.verdict == ambition_core::Verdict::Pending)
             {
-                return Cmd::Arbitrate(accept);
+                return Cmd::Arbitrate(state.arbitration_sel == 0);
             }
             Cmd::None
         }
@@ -76,7 +82,30 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             Cmd::None
         }
         Msg::MoveDown | Msg::MoveUp => {
+            // 待裁定：箭头切换「判对/判错」高亮（不计修订）
+            if state
+                .grade
+                .as_ref()
+                .is_some_and(|g| g.verdict == ambition_core::Verdict::Pending)
+            {
+                state.arbitration_sel = 1 - state.arbitration_sel;
+                return Cmd::None;
+            }
             if state.grade.is_some() {
+                return Cmd::None;
+            }
+            // 填空待答：切换空位（Tab/→/↓ 下一空，Shift+Tab/←/↑ 上一空；单空原地不动）
+            if state.is_fill_pending() {
+                let n = state.inputs.len();
+                if n > 1 {
+                    let delta = if matches!(msg, Msg::MoveDown) {
+                        1
+                    } else {
+                        n - 1
+                    };
+                    state.blank_sel = (state.blank_sel + delta) % n;
+                    state.revisions += 1;
+                }
                 return Cmd::None;
             }
             let kind = &state.questions[state.idx].kind;
@@ -117,25 +146,20 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                     Cmd::Submit(Answer::Choice(ids))
                 }
                 QuestionKind::FillBlank(body) => {
-                    // 多空输入：`;` 分隔（单空直接整串）
-                    let answers: Vec<String> = state
-                        .input
-                        .split(';')
-                        .map(|part| part.trim().to_string())
-                        .collect();
-                    if answers.len() != body.blanks.len() {
+                    // 每空一位（长度由构造保证；不齐 = 状态异常，防御性报错不伪造提交）
+                    if state.inputs.len() != body.blanks.len() {
                         state.error = Some(format!(
-                            "本题 {} 个空，请用 ; 分隔 {} 个答案",
+                            "本题 {} 个空，当前 {} 个输入位（状态异常）",
                             body.blanks.len(),
-                            body.blanks.len()
+                            state.inputs.len()
                         ));
                         return Cmd::None;
                     }
                     Cmd::Submit(Answer::Fill(
                         state
-                            .input
-                            .split(';')
-                            .map(|p| p.trim().to_string())
+                            .inputs
+                            .iter()
+                            .map(|field| field.trim().to_string())
                             .collect(),
                     ))
                 }
@@ -147,16 +171,19 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             }
             state.grade = None;
             state.sel = 0;
-            state.input.clear();
             state.revisions = 0;
             state.self_confidence = None;
             state.editing = false;
             state.checked.clear();
+            state.arbitration_sel = 0;
             state.started_at = Instant::now();
             if state.idx + 1 >= state.questions.len() {
                 state.finished = true;
             } else {
                 state.idx += 1;
+                // 按新题重建空位输入（选择题 = 0 位）
+                state.inputs = vec![String::new(); blank_count(&state.questions[state.idx].kind)];
+                state.blank_sel = 0;
             }
             Cmd::None
         }
@@ -257,9 +284,10 @@ mod tests {
     #[test]
     fn test_update_fill_input_builds_answer_and_counts_revisions() {
         let mut s = new_state(vec![fill_question(1)]);
+        assert_eq!(s.inputs.len(), 1, "单词一位");
         assert_eq!(update(&mut s, Msg::Char('a')), Cmd::None);
         assert_eq!(update(&mut s, Msg::Char('m')), Cmd::None);
-        assert_eq!(s.input, "am");
+        assert_eq!(s.inputs[0], "am");
         assert_eq!(s.revisions, 2, "逐字符计入修订");
         assert_eq!(
             update(&mut s, Msg::Submit),
@@ -267,33 +295,59 @@ mod tests {
             "单空整串提交"
         );
         assert_eq!(update(&mut s, Msg::Backspace), Cmd::None, "判分后不删改");
+    }
 
-        // 多空分号分隔
-        let mut multi = new_state(vec![fill_question(2)]);
-        for c in "am;by".chars() {
-            update(&mut multi, Msg::Char(c));
+    #[test]
+    fn test_update_cycles_blank_fields_and_submits_each() {
+        let mut s = new_state(vec![fill_question(2)]);
+        assert_eq!(s.inputs.len(), 2, "两空两位");
+        assert_eq!(s.blank_sel, 0);
+        for c in "am".chars() {
+            update(&mut s, Msg::Char(c));
         }
+        update(&mut s, Msg::MoveDown);
+        assert_eq!(s.blank_sel, 1, "下一空");
+        for c in "by".chars() {
+            update(&mut s, Msg::Char(c));
+        }
+        update(&mut s, Msg::MoveUp);
+        assert_eq!(s.blank_sel, 0, "上一空");
+        update(&mut s, Msg::Backspace);
+        assert_eq!(s.inputs[0], "a", "退格只作用当前空");
+        assert_eq!(s.inputs[1], "by", "其它空不受影响");
         assert_eq!(
-            update(&mut multi, Msg::Submit),
-            Cmd::Submit(Answer::Fill(vec!["am".to_string(), "by".to_string()]))
+            update(&mut s, Msg::Submit),
+            Cmd::Submit(Answer::Fill(vec!["a".to_string(), "by".to_string()])),
+            "每位 trim 后按序提交（当前空已退格到 a）"
         );
+        // 单空：切换原地不动、不计修订
+        let mut one = new_state(vec![fill_question(1)]);
+        let rev = one.revisions;
+        update(&mut one, Msg::MoveDown);
+        assert_eq!(one.blank_sel, 0, "单空原地");
+        assert_eq!(one.revisions, rev, "单空切换不计修订");
+        // 判分后切换无效
+        apply_grade(&mut s, grade(Verdict::Correct));
+        update(&mut s, Msg::MoveDown);
+        assert_eq!(s.blank_sel, 0, "判分后不切空");
     }
 
     #[test]
     fn test_update_fill_rejects_wrong_blank_count_with_error() {
         let mut s = new_state(vec![fill_question(2)]);
-        for c in "onlyone".chars() {
-            update(&mut s, Msg::Char(c));
-        }
-        assert_eq!(update(&mut s, Msg::Submit), Cmd::None, "空数不匹配不提交");
+        // 人为制造输入位与空数不齐（状态异常路径，防御性不提交）
+        s.inputs.push(String::new());
+        assert_eq!(update(&mut s, Msg::Submit), Cmd::None, "输入位不齐不提交");
         let err = s.error.clone().expect("错误行被设置");
-        assert!(err.contains(";"), "错误提示分隔符: {err}");
-        // 再次提交前错误清除
-        update(&mut s, Msg::Char(';'));
-        update(&mut s, Msg::Char('x'));
+        assert!(err.contains("个空"), "错误提示空数: {err}");
+        // 修回后正常提交，且进入提交即清错误
+        s.inputs.pop();
+        update(&mut s, Msg::Char('a'));
+        update(&mut s, Msg::MoveDown);
+        update(&mut s, Msg::Char('b'));
         assert_eq!(
             update(&mut s, Msg::Submit),
-            Cmd::Submit(Answer::Fill(vec!["onlyone".to_string(), "x".to_string()]))
+            Cmd::Submit(Answer::Fill(vec!["a".to_string(), "b".to_string()]))
         );
         assert!(s.error.is_none(), "进入提交即清错误");
     }
@@ -306,7 +360,8 @@ mod tests {
         assert_eq!(update(&mut s, Msg::Next), Cmd::None);
         assert_eq!(s.idx, 1, "进入第二题");
         assert!(s.grade.is_none() && s.sel == 0, "状态复位");
-        assert!(s.input.is_empty(), "输入行复位");
+        assert!(s.inputs.iter().all(|f| f.is_empty()), "输入位复位");
+        assert_eq!(s.blank_sel, 0, "空位复位");
         assert_eq!(s.revisions, 0, "修订计数复位");
         // 未判分时 Next 无效
         assert_eq!(update(&mut s, Msg::Next), Cmd::None);
@@ -323,19 +378,36 @@ mod tests {
     #[test]
     fn test_update_arbitrate_only_fires_on_pending_grade() {
         let mut s = new_state(vec![sample_question()]);
-        // 未判分：裁决键无效
-        assert_eq!(update(&mut s, Msg::Arbitrate(true)), Cmd::None);
+        // 未判分：确认裁决无效
+        assert_eq!(update(&mut s, Msg::ConfirmArbitrate), Cmd::None);
         // 非 Pending 判分：忽略
         apply_grade(&mut s, grade(Verdict::Correct));
         assert_eq!(
-            update(&mut s, Msg::Arbitrate(false)),
+            update(&mut s, Msg::ConfirmArbitrate),
             Cmd::None,
             "已定判不裁决"
         );
-        // Pending：转出裁决命令
+        // Pending：默认高亮判对，箭头切换，Enter 确认
         apply_grade(&mut s, grade(Verdict::Pending));
-        assert_eq!(update(&mut s, Msg::Arbitrate(true)), Cmd::Arbitrate(true));
-        assert_eq!(update(&mut s, Msg::Arbitrate(false)), Cmd::Arbitrate(false));
+        assert_eq!(s.arbitration_sel, 0, "默认高亮判对");
+        assert_eq!(
+            update(&mut s, Msg::ConfirmArbitrate),
+            Cmd::Arbitrate(true),
+            "确认判对"
+        );
+        update(&mut s, Msg::MoveDown);
+        assert_eq!(s.arbitration_sel, 1, "箭头切到判错");
+        update(&mut s, Msg::MoveUp);
+        assert_eq!(s.arbitration_sel, 0, "箭头切回判对");
+        update(&mut s, Msg::MoveDown);
+        assert_eq!(
+            update(&mut s, Msg::ConfirmArbitrate),
+            Cmd::Arbitrate(false),
+            "确认判错"
+        );
+        // 判分后高亮复位（apply_grade）
+        apply_grade(&mut s, grade(Verdict::Correct));
+        assert_eq!(s.arbitration_sel, 0, "新判分复位高亮");
     }
 
     #[test]
@@ -412,14 +484,14 @@ mod tests {
         }
         assert!(s.editing, "打字即编辑");
         update(&mut s, Msg::StopEdit);
-        assert!(!s.editing && s.input == "am", "退出编辑保留输入");
+        assert!(!s.editing && s.inputs[0] == "am", "退出编辑保留输入");
         // 浏览态删改/打字直接恢复编辑
         update(&mut s, Msg::Backspace);
-        assert!(s.editing && s.input == "a", "删改即恢复编辑");
+        assert!(s.editing && s.inputs[0] == "a", "删改即恢复编辑");
         // 判分后不再收字、StopEdit 忽略
         apply_grade(&mut s, grade(Verdict::Correct));
         update(&mut s, Msg::Char('x'));
-        assert_eq!(s.input, "a", "判分后不收字符");
+        assert_eq!(s.inputs[0], "a", "判分后不收字符");
         update(&mut s, Msg::StopEdit);
         assert!(s.editing, "判分后 StopEdit 忽略（标志不变）");
         assert_eq!(s.key_ctx(), KeyCtx::Graded, "编辑标志不影响已判分 ctx");

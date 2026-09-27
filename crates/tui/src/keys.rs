@@ -8,7 +8,7 @@ use super::*;
 /// 键位上下文（键位表只此一份；新增屏 = 新增变体）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyCtx {
-    /// 选择题作答（未判分）：j/k/Space/1-4/q
+    /// 选择题作答（未判分）：↑/↓/Space/1-4（单字母已废，docs/03 §5.3）
     Choice,
     /// 填空待答：一切可打印字符进输入行；`editing`=是否编辑中（决定 Esc 语义）
     Fill { editing: bool },
@@ -22,54 +22,53 @@ pub enum KeyCtx {
 
 /// 键位 → 消息（唯一键位表；docs/03 §5.3）
 pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg> {
-    // ① 恒定层：Ctrl+Q / Ctrl+C 退出（任何上下文，含填空编辑中）
-    if mods.contains(KeyModifiers::CONTROL)
-        && matches!(code, KeyCode::Char('q') | KeyCode::Char('c'))
-    {
-        return Some(Msg::Quit);
+    // ① 恒定层：Ctrl 组合（任何上下文）——Ctrl+Q/Ctrl+C 退出；其余 Ctrl+字母 = 屏幕直达
+    //    （docs/03 §5.3，多屏落地后接 Msg::Screen）；非 Ctrl 的字母永远不进命令层
+    if mods.contains(KeyModifiers::CONTROL) {
+        return match code {
+            KeyCode::Char('q') | KeyCode::Char('c') => Some(Msg::Quit),
+            _ => None,
+        };
     }
     // ② Esc / Enter：语义按上下文分化
     match code {
         KeyCode::Esc => {
             return match ctx {
                 KeyCtx::Fill { editing: true } => Some(Msg::StopEdit),
+                KeyCtx::Pending => Some(Msg::Next), // 跳过本题（保持待裁定桶）
                 _ => Some(Msg::Quit),
             };
         }
         KeyCode::Enter => {
             return Some(match ctx {
                 KeyCtx::Choice | KeyCtx::Fill { .. } => Msg::Submit,
-                KeyCtx::Pending | KeyCtx::Graded | KeyCtx::Finished => Msg::Next,
+                KeyCtx::Pending => Msg::ConfirmArbitrate,
+                KeyCtx::Graded | KeyCtx::Finished => Msg::Next,
             });
         }
         _ => {}
     }
-    // ③ 填空待答：一切可打印字符（含空格/;/q/数字）都是文本——打字即恢复编辑
+    // ③ 填空待答：一切可打印字符（含空格/;/q/数字）都是文本——打字即恢复编辑；
+    //    空位导航：Tab/→/↓ 下一空，Shift+Tab/←/↑ 上一空（单空时 update 原地）
     if matches!(ctx, KeyCtx::Fill { .. }) {
         return match code {
             KeyCode::Backspace => Some(Msg::Backspace),
             KeyCode::Char(c) => Some(Msg::Char(c)),
-            KeyCode::Down => Some(Msg::MoveDown),
-            KeyCode::Up => Some(Msg::MoveUp),
+            KeyCode::Tab | KeyCode::Right | KeyCode::Down => Some(Msg::MoveDown),
+            KeyCode::BackTab | KeyCode::Left | KeyCode::Up => Some(Msg::MoveUp),
             _ => None,
         };
     }
-    // ④ 作答 / 裁决 / 收尾表
+    // ④ 作答 / 裁决 / 收尾（**仅非字母键：方向/Space/数字**；单字母快捷键全废，docs/03 §5.3 总则）
     match (ctx, code) {
+        (KeyCtx::Choice, KeyCode::Down) => Some(Msg::MoveDown),
+        (KeyCtx::Choice, KeyCode::Up) => Some(Msg::MoveUp),
         (KeyCtx::Choice, KeyCode::Char(' ')) => Some(Msg::Select),
-        (KeyCtx::Choice, KeyCode::Char('q')) => Some(Msg::Quit),
-        (KeyCtx::Choice, KeyCode::Char('j')) | (KeyCtx::Choice, KeyCode::Down) => {
-            Some(Msg::MoveDown)
-        }
-        (KeyCtx::Choice, KeyCode::Char('k')) | (KeyCtx::Choice, KeyCode::Up) => Some(Msg::MoveUp),
         (KeyCtx::Choice, KeyCode::Char(c @ '1'..='4')) => {
             Some(Msg::Confidence(c.to_digit(10).unwrap_or(1) as u8))
         }
-        (KeyCtx::Pending, KeyCode::Char('y')) => Some(Msg::Arbitrate(true)),
-        (KeyCtx::Pending, KeyCode::Char('n')) => Some(Msg::Arbitrate(false)),
-        (KeyCtx::Pending | KeyCtx::Graded | KeyCtx::Finished, KeyCode::Char('q')) => {
-            Some(Msg::Quit)
-        }
+        (KeyCtx::Pending, KeyCode::Down | KeyCode::Right) => Some(Msg::MoveDown),
+        (KeyCtx::Pending, KeyCode::Up | KeyCode::Left) => Some(Msg::MoveUp),
         _ => None,
     }
 }
@@ -77,14 +76,16 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
 /// 提示行文案（与路由同源；render 直接取用，禁止硬编码键位）
 pub fn hint(ctx: KeyCtx) -> &'static str {
     match ctx {
-        KeyCtx::Choice => " j/k 移动 · Space 选中 · Enter 提交 · 1-4 自评把握 · q 退出",
+        KeyCtx::Choice => " ↑/↓ 移动 · Space 选中 · Enter 提交 · 1-4 自评把握 · Ctrl+Q 退出",
         KeyCtx::Fill { editing: true } => {
-            " 打字作答 · 多空用 ; 分隔 · Enter 提交 · Esc 退出编辑（保留输入）· Ctrl+Q 退出"
+            " 打字作答 · Enter 提交 · Tab/→ 下一空（Shift+Tab/← 上一空）· Esc 退出编辑（保留输入）· Ctrl+Q 退出"
         }
-        KeyCtx::Fill { editing: false } => " 打字恢复编辑（已输入保留）· Enter 提交 · Esc 退出程序",
-        KeyCtx::Pending => " Enter 下一题 · y 判对 / n 判错 · q 退出",
-        KeyCtx::Graded => " Enter 下一题 · q 退出",
-        KeyCtx::Finished => " q 退出",
+        KeyCtx::Fill { editing: false } => {
+            " 打字恢复编辑（已输入保留）· Enter 提交 · Esc/Ctrl+Q 退出"
+        }
+        KeyCtx::Pending => " ←/→ 选择判对判错 · Enter 确认裁决 · Esc 跳过 · Ctrl+Q 退出",
+        KeyCtx::Graded => " Enter 下一题 · Ctrl+Q 退出",
+        KeyCtx::Finished => " Ctrl+Q 退出",
     }
 }
 
@@ -97,17 +98,20 @@ mod tests {
         M::empty()
     }
 
-    #[test]
-    fn test_key_to_msg_quit_rules_unified() {
-        let ctxs = [
+    fn all_ctxs() -> [KeyCtx; 6] {
+        [
             KeyCtx::Choice,
             KeyCtx::Fill { editing: true },
             KeyCtx::Fill { editing: false },
             KeyCtx::Pending,
             KeyCtx::Graded,
             KeyCtx::Finished,
-        ];
-        for ctx in ctxs {
+        ]
+    }
+
+    #[test]
+    fn test_key_to_msg_quit_rules_unified() {
+        for ctx in all_ctxs() {
             assert_eq!(
                 key_to_msg(ctx, K::Char('q'), M::CONTROL),
                 Some(Msg::Quit),
@@ -121,17 +125,43 @@ mod tests {
         }
         assert_eq!(
             key_to_msg(KeyCtx::Choice, K::Char('q'), mods()),
-            Some(Msg::Quit)
+            None,
+            "单字母 q 不再退出（禁单字母快捷键）"
         );
-        assert_eq!(
-            key_to_msg(KeyCtx::Graded, K::Char('q'), mods()),
-            Some(Msg::Quit)
-        );
+        assert_eq!(key_to_msg(KeyCtx::Graded, K::Char('q'), mods()), None);
         assert_eq!(
             key_to_msg(KeyCtx::Fill { editing: true }, K::Char('q'), mods()),
             Some(Msg::Char('q')),
             "填空态 q 是文本"
         );
+    }
+
+    #[test]
+    fn test_key_to_msg_no_single_letter_shortcuts() {
+        // 键位总则（docs/03 §5.3）：除填空打字外，a-z 一律不是命令
+        for ctx in [
+            KeyCtx::Choice,
+            KeyCtx::Pending,
+            KeyCtx::Graded,
+            KeyCtx::Finished,
+        ] {
+            for b in b'a'..=b'z' {
+                assert_eq!(
+                    key_to_msg(ctx, K::Char(b as char), mods()),
+                    None,
+                    "{ctx:?} 禁单字母快捷键: {}",
+                    b as char
+                );
+            }
+        }
+        // 填空：字母 = 打字文本（路由为 Char，由 update 落当前空位）
+        for c in ['q', 'j', 'k', 'y', 'n'] {
+            assert_eq!(
+                key_to_msg(KeyCtx::Fill { editing: false }, K::Char(c), mods()),
+                Some(Msg::Char(c)),
+                "填空字母=打字 {c}"
+            );
+        }
     }
 
     #[test]
@@ -142,13 +172,13 @@ mod tests {
             "编辑中 Esc=退出编辑保留文本"
         );
         assert_eq!(
-            key_to_msg(KeyCtx::Fill { editing: false }, K::Esc, mods()),
-            Some(Msg::Quit),
-            "未编辑 Esc=退出程序"
+            key_to_msg(KeyCtx::Pending, K::Esc, mods()),
+            Some(Msg::Next),
+            "待裁定 Esc=跳过（保持待裁定桶）"
         );
         for ctx in [
+            KeyCtx::Fill { editing: false },
             KeyCtx::Choice,
-            KeyCtx::Pending,
             KeyCtx::Graded,
             KeyCtx::Finished,
         ] {
@@ -169,7 +199,12 @@ mod tests {
                 "{ctx:?}"
             );
         }
-        for ctx in [KeyCtx::Pending, KeyCtx::Graded, KeyCtx::Finished] {
+        assert_eq!(
+            key_to_msg(KeyCtx::Pending, K::Enter, mods()),
+            Some(Msg::ConfirmArbitrate),
+            "待裁定 Enter=确认裁决"
+        );
+        for ctx in [KeyCtx::Graded, KeyCtx::Finished] {
             assert_eq!(
                 key_to_msg(ctx, K::Enter, mods()),
                 Some(Msg::Next),
@@ -179,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn test_key_to_msg_fill_swallows_all_printables() {
+    fn test_key_to_msg_fill_swallows_printables_and_navigates_blanks() {
         let ctx = KeyCtx::Fill { editing: false };
         for c in ['a', 'q', '1', 'y', ' ', ';'] {
             assert_eq!(
@@ -189,54 +224,55 @@ mod tests {
             );
         }
         assert_eq!(key_to_msg(ctx, K::Backspace, mods()), Some(Msg::Backspace));
-        assert_eq!(key_to_msg(ctx, K::Tab, mods()), None, "未映射键忽略");
+        assert_eq!(
+            key_to_msg(ctx, K::Tab, mods()),
+            Some(Msg::MoveDown),
+            "Tab=下一空"
+        );
+        assert_eq!(
+            key_to_msg(ctx, K::BackTab, mods()),
+            Some(Msg::MoveUp),
+            "Shift+Tab=上一空"
+        );
+        assert_eq!(key_to_msg(ctx, K::Right, mods()), Some(Msg::MoveDown));
+        assert_eq!(key_to_msg(ctx, K::Left, mods()), Some(Msg::MoveUp));
+        assert_eq!(key_to_msg(ctx, K::F(5), mods()), None, "未映射键忽略");
     }
 
     #[test]
-    fn test_key_to_msg_choice_select_move_and_confidence() {
+    fn test_key_to_msg_choice_uses_arrows_space_and_digits() {
         let c = KeyCtx::Choice;
+        assert_eq!(key_to_msg(c, K::Down, mods()), Some(Msg::MoveDown));
+        assert_eq!(key_to_msg(c, K::Up, mods()), Some(Msg::MoveUp));
         assert_eq!(
             key_to_msg(c, K::Char(' '), mods()),
             Some(Msg::Select),
             "Space=选中"
         );
-        assert_eq!(key_to_msg(c, K::Char('j'), mods()), Some(Msg::MoveDown));
-        assert_eq!(key_to_msg(c, K::Down, mods()), Some(Msg::MoveDown));
-        assert_eq!(key_to_msg(c, K::Char('k'), mods()), Some(Msg::MoveUp));
-        assert_eq!(key_to_msg(c, K::Up, mods()), Some(Msg::MoveUp));
         for level in 1..=4 {
             assert_eq!(
                 key_to_msg(c, K::Char(char::from(b'0' + level)), mods()),
                 Some(Msg::Confidence(level)),
-                "{level} 档自评"
+                "{level} 档自评（数字非字母）"
             );
         }
         assert_eq!(key_to_msg(c, K::Char('5'), mods()), None, "5 档不存在");
-        assert_eq!(key_to_msg(c, K::Char('y'), mods()), None, "非待裁定不裁决");
         assert_eq!(key_to_msg(c, K::Backspace, mods()), None, "作答态无退格");
     }
 
     #[test]
-    fn test_key_to_msg_pending_only_arbitration_and_next() {
+    fn test_key_to_msg_pending_arrows_select_and_enter_confirms() {
         let p = KeyCtx::Pending;
+        assert_eq!(key_to_msg(p, K::Right, mods()), Some(Msg::MoveDown));
+        assert_eq!(key_to_msg(p, K::Down, mods()), Some(Msg::MoveDown));
+        assert_eq!(key_to_msg(p, K::Left, mods()), Some(Msg::MoveUp));
+        assert_eq!(key_to_msg(p, K::Up, mods()), Some(Msg::MoveUp));
+        assert_eq!(key_to_msg(p, K::Enter, mods()), Some(Msg::ConfirmArbitrate));
+        assert_eq!(key_to_msg(p, K::Char('1'), mods()), None, "裁决态无自评");
         assert_eq!(
-            key_to_msg(p, K::Char('y'), mods()),
-            Some(Msg::Arbitrate(true))
-        );
-        assert_eq!(
-            key_to_msg(p, K::Char('n'), mods()),
-            Some(Msg::Arbitrate(false))
-        );
-        assert_eq!(key_to_msg(p, K::Char('1'), mods()), None, "判分后不自评");
-        assert_eq!(key_to_msg(p, K::Enter, mods()), Some(Msg::Next));
-        assert_eq!(
-            key_to_msg(KeyCtx::Graded, K::Char('y'), mods()),
+            key_to_msg(KeyCtx::Graded, K::Right, mods()),
             None,
-            "非 Pending 不裁决"
-        );
-        assert_eq!(
-            key_to_msg(KeyCtx::Finished, K::Char('q'), mods()),
-            Some(Msg::Quit)
+            "已判分不切高亮"
         );
     }
 
@@ -252,18 +288,25 @@ mod tests {
         ];
         for h in all {
             assert!(!h.is_empty(), "提示非空");
+            assert!(!h.contains("j/k"), "提示不含已废单字母: {h}");
         }
         let mut uniq: Vec<&str> = all.to_vec();
         uniq.dedup();
         assert_eq!(uniq.len(), all.len(), "各上下文提示互异");
         assert!(hint(KeyCtx::Choice).contains("Space"), "选择提示含选中键");
+        assert!(hint(KeyCtx::Choice).contains("↑/↓"), "选择提示用方向键");
         assert!(
             hint(KeyCtx::Fill { editing: true }).contains("Esc 退出编辑"),
             "填空编辑提示含退出编辑"
         );
         assert!(
-            hint(KeyCtx::Pending).contains("y 判对"),
-            "待裁定提示含裁决键"
+            hint(KeyCtx::Fill { editing: true }).contains("下一空"),
+            "填空提示含空位导航"
+        );
+        assert!(hint(KeyCtx::Pending).contains("判对"), "待裁定提示含判对");
+        assert!(
+            hint(KeyCtx::Pending).contains("Enter 确认"),
+            "待裁定提示含确认"
         );
     }
 }
