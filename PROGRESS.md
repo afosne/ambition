@@ -12,7 +12,7 @@ MVP_STAGE: 4/6
 | 1 | M1 骨架 | core/store/engine/tui + 规则判题 + 打字通底座 + 游戏底座 | ✅ 完成（2026-09-24，提交 5271323） |
 | 2 | M2 出题 | llm crate（OpenAI/Anthropic 协议）+ 结构化出题 + Jev 质检回路 + qpack 导入导出 + seed 题库 | ✅ 完成（2026-09-24，提交 b39efef） |
 | 3 | M3 判题 | jev crate 客户端 + 待裁定桶 + 错因分类 + 中式英语错式库 + 成本台账 | ✅ 完成（2026-09-24，提交 75408b0） |
-| 4 | M4 记忆 | FSRS 接线 fsrs-rs + 错词本/义项/句式 + 假对上线 + 复习队列 | ⬜ 待施工 |
+| 4 | M4 记忆 | FSRS 接线 fsrs-rs + 错词本/义项/句式 + 假对上线 + 复习队列 | ✅ 完成（2026-09-27，提交 8769432；含用户加码的题型补全） |
 | 5 | M5 写作 | composite scoring + 批注 + 模板作文填槽 + 翻译题型 + 套卷估分 | ⬜ 待施工 |
 | 6 | M6 闭环 | 笔记/日记/TODO + 画像聚合 + 个性化出题 + 周报 + 游戏全量 | ⬜ 待施工 |
 
@@ -21,6 +21,29 @@ MVP_STAGE: 4/6
 ---
 
 ## 进度日志
+
+### 2026-09-27 · M4 记忆：FSRS 接线 + 复习队列 + 假对上线 + 词库句式入卡（阶段任务；用户指令「继续实现 m4」）
+
+- **范围拍板（用户确认）**：①全部 9 项含 TUI 复习屏；②词库数据由 agent 生成小规模种子；③**承接项 #15 题型补全（完形/阅读/七选五/语法填空）一并做**。中途另裁定**取消配对桩**（结构门禁配对范围放宽到同 crate，见 P-16 修订/P-18）。
+- **改动（8 个提交）**：
+  - `11d1325` **题型补全**：docs 先行（docs/02 §1 Body 族+`Answer::Group`、docs/06 M4 注记、docs/07 §1 递归判分口径）→ core `QuestionKind` 扩 Cloze/Reading/SevenOfFive/GrammarFill + `Answer::Group` + 判定/拆解辅助（kind.rs）；gen `QuestionKindTag` 扩四型（as_str/is_passage）+ DraftQuestion 扩 passage/items 校验解析（draft_passage.rs）+ qc_state 语篇口径；grader `grade` 检测复合题 → `grade_composite` 拆子题递归走完整三级流水线 → 汇总（Σ分、任一 Pending 整体 Pending、graded_by 取最重路径 Human>LlmReview>Jev>Rule、子题 qid=父+下标防碰撞）；tui 逐槽作答（sub_answers）；
+  - `feded54` 新题型 TUI 渲染作答（语篇+缺口标注+子题）+ draft schema 扩；
+  - `63444aa` seed 补语篇四题型各 2 篇（203→211 题，qid 幂等旧题零变）；
+  - `b198ec7` **store 迁移 v3**：`srs_queue`（card_id PK + payload + **due_at 整数 unix 索引** P-15 + wrong_count 查询列）+ `get_attempt`/`recent_timings`（SQL json_extract 过滤无计时行）+ cards.rs CRUD（幂等 REPLACE、坏载荷显式 Decode 不静默丢卡）；
+  - `bc2f244` **engine SRS 旁路+门面**：`EngineError` 加 Srs/Vocab；`SubmitOutcome.srs: Option<CardAction>`；`is_guess_attempt`（近 200 次滚动基线、`recent_timings(exclude)` 排除本次——裁决路径等价 insert 前取样）→ `srs_after_attempt`（Wrong/Partial 建卡/提权+错因入卡、Correct 假对建卡、非假对已卡按 Good、Pending 不动、失败 warn 不回滚）；`due_list`（due_cards→ReviewItem 组装→due_queue 过滤排序交错，悬空卡 warn 跳过）/`review_answer`（FSRS 调度+upsert+ReviewDone→settle Xp(1)）/`wrong_wordbook`/`question_back`（全题型）；
+  - `5ece073` **M4-5/6/8**：`apply_srs_hint`（错词入册/提权/FSRS 安排三文案）+ render 提示行；**Review 复习屏**（Screen::Review + KeyCtx::Review：Space/Enter 翻面·1-4 评分·Tab/Esc 返回 + **Ctrl+A/Ctrl+R 直达落地**（docs/03 §5.3 同步）+ Cmd::ReviewLoad/ReviewRate 接 due_list(limit 20)/review_answer + 四态渲染 + finished 后仍可进复习屏）；`resolve_pending` 裁决后补执行 SRS 处置；
+  - `edb5cae` 结构门禁配对范围放宽到同 crate（用户裁定取消配对桩；docs/01 §3 先行）；
+  - `8769432` **词库/句式**（M4-7）：`data/lexicon/en/senses.json`（31 义项/11 词，bank/light/run 多义抽检达标）+ `data/patterns/en/patterns.json`（8 句式含 note_zh/例对/traps）；engine/lexicon.rs loader（schema_version=1 校验、坏文件显式 Err→assemble 仅 warn 不阻断）+ `word_detail(lemma)` + `enroll_builtin_cards`/`enroll_card` 幂等入卡（**已有卡不覆盖 FSRS 调度**）；复习条目背面接真实数据（义项释义/句式讲解+form）。
+- **验证**：fmt/clippy `-D warnings` 干净；`cargo test` **386 用例全绿**（M4 净增 +71：core 31/gen 46/grader 63/store 33/engine 62/tui 31…）；七步钩子 7/7；**真机冒烟（P-14 产物断言）**：ambition.exe 启动 6s → `schema_version=3`、211 题入 seed、`srs_queue` **39 张内置卡**（31 义项 + 8 句式）自动入队、due/wrong 双索引在、TUI `[1/211]` 与新键位提示渲染无 panic。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：8 提交全部七步钩子过；文档先行（docs/01/02/03/06/07/09 六册同步）；新增测试 71 个含递归判分汇总口径、幂等入卡不覆盖调度、假对三形态接线、Review 四态渲染等关键断言；文件均 ≤500 行（拆出 kind/draft_passage/rule_tests/update_tests/srs_tests/review_state/review_render 七个模块）。
+- **实际使用**：真机可跑——启动即得 211 题 + 39 张到期复习卡；答错题自动入错词本（提示行可见）；Ctrl+R 进复习屏翻卡评分（1-4）真 FSRS 调度；完形/阅读/七选五/语法填空四新题型可作答可判分；裁决后补入卡。边界：义项种子仅 11 词/31 义项（扩充随 EC-DICT，M5+）；阅读子题按顺序作答不可回改（#26）；裁决路径 TUI 无 SRS 提示（#29）。
+- **代码耦合度**：依赖方向不变（store→srs 新增、engine→srs 新增，均单向无环）；`CardAction/Rating` 经 engine 再导出，两壳免直依赖 srs；`srs_queue` 单写者=08 经 engine（00 §4 合规，store 仅 CRUD）；排程唯一实现仍是 srs crate（00 §5 合规，engine 只编排）。
+- **鲁棒性**：SRS 全链路旁路失败 warn 不回滚主事务（P-8 口径）；基线取样失败降级非假对；坏载荷显式 Decode；卡片悬空 warn 跳过不炸队列；裁决 attempt 缺失跳过补执行；Review 评分未翻面防误触、评分失败独立错误行；并发编辑事故按 P-18 流程处置（停手取证→ask→精确 add）。
+
+- **M3 承接项处置**：#15 题型补全 ✅、#19 假对合流 ✅（本阶段完成）；#13 题包屏 / #14 seed 降级开关 / #16 seed 扩轨 → 承接 M5。
 
 ### 2026-09-27 · TUI 键位二期：多空分行作答 + 全站禁单字母快捷键（非阶段任务，用户手动发起）
 
@@ -190,21 +213,31 @@ MVP_STAGE: 4/6
 - [ ] 10. TUI 自评键位（提交前 1-4 档 confidence）→ `Attempt.self_confidence` → 接 `is_guess` + `srs::decide_action`（与 M4 FSRS 队列合流）——**两步半**：M3 已落键位采集与落库（1-4 档、判分锁定、换题重置，TUI 提交带 self_confidence）；`is_guess` 需用户延迟基线（p50/p90）与 FSRS 队列，归 M4（尾已移 #19）
 - [x] 11. Jev 全量：`evaluate_many` 并发池 8 + `route_by_confidence`（0.75/0.35）+ 待裁定桶 + 错因分类（docs/05 §2-§4 M3 范围）（M3：并发池保序+失败隔离测试；路由边界/非英语阈值表驱动；arbitration 迁移 v2 同事务入桶；28 类 ErrorTag + error_tags.json 语料）
 - [x] 12. `LlmRouter::usage_summary` 成本面板 + `llm_cache` TTL/淘汰 + generate 全局熔断（连续失败快速返回）（M3：区间聚合双实现 + `cache_purge_before` 7 天 + 熔断 5/10/试探三态实测）
-- [ ] 13. TUI 题包屏（`i` 导入/`x` 导出键位，docs/03 §5.3）接线 `import_pack`/`export_pack`；`share_code` 口令码随 M7（M3 未动，承接至 M4）
-- [ ] 14. seed 导入失败降级开关：坏 seed 包只 `tracing::warn` 跳过（不阻断 open），qid 损坏仍拒（用户 `data/seed/` 目录加载器未落地，承接至 M4）
-- [ ] 15. 题型补全：完形/阅读/七选五/语法填空（DESIGN §13.4 归 M2，本阶段标签未列——core QuestionKind 扩展 + grader 递归子题 + seed 补题型）（承接至 M4）
-- [ ] 16. seed 扩轨：gaokao/zhongkao/…（seed_gen 参数化 track + 每轨 ≥200 题，docs/16 §3）（承接至 M4）
+- [ ] 13. TUI 题包屏（`Ctrl+O` 导入/`Ctrl+X` 导出键位，docs/03 §5.3）接线 `import_pack`/`export_pack`；`share_code` 口令码随 M7（M4 未动，承接至 M5）
+- [ ] 14. seed 导入失败降级开关：坏 seed 包只 `tracing::warn` 跳过（不阻断 open），qid 损坏仍拒（用户 `data/seed/` 目录加载器未落地；M4 内置词库/句式已按此口径 warn 不阻断，seed 本体未改，承接至 M5）
+- [x] 15. 题型补全：完形/阅读/七选五/语法填空（DESIGN §13.4 归 M2，本阶段标签未列——core QuestionKind 扩展 + grader 递归子题 + seed 补题型）（M4 完成，11d1325/feded54/63444aa）
+- [ ] 16. seed 扩轨：gaokao/zhongkao/…（seed_gen 参数化 track + 每轨 ≥200 题，docs/16 §3）（M4 未动，承接至 M5）
 
 ### M3 改进建议（M4 开工即处理，勾=完成）
 
 - [ ] 17. 讲解层①②：`GradeResult` 加 `detail`（Jev 概率分布/规则 diff 持久化）+ TUI 讲解键接 `06::explain`（文本讲解，需 LLM key；无 key 只显结构化讲解——docs/07 §5；键位按 docs/03 §5.3 总则用非字母键，禁单字母）
 - [ ] 18. 成本面板与题包屏入 TUI：`cost_summary` → Profile/Settings 展示（M3 已有门面）；题包 `Ctrl+O` 导入 / `Ctrl+X` 导出 键位（承接 #13；docs/03 §5.3 禁单字母）
-- [ ] 19. 假对检测合流：从 attempts.timing 算用户延迟基线（p50/p90 滚动）→ `is_guess(timing, self_confidence, baseline)` 接 `srs::decide_action`（M3 已采自评键位，承接 #10 尾巴）
+- [x] 19. 假对检测合流：从 attempts.timing 算用户延迟基线（p50/p90 滚动）→ `is_guess(timing, self_confidence, baseline)` 接 `srs::decide_action`（M4 完成，bc2f244：recent_timings(exclude) 排除本次 + srs_after_attempt 接线）
 - [ ] 20. 裁决增强：选择题人工裁决回流 `ChoiceBody.answer` 集（当前只回流填空 acceptable）；`arbitration.reason` 分值区分灰区/离线两态
 - [ ] 21. 资源 loader 统一：`crates/grader/assets/jev`、`data/chinglish`、`crates/{gen,grader}/assets/prompts` 三处 include_str 收口到 16-config 单入口（**仅内容类资源 chinglish/seed 允许用户目录覆盖；prompt 与判分语料永不放开**——2026-09-27 已从 data/ 移出并删除运行时覆盖；选版函数三处同构（l2 match+回退 en），一并收口）
 - [ ] 23. 质检指令本地化：gen `qc.rs` 五问 instructions 仍英文硬编码（l2≠en 时 Jev 质检指令不随语种；与 arbitrate/error_cause 同法按 l2 分版即可）
 - [ ] 24. TUI 帮助屏：`?` 弹出键位帮助（docs/03 §5.3 承诺未实现；文案直接复用 `keys::hint` 全表，禁止硬编码）
 - [ ] 22. `evaluate_many` 消费方：M5 套卷批量判题接入（当前仅有契约测试）
+
+### M4 改进建议（M5 开工即处理，勾=完成）
+
+- [ ] 25. Review 屏队列刷新：本轮完成后 Ctrl+R 同屏忽略（Screen 相同直接 None），需回 Practice 再进才能重载——done 态应允许重载（改 Msg::Screen(Review) 在 Review ctx 触发 ReviewLoad）；裁决路径（resolve_pending）TUI 无 SRS 提示（SubmitOutcome.srs 只覆盖提交路径，#29 一并考虑）
+- [ ] 26. 阅读子题顺序流不可回改（sub_answers 只进不退：Space 记录即前进，无「上一子题」键）——补 BackTab/← 回退或允许重选当前槽
+- [ ] 27. 词库数据扩充：31 义项/11 词 + 8 句式仅够验收（bank/light/run 抽检达标）；EC-DICT 全量导入/`crates/vocab` 独立 crate/五模式训练随 M5+（docs/09 §1 注记）；word_detail 与复习条目每次全量解析 JSON——数据量大后需索引/懒加载（docs/09 §1 mmap 注记）
+- [ ] 28. 复习屏体验：评分反馈只显「N 天后」，可加 next_interval 卡片化/连续复习统计；`due_list` limit 20 一轮，队列深度与 daily_budget（16-config §6）打通
+- [ ] 29. 裁决（resolve_pending）返回值不带 SRS 处置（签名仍是 GradeResult）——若要 UI 提示需扩返回类型（改 docs/03 §2 契约先行）
+
+（承接 M3 未完项：#13 题包屏 / #14 seed 降级开关 / #16 seed 扩轨 / #17 讲解层 / #18 成本面板入 TUI / #20 裁决增强 / #21 资源 loader 收口 / #22 evaluate_many 消费方 / #23 qc 指令本地化 / #24 帮助屏——均仍欠，随 M5+ 处理。）
 
 ### 2026-09-23 · 定时施工链路修复（自动化基建，非 MVP 阶段）
 
