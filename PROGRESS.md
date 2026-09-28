@@ -22,6 +22,27 @@ MVP_STAGE: 4/6
 
 ## 进度日志
 
+### 2026-09-27 · 模块交叉检查：跨模块参数收口 + 跨模块夹具去重（非阶段任务，用户手动发起）
+
+- **背景与指令**：用户两问——①「模块交叉部分检查：模块应该只转递**少量参数**即可调用其他模块方法」；②「检查不同模块之间代码是否有重复/可以复用的部分」（上一轮只合了模块内重复，本轮专查跨模块）。
+- **检查方法**：(1) 全仓 fn 签名参数扫描（≥4 参清单，共 8 条）；(2) 跨 crate 调用点实参扫描（排除嵌套调用逗号误报）；(3) 全仓同函数体 md5 两轮扫描（长函数体 + 短函数体）；(4) 裸 bool 对照 docs/01 §1「禁裸 bool 参数」。
+- **改动（2 提交）**：
+  - `e49be31` **记账参数收口（docs/05 §1 契约先行）**：`AiLedger::record_usage` 原 4 位置参数（kind/model/tokens_in/tokens_out）→ `core::UsageRecord` 单结构；全链改造 = llm trait/StubLedger/MemLedger + router 生产记账调用 + engine StoreLedger + jev client 记账 + `store::record_usage`（**5 参→2 参**）+ 20+ 测试调用点全部 `UsageRecord::new(…)`；llm 再导出 `ambition_llm::UsageRecord` 供不依赖 core 的 jev（Cargo 零变）。
+  - `4215013` **跨模块夹具去重二期**（净 +171/-236）：store `memory_pool` **×7 文件**逐字复制 → repo/fixtures 升 crate 级 `common/`（与 jev/llm/engine/tui 模式统一）；llm `Scripted` 脚本供给方**整体**（struct + new/calls + LlmProvider 实现，requests/router 两份逐字节同）+ `sample_req` ×2 收口 common；engine `attempt_for` ×4（装配/练习/题包/裁决）收口 common fixtures；+7 夹具配对测试（内存库建表断言替换占位式断言）。
+- **检查结论（未改动项与理由）**：
+  - **良样例**：`engine.submit_answer(&Attempt)` 单参门面（qid/answer/timing/confidence/mode 已打包进 Attempt）、`Grader::new(3)`、`due_list(now, limit)`——两壳调 engine 均 1-2 参 ✓。
+  - **合规保留**：`Question::new(5)`=领域构造器、`save_game_state(pool, player, xp, streak)` / `add_blank_acceptable(pool, qid, index, value)`（含句柄 4 参、3 数据参）、seed_gen `choice/multi(5)`（示例内）——均在 docs/01 ≤5 上限内且数据参 ≤3。
+  - **生产码跨模块重复 = 零命中**：两轮全仓同体扫描（>60 字符 + 短函数）未再发现跨文件重复——上一轮收口全部守住；openai/anthropic 各自的 `fn model`、MemLedger 内存聚合 vs store SQL 聚合属不同实现体，非重复。
+  - **发现 docs/01「禁裸 bool」违例 2 处**（srs `due_queue(…, interleave)` 生产调用点传字面 `true`、grader `normalize_for_compare(…, ignore_articles)` 生产无调用）→ 改进建议 #31（改枚举需契约先行）。
+- **验证**：**420 测试全绿**（+7）；`clippy -D warnings` 0；配对/行数结构门禁 PASS；TUI 冒烟 0 panic（`Space`/`Ctrl+Q`/`[1/211]` 在场）；七步钩子 2 提交 7/7。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：契约先行（docs/05 §1 先于 UsageRecord 改造）；配对测试随新函数/新夹具同步落同文件（Scripted 的 new/calls/complete/model 四方法逐一配桩）；420 只增不减；两轮同体扫描脚本化（不靠目测）。
+- **实际使用**：跨 crate 记账调用从“拉 4 个位置参数对号入座”变 1 个具名对象（可读性：`UsageRecord::new("question_gen", "m1", 40, 12)` 自文档化）；对外可观察行为零变化（台账行/缓存/判分不变，冒烟验证）；对下游 API 仅 record_usage 签名变更（已文档化）。
+- **代码耦合度**：依赖方向不变（05 不依赖 store 红线保持：UsageRecord 落 core、llm 再导出、jev Cargo 零变）；夹具按 crate 收口不跨 crate；store fixtures 升 crate 级后 `common` 命名与五 crate 统一；两轮扫描证明跨模块重复已清零，后续新增跨模块代码有脚本基线可比对。
+- **鲁棒性**：record_usage 收口不改旁路语义（StoreLedger 读写失败仍 warn 不阻断）；内存库夹具测试改真实建表断言（原占位断言被 clippy 拦下，未带病过门）；fixture 可见性 pub(crate) 最小化；锁/降级路径未触碰。
+
 ### 2026-09-27 · 模块目录细分 + 代码复用收口（非阶段任务，用户手动发起）
 
 - **背景与指令**：用户两问——①「每个模块还能继续细分：模块/src/细分功能/组件/工具/通用等，**不要单个文件**」；②「检查代码复用，**能合并的功能尽量合并成一个**，防止代码无限变大」。
@@ -260,6 +281,7 @@ MVP_STAGE: 4/6
 - [ ] 28. 复习屏体验：评分反馈只显「N 天后」，可加 next_interval 卡片化/连续复习统计；`due_list` limit 20 一轮，队列深度与 daily_budget（16-config §6）打通
 - [ ] 29. 裁决（resolve_pending）返回值不带 SRS 处置（签名仍是 GradeResult）——若要 UI 提示需扩返回类型（改 docs/03 §2 契约先行）
 - [ ] 30. `gen/pipeline/mod.rs` 500 行压线（目录细分后为 generator 内容+域声明）——再增内容前先把 generator 测试拆 `pipeline/generator_tests.rs`（被测 fn 留同文件配对桩，P-16）
+- [ ] 31. 裸 bool 参数违例（docs/01 §1「禁裸 bool」，模块交叉检查发现）：srs `due_queue(…, interleave: bool)`——engine 生产调用点传字面 `true`，语义在调用点丢失，改 `Interleave` 枚举（契约先行 docs/08）；grader `normalize_for_compare(…, ignore_articles: bool)`——生产无调用仅测试，改 `ArticlePolicy` 枚举（契约先行 docs/07）
 
 （承接 M3 未完项：#13 题包屏 / #14 seed 降级开关 / #16 seed 扩轨 / #17 讲解层 / #18 成本面板入 TUI / #20 裁决增强 / #21 资源 loader 收口 / #22 evaluate_many 消费方 / #23 qc 指令本地化 / #24 帮助屏——均仍欠，随 M5+ 处理。）
 
