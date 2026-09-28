@@ -163,6 +163,7 @@ dependencies = [
 name = "ambition-writing"
 version = "0.1.0"
 dependencies = [
+ "ambition-core",
  "serde",
  "serde_json",
  "tracing",

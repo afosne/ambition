@@ -66,7 +66,7 @@
     { "text": "Please do not hesitate to contact me", "register": "formal", "level": 3 }
   ],
   "anti_patterns": [
-    { "pattern_en": "I am writing to you to invite you", "note_zh": "啰嗦直译，合并为一句目的句" },
-    { "pattern_en": "I am fine thank you and you", "note_zh": "口语万能开场，书信开场用 I am writing..." }
+    { "pattern_en": "I am writing to you to invite you", "note_zh": "啰嗦直译，合并为一句目的句" , "replacement_en": "I am writing to invite you"},
+    { "pattern_en": "I am fine thank you and you", "note_zh": "口语万能开场，书信开场用 I am writing..." , "replacement_en": "How have you been lately?"}
   ]
 }

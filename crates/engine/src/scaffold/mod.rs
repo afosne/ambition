@@ -65,10 +65,7 @@ impl Engine {
         self.grader
             .check_scaffold(essay, &t)
             .await
-            .map_err(|err| match err {
-                ambition_jev::JevError::Offline => EngineError::Offline,
-                other => EngineError::Jev(other),
-            })
+            .map_err(from_jev)
     }
 
     /// 按 id 取模板：DB 个人行优先（覆盖内置）→ 内置 → NotFound

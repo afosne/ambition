@@ -50,6 +50,8 @@ pub struct Phrase {
 pub struct AntiPattern {
     pub pattern_en: String,
     pub note_zh: String,
+    /// 升级替换句（upgrade_sentence 整句命中即换；docs/10 §1 M5-W5）
+    pub replacement_en: String,
 }
 
 /// 模板（结构骨架 + 槽位 + 亮点 + 反模板；docs/10 §1）

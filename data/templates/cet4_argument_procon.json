@@ -78,8 +78,8 @@
     { "text": "play a crucial role in", "register": "formal", "level": 4 }
   ],
   "anti_patterns": [
-    { "pattern_en": "Nowadays with the development of society and economy", "note_zh": "模板痕迹过重，考官反感，改写成具体话题句" },
-    { "pattern_en": "Everything has two sides", "note_zh": "中式万能句，改写成正反具体观点" },
-    { "pattern_en": "I think this is very good", "note_zh": "口语化、无论证，升级为具体结论句" }
+    { "pattern_en": "Nowadays with the development of society and economy", "note_zh": "模板痕迹过重，考官反感，改写成具体话题句" , "replacement_en": "In recent years, this issue has aroused wide public concern"},
+    { "pattern_en": "Everything has two sides", "note_zh": "中式万能句，改写成正反具体观点" , "replacement_en": "Arguments over this issue tend to divide people into two camps"},
+    { "pattern_en": "I think this is very good", "note_zh": "口语化、无论证，升级为具体结论句" , "replacement_en": "From my perspective, this measure is well worth the effort"}
   ]
 }

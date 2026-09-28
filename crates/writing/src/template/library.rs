@@ -82,7 +82,13 @@ mod tests {
             }
             assert!(!seen.is_empty(), "{} 至少一个槽", t.template_id);
             // 权重无关：短语/反模板可为空但结构在
-            assert!(t.anti_patterns.iter().all(|a| !a.pattern_en.is_empty()));
+            assert!(
+                t.anti_patterns
+                    .iter()
+                    .all(|a| !a.pattern_en.is_empty() && !a.replacement_en.is_empty()),
+                "{} 反模板含替换句",
+                t.template_id
+            );
         }
     }
 

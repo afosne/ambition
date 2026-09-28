@@ -49,6 +49,30 @@ impl Grader {
             passed: meaning_kept >= 0.5 && fits_prompt >= 0.5,
         })
     }
+
+    /// 升级句核验（M5-W5，docs/10 §2：Jev noul「原意未变」≥0.5 过；<0.5 = 语义走样必须拦；无 Jev → Offline）
+    pub async fn verify_upgrade(&self, from: &str, to: &str) -> Result<bool, JevError> {
+        let Some(jev) = &self.jev else {
+            return Err(JevError::Offline);
+        };
+        let state = JevState(serde_json::json!({
+            "original": from,
+            "upgraded": to,
+        }));
+        let mut questions = JevQuestions::new();
+        questions.insert(
+            "meaning_kept".into(),
+            JevQuestion::Noul(NoulQ {
+                instructions: "The upgraded sentence keeps the original meaning unchanged; only the wording improved.".into(),
+            }),
+        );
+        let answers = jev.evaluate(state, &questions).await?;
+        let meaning_kept = answers
+            .get("meaning_kept")
+            .and_then(JevAnswer::noul_prob)
+            .ok_or_else(|| JevError::Invalid("missing meaning_kept answer".into()))?;
+        Ok(meaning_kept >= 0.5)
+    }
 }
 
 #[cfg(test)]
@@ -118,6 +142,67 @@ mod tests {
             (check.fits_prompt - 0.3).abs() < 1e-5,
             "分项原样回传（提示用）"
         );
+    }
+
+    #[tokio::test]
+    async fn test_verify_upgrade_passes_when_meaning_kept() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/systemone"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "answers": { "meaning_kept": {"type": "noul", "noul": 0.9} }
+            })))
+            .mount(&server)
+            .await;
+        let grader = Grader::new(
+            Some(std::sync::Arc::new(client_with(&server).await)),
+            None,
+            Thresholds::english(),
+        );
+        let ok = grader
+            .verify_upgrade("I think it is good.", "I hold that it is beneficial.")
+            .await
+            .expect("可核验");
+        assert!(ok, "原意保留 ≥0.5 → 通过");
+    }
+
+    #[tokio::test]
+    async fn test_verify_upgrade_blocks_meaning_shift() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/systemone"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "answers": { "meaning_kept": {"type": "noul", "noul": 0.3} }
+            })))
+            .mount(&server)
+            .await;
+        let grader = Grader::new(
+            Some(std::sync::Arc::new(client_with(&server).await)),
+            None,
+            Thresholds::english(),
+        );
+        let ok = grader
+            .verify_upgrade(
+                "The plan saves money.",
+                "The plan changes the goal entirely.",
+            )
+            .await
+            .expect("可核验");
+        assert!(!ok, "语义走样 <0.5 → 必须拦（checklist）");
+    }
+
+    #[tokio::test]
+    async fn test_verify_upgrade_offline_without_jev() {
+        let grader = Grader::offline();
+        let err = grader
+            .verify_upgrade("a", "b")
+            .await
+            .expect_err("无 Jev → Offline");
+        assert!(matches!(err, JevError::Offline));
     }
 
     #[tokio::test]

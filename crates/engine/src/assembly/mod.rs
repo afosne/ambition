@@ -56,13 +56,14 @@ impl Engine {
         if let Err(err) = ai::purge_stale_cache(&pool).await {
             tracing::warn!(error = %err, "llm_cache purge failed");
         }
-        let grader = build_grader(pool.clone(), &ai);
+        let (grader, llm) = build_grader(pool.clone(), &ai);
         let (xp, streak) = ambition_store::load_game_state(&pool, "local").await?;
         let engine = Self {
             pool,
             events: Mutex::new(Vec::new()),
             game: GameProjector::hydrate(xp, streak),
             grader,
+            llm,
         };
         engine
             .import_seed(include_str!(
@@ -76,7 +77,13 @@ impl Engine {
 }
 
 /// 按配置装配三级判题器（key 缺席 → 对应级别 None = 离线降级；StoreLedger 经 engine 装配，05 不依赖 store）
-fn build_grader(pool: SqlitePool, ai: &AiConfig) -> ambition_grader::Grader {
+fn build_grader(
+    pool: SqlitePool,
+    ai: &AiConfig,
+) -> (
+    ambition_grader::Grader,
+    Option<std::sync::Arc<ambition_llm::LlmRouter>>,
+) {
     use std::sync::Arc;
     let jev = ai.jev_key.as_ref().map(|key| {
         Arc::new(ambition_jev::JevClient::with_options(
@@ -97,7 +104,9 @@ fn build_grader(pool: SqlitePool, ai: &AiConfig) -> ambition_grader::Grader {
             Box::new(StoreLedger::new(pool.clone())),
         ))
     });
-    ambition_grader::Grader::new(jev, llm, ambition_grader::Thresholds::english())
+    let grader =
+        ambition_grader::Grader::new(jev, llm.clone(), ambition_grader::Thresholds::english());
+    (grader, llm)
 }
 
 #[cfg(test)]
@@ -192,7 +201,8 @@ mod tests {
             .await
             .expect("内存库");
         ambition_store::init_db(&pool).await.expect("建表");
-        let grader = build_grader(pool, &AiConfig::offline());
+        let (grader, llm) = build_grader(pool, &AiConfig::offline());
+        assert!(llm.is_none(), "离线无 llm 句柄");
         let m = multi_pick_two();
         let grade = grader.grade(&m, &Answer::Choice(vec![0])).await;
         assert_eq!(grade.verdict, Verdict::Pending, "离线无 AI → 桶");

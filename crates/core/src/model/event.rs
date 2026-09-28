@@ -18,6 +18,13 @@ pub enum DomainEvent {
         /// Rating 持久化字符串（again/hard/good/easy）
         rating: String,
     },
+    /// 作文批改完成（M5-W5：grade_essay 落两表后发布，gamify → Xp(5)、不进连击——docs/13）
+    EssayGraded {
+        essay_id: String,
+        rubric_id: String,
+        score: f32,
+        max: f32,
+    },
 }
 
 /// 事件总线：订阅者（gamify/sync 投影/profile）旁路消费，各自幂等；engine 只 publish 不直调（改进 #3）

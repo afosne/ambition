@@ -7,6 +7,7 @@
 mod assembly;
 #[cfg(test)]
 mod common;
+mod essay;
 mod practice;
 mod scaffold;
 mod srs;
@@ -47,6 +48,24 @@ pub enum EngineError {
     Vocab(String),
     #[error("jev: {0}")]
     Jev(#[from] ambition_jev::JevError),
+    #[error("llm: {0}")]
+    Llm(#[from] ambition_llm::LlmError),
+}
+
+/// Jev 错误跨层映射（离线 → 配置提示口径；其余带源可见，P-8 不伪造，scaffold/essay 共用）
+fn from_jev(err: ambition_jev::JevError) -> EngineError {
+    match err {
+        ambition_jev::JevError::Offline => EngineError::Offline,
+        other => EngineError::Jev(other),
+    }
+}
+
+/// Llm 错误跨层映射（同 from_jev 口径）
+fn from_llm(err: ambition_llm::LlmError) -> EngineError {
+    match err {
+        ambition_llm::LlmError::Offline => EngineError::Offline,
+        other => EngineError::Llm(other),
+    }
 }
 
 /// 一次提交的产出：判分结果 + 游戏效果 + 入卡处置回传（M4，docs/03 §2）
@@ -72,11 +91,39 @@ pub struct Engine {
     events: Mutex<Vec<DomainEvent>>,
     game: GameProjector,
     grader: ambition_grader::Grader,
+    /// LLM 句柄（annotate/model_essays 直用；与 grader 共享同一 Arc，装配单点，M5-W5）
+    llm: Option<std::sync::Arc<ambition_llm::LlmRouter>>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_from_jev_maps_offline_to_config_hint() {
+        assert!(
+            matches!(
+                from_jev(ambition_jev::JevError::Offline),
+                EngineError::Offline
+            ),
+            "离线 → 配置提示"
+        );
+        let other = ambition_jev::JevError::Invalid("bad".into());
+        assert!(matches!(from_jev(other), EngineError::Jev(_)), "其余带源");
+    }
+
+    #[test]
+    fn test_from_llm_maps_offline_to_config_hint() {
+        assert!(
+            matches!(
+                from_llm(ambition_llm::LlmError::Offline),
+                EngineError::Offline
+            ),
+            "离线 → 配置提示"
+        );
+        let other = ambition_llm::LlmError::InvalidOutput { attempts: 3 };
+        assert!(matches!(from_llm(other), EngineError::Llm(_)), "其余带源");
+    }
 
     #[test]
     fn test_submit_outcome_carries_grade_effects_and_srs() {

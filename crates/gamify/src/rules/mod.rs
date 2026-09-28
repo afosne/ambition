@@ -15,6 +15,8 @@ pub fn on_event(event: &DomainEvent) -> Vec<GameEffect> {
         },
         // M4：复习只给小额经验、不进连击——排程不受游戏影响（docs/13 §原则）
         DomainEvent::ReviewDone { .. } => vec![GameEffect::Xp(1)],
+        // M5：作文批改完成 → 大额经验、不进连击（docs/13：写作质量不受游戏影响）
+        DomainEvent::EssayGraded { .. } => vec![GameEffect::Xp(5)],
     }
 }
 
@@ -97,6 +99,21 @@ mod tests {
         // 100 + 115 = 215 → 3 级
         assert_eq!(level_of(215), 3);
         assert_eq!(level_of(-5), 1); // 负值防御
+    }
+
+    #[test]
+    fn test_on_event_essay_graded_gives_xp_without_combo() {
+        let effects = on_event(&DomainEvent::EssayGraded {
+            essay_id: "e1".into(),
+            rubric_id: "gaokao25".into(),
+            score: 20.0,
+            max: 25.0,
+        });
+        assert_eq!(
+            effects,
+            vec![GameEffect::Xp(5)],
+            "只经验不连击（docs/13 M5）"
+        );
     }
 
     #[test]

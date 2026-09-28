@@ -15,7 +15,7 @@ pub struct Slot { pub id: String, pub label_zh: String, pub options_en: Vec<Stri
 /// 亮点词汇/句式（语域分档）
 pub struct Phrase { pub text: String, pub register: String, pub level: u8 }
 /// 反模板黑名单（模板痕迹句式）
-pub struct AntiPattern { pub pattern_en: String, pub note_zh: String }
+pub struct AntiPattern { pub pattern_en: String, pub note_zh: String, pub replacement_en: String }  // 升级替换句（upgrade_sentence 本地命中即换，M5-W5）
 pub struct Template { pub template_id: String, pub track: String, pub genre: String,
                       pub skeleton: Vec<ParaFunc>, pub slots: Vec<Slot>, pub phrases: Vec<Phrase>,
                       pub anti_patterns: Vec<AntiPattern>, pub source: TemplateSource }
@@ -34,17 +34,33 @@ pub async fn promote_to_personal(&self, sentence, essay_id) -> Result<Template>;
 ## 2. 批改闭环 + 加分项
 
 ```rust
-pub async fn grade_essay(&self, essay, rubric) -> Result<EssayGrade>;     // 07 composite → band
-pub async fn annotate(&self, essay, g) -> Result<Comments>;               // 逐句批注/升级/亮点（llm 缓存 key=hash(body+rubric)）
-pub fn recommend_after(g, lib) -> Vec<Recommendation>;                    // 缺陷→模板/句式/搭配补练
-pub async fn upgrade_sentence(&self, s) -> Result<Vec<Upgrade>>;          // 低级句→高级句（good→beneficial…）
-pub async fn verify_upgrade(&self, from, to) -> Result<bool>;             // Jev noul 原意未变
-pub fn phrase_bank(track) -> Vec<Phrase>;                                 // 亮点词汇（语域分档）
-pub async fn model_essays(&self, prompt) -> Result<ModelEssaySet>;        // 三档范文+逐句赏析（qc.natural）
-pub async fn polish(&self, text, register) -> Result<String>;             // 语域润色
-pub async fn long_sentence_explain(&self, s) -> Result<SyntaxTree>;       // 长难句图解
-pub fn merge_split_items(track) -> Vec<Question>;                         // 合并/拆分/概要（Drill）
-pub async fn register_check(&self, text, target) -> Result<RegisterReport>;
+// —— M5-W5 落地契约（2026-09-28）；W8 留位项（polish/long_sentence_explain/merge_split_items/register_check）签名不变、随语域波次实现 ——
+pub struct EssaySubmission { pub body: String, pub prompt_zh: String, pub genre: String, pub rubric_id: String, pub scaffold_stage: String, pub template_id: String }
+pub async fn grade_essay(&self, sub: &EssaySubmission) -> Result<GradeResult, EngineError>;
+    // 07 composite → 档位（不另造 EssayGrade：出口 = GradeResult，与 02 §2 essay_grades.payload 同构）；落 essays+essay_grades 两表 + DomainEvent::EssayGraded
+pub async fn annotate(&self, essay: &str, grade: &GradeResult, rubric_id: &str) -> Result<Comments, EngineError>;
+    // 逐句批注/升级/亮点（LlmKind::Explain + writing 资产 prompts/annotate + comments_schema）；缓存 = llm run_loop 按 effective_cache_key 自动 get/put（key 含 instr+essay+rubric 上下文 = hash(body+rubric) 口径）
+pub fn recommend_after(g: &GradeResult, lib: &[Phrase]) -> Vec<Recommendation>;  // 缺陷→模板/句式/搭配补练（纯函数；lib = phrase_bank(track) 结果）
+pub async fn upgrade_sentence(&self, s: &str) -> Result<Vec<Upgrade>, EngineError>;  // 低级句→高级句候选（本地：AntiPattern.replacement_en 整句命中 + 同义表 good→beneficial…）
+pub async fn verify_upgrade(&self, from: &str, to: &str) -> Result<bool, EngineError>;  // Jev noul 原意未变（≥0.5 过；<0.5 = 语义走样必须拦）
+pub fn phrase_bank(track: &str) -> Vec<Phrase>;                          // 亮点词汇（语域分档；内置模板 phrases 汇聚，08 补个人库）
+pub async fn model_essays(&self, prompt: &str) -> Result<ModelEssaySet, EngineError>;  // 三档范文+逐句赏析（llm structured + writing schema；缓存同 run_loop）
+pub async fn polish(&self, text, register) -> Result<String>;             // 语域润色（W8）
+pub async fn long_sentence_explain(&self, s) -> Result<SyntaxTree>;       // 长难句图解（W8）
+pub fn merge_split_items(track) -> Vec<Question>;                         // 合并/拆分/概要（Drill，W8）
+pub async fn register_check(&self, text, target) -> Result<RegisterReport>;   // 语域检查（W8）
+// —— 类型补全（M5-W5 docs-first 定义，实现 crates/writing）——
+pub enum CommentKind { Upgrade, Highlight }
+pub struct Annotation { pub sentence: String, pub kind: CommentKind, pub suggested: Option<String>, pub brief_reason: String, pub target: Option<SrsTarget> }
+pub struct Comments { pub annotations: Vec<Annotation> }
+pub enum WordKind { Word, Phrase, Expression }
+pub struct SrsTarget { pub kind: WordKind, pub text: String }   // 升级句可入卡目标（Phrase 卡随 08-adaptive）
+pub struct Upgrade { pub from: String, pub to: String, pub why_zh: String }
+pub enum RecommendKind { Template, Phrase, Collocation }
+pub struct Recommendation { pub kind: RecommendKind, pub text_zh: String, pub reason_zh: String }
+pub struct ModelEssaySet { pub essays: Vec<ModelEssay> }
+pub struct ModelEssay { pub word_target: u32, pub text: String, pub sentences: Vec<SentenceNote> }   // 200/400/600 三档
+pub struct SentenceNote { pub sentence: String, pub note_zh: String }
 ```
 
 ## 3. 翻译题型（考试向；工作台在 11）
