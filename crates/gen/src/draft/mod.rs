@@ -185,6 +185,53 @@ impl DraftQuestion {
                     reference: self.answers[0].clone(),
                 })
             }
+            // M5-W3 作文题：passage = 中文题面（l1，仅展示不进 state）、stem = 英文指令；
+            // genre/track 从 tags 推；rubric/字数/限时按轨默认（docs/16 stages writing 口径）
+            QuestionKindTag::Essay => {
+                if self.passage.trim().is_empty() {
+                    return Err(GenError::InvalidDraft(
+                        "essay needs passage (prompt)".into(),
+                    ));
+                }
+                let known = [
+                    "letter",
+                    "notice",
+                    "continuation",
+                    "summary",
+                    "argument",
+                    "chart",
+                    "email",
+                ];
+                let genre = known
+                    .iter()
+                    .find(|g| self.tags.iter().any(|t| *t == **g))
+                    .map(|g| (*g).to_string())
+                    .unwrap_or_else(|| "argument".to_string());
+                let track = ["gaokao", "cet4", "ielts"]
+                    .iter()
+                    .find(|t| self.tags.iter().any(|tag| *tag == **t))
+                    .map(|t| (*t).to_string())
+                    .unwrap_or_else(|| "gaokao".to_string());
+                let (word_range, minutes) = match track.as_str() {
+                    "cet4" => ((120, 180), 30),
+                    "ielts" => ((250, 350), 40),
+                    _ => ((80, 120), 30),
+                };
+                // MVP：非雅思轨复用高考 25 分制 rubric（独立 cet4 rubric 随 W6 真题套卷校准）
+                let rubric_id = if track == "ielts" {
+                    "ielts_task2"
+                } else {
+                    "gaokao25"
+                };
+                ambition_core::QuestionKind::Essay(ambition_core::EssayPrompt {
+                    prompt_zh: self.passage.clone(),
+                    genre,
+                    track,
+                    rubric_id: rubric_id.to_string(),
+                    word_range,
+                    minutes,
+                })
+            }
         };
         Ok(ambition_core::Question::new(
             self.stem.clone(),
@@ -264,6 +311,9 @@ pub fn parse_draft_batch(text: &str) -> Result<DraftBatch, GenError> {
 }
 
 #[cfg(test)]
+mod draft_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use ambition_core::{Provenance, QuestionKind};
@@ -292,128 +342,6 @@ mod tests {
         // 同内容同 qid
         let again = draft.to_question().expect("转换2");
         assert_eq!(again.qid, q.qid);
-    }
-
-    #[test]
-    fn test_to_question_builds_translation_with_l1_source_and_l2_reference() {
-        let draft: DraftQuestion = serde_json::from_value(serde_json::json!({
-            "kind": "translation",
-            "stem": "Translate the following sentence into English.",
-            "passage": "我喜欢春天。",
-            "answers": ["I like spring."],
-            "difficulty": 2,
-            "tags": ["translation", "cet4"]
-        }))
-        .expect("翻译草稿");
-        let q = draft.to_question().expect("转换");
-        let QuestionKind::Translation(body) = &q.kind else {
-            panic!("题型错误: {:?}", q.kind);
-        };
-        assert_eq!(body.source_text, "我喜欢春天。", "源文 = l1（不进 state）");
-        assert_eq!(body.reference, "I like spring.", "参考译文 = l2");
-        assert_eq!(body.direction.from.0, ambition_core::DEFAULT_L1);
-        assert_eq!(body.direction.to.0, "en");
-
-        // 缺参考译文 → Err（不伪造判分参照）
-        let no_ref: DraftQuestion = serde_json::from_value(serde_json::json!({
-            "kind": "translation",
-            "stem": "Translate ...",
-            "passage": "你好。",
-            "answers": [],
-            "difficulty": 2,
-            "tags": []
-        }))
-        .expect("可反序列化");
-        assert!(no_ref.to_question().is_err(), "缺 reference → Err");
-    }
-
-    #[test]
-    fn test_to_question_rejects_malformed_drafts() {
-        let base = serde_json::json!({
-            "kind": "single_choice",
-            "stem": "S.",
-            "options": ["a", "b"],
-            "answers": ["a"],
-            "difficulty": 2,
-            "tags": []
-        });
-        let mut bad = base.clone();
-        bad["answers"] = serde_json::json!(["not-an-option"]);
-        assert!(
-            serde_json::from_value::<DraftQuestion>(bad)
-                .expect("可反序列化")
-                .to_question()
-                .is_err(),
-            "答案不在选项中 → Err"
-        );
-
-        let mut empty_stem = base.clone();
-        empty_stem["stem"] = serde_json::json!("   ");
-        assert!(
-            serde_json::from_value::<DraftQuestion>(empty_stem)
-                .expect("可反序列化")
-                .to_question()
-                .is_err(),
-            "空题干 → Err"
-        );
-
-        let mut dup = base.clone();
-        dup["options"] = serde_json::json!(["a", "a"]);
-        assert!(
-            serde_json::from_value::<DraftQuestion>(dup)
-                .expect("可反序列化")
-                .to_question()
-                .is_err(),
-            "重复选项 → Err"
-        );
-
-        let single_one = serde_json::json!({
-            "kind": "single_choice", "stem": "S.", "options": ["a", "b", "c"],
-            "answers": ["a", "b"], "difficulty": 2, "tags": []
-        });
-        assert!(
-            serde_json::from_value::<DraftQuestion>(single_one)
-                .expect("可反序列化")
-                .to_question()
-                .is_err(),
-            "单选多答 → Err"
-        );
-
-        let multi_one = serde_json::json!({
-            "kind": "multi_choice", "stem": "S.", "options": ["a", "b"],
-            "answers": ["a"], "difficulty": 2, "tags": []
-        });
-        assert!(
-            serde_json::from_value::<DraftQuestion>(multi_one)
-                .expect("可反序列化")
-                .to_question()
-                .is_err(),
-            "多选单答 → Err"
-        );
-
-        let fill_marker_mismatch = serde_json::json!({
-            "kind": "fill_blank", "stem": "She ___ every ___ day.",
-            "answers": [], "blanks": [["runs"]], "difficulty": 2, "tags": []
-        });
-        assert!(
-            serde_json::from_value::<DraftQuestion>(fill_marker_mismatch)
-                .expect("可反序列化")
-                .to_question()
-                .is_err(),
-            "空位数不匹配 → Err"
-        );
-
-        let bad_difficulty = serde_json::json!({
-            "kind": "single_choice", "stem": "S.", "options": ["a", "b"],
-            "answers": ["a"], "difficulty": 9, "tags": []
-        });
-        assert!(
-            serde_json::from_value::<DraftQuestion>(bad_difficulty)
-                .expect("可反序列化")
-                .to_question()
-                .is_err(),
-            "难度越界 → Err"
-        );
     }
 
     #[test]

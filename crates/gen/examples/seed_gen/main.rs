@@ -7,12 +7,14 @@ use std::path::PathBuf;
 use ambition_core::{BlankItem, ChoiceBody, OptionItem, Provenance, Question, QuestionKind};
 use ambition_gen::{Manifest, PackItem, QPACK_SCHEMA_VERSION, QPack};
 
+mod essay;
 mod grammar;
 mod mixed;
 mod passage;
 mod translation;
 mod usage;
 
+use essay::essays;
 use grammar::{future_will, past_regular, present_sva};
 use mixed::{fill_blanks, multi_choice, tense_mix};
 use passage::{cloze, grammar_fill, reading, seven_of_five};
@@ -120,6 +122,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     scored.extend(seven_of_five());
     // M5-W2：翻译题（源文 l1 不进 Jev state，docs/05 §3.5）
     scored.extend(sentences());
+    // M5-W3：作文题（中文题面不进 state；词数/限时走卷面层，docs/07 §1）
+    scored.extend(essays());
     assert!(
         scored.len() >= 200,
         "docs/16 requires >=200 questions per track, got {}",

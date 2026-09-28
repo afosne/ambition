@@ -58,6 +58,20 @@ pub fn render(frame: &mut Frame, state: &AppState) {
                     body.source_text
                 ));
             }
+            // M5-W3：作文——中文题面 + 字数/限时红线（展示用，永不进 state）
+            QuestionKind::Essay(body) => {
+                text.push_str(&format!(
+                    "
+ 题面: {}
+",
+                    body.prompt_zh
+                ));
+                text.push_str(&format!(
+                    " 体裁 {} · 字数 {}-{} 词 · 限时 {} 分钟
+",
+                    body.genre, body.word_range.0, body.word_range.1, body.minutes
+                ));
+            }
             // 语篇类题型（七选五逐槽反馈/阅读逐子题反馈/完形·语法填空语篇，passage_render.rs）
             _ => render_passage(&mut text, state, q),
         }
@@ -106,6 +120,18 @@ pub fn render(frame: &mut Frame, state: &AppState) {
                     labels.join("、"),
                     grade.confidence
                 ));
+            }
+            // composite 维度分解（M5：翻译/作文 detail::Dims 浮层，docs/07 §3）
+            if let ambition_core::GradeDetail::Dims(dims) = &grade.detail {
+                for dim in dims {
+                    text.push_str(&format!(
+                        "
+ 维度 {}: {:.0}%（置信 {:.2}）",
+                        dim.key,
+                        dim.score * 100.0,
+                        dim.confidence
+                    ));
+                }
             }
             if q.kind.is_fill() {
                 let sets = fill_answers(&q.kind);
@@ -181,6 +207,32 @@ mod tests {
     use super::*;
     use crate::common::*;
     use ambition_core::Verdict;
+
+    #[test]
+    fn test_render_essay_shows_prompt_and_red_lines() {
+        let q = Question::new(
+            "Write an essay in English according to the prompt.".into(),
+            QuestionKind::Essay(ambition_core::EssayPrompt {
+                prompt_zh: "以“绿色校园”为题写一篇短文。".into(),
+                genre: "argument".into(),
+                track: "cet4".into(),
+                rubric_id: "gaokao25".into(),
+                word_range: (120, 180),
+                minutes: 30,
+            }),
+            3,
+            vec!["essay".to_string(), "cet4".to_string()],
+            ambition_core::Provenance::Seed,
+        );
+        let s = new_state(vec![q]);
+        let out = crate::common::render_sized(&s, 72, 18);
+        assert!(
+            out.contains("题面"),
+            "中文题面展示（仅题面，不进 state）: {out}"
+        );
+        assert!(out.contains("字数 120-180 词"), "字数红线可见: {out}");
+        assert!(out.contains("限时 30 分钟"), "限时可见: {out}");
+    }
 
     #[test]
     fn test_render_draws_stem_options_and_grade() {

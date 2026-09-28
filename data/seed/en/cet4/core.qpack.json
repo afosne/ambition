@@ -9279,6 +9279,71 @@
       "explanations": [
         "Keep the original meaning intact; prefer natural collocations over literal wording."
       ]
+    },
+    {
+      "qid": "a9df428192c35e64",
+      "question": {
+        "qid": "a9df428192c35e64",
+        "kind": {
+          "essay": {
+            "prompt_zh": "随着手机和社交媒体的普及，越来越多的中学生花费大量时间上网。请以“Spending Time Wisely”为题，写一篇120词左右的短文，谈谈你的看法。",
+            "genre": "argument",
+            "track": "cet4",
+            "rubric_id": "gaokao25",
+            "word_range": [
+              120,
+              180
+            ],
+            "minutes": 30
+          }
+        },
+        "stem": "Write an essay in English according to the prompt.",
+        "difficulty": 3,
+        "tags": [
+          "essay",
+          "cet4",
+          "argument"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Structure: introduction - body - conclusion; one idea per paragraph; keep within the word range."
+      ]
+    },
+    {
+      "qid": "4d7b2a7140529eda",
+      "question": {
+        "qid": "4d7b2a7140529eda",
+        "kind": {
+          "essay": {
+            "prompt_zh": "假如你是李华，你校英语社团将举办“绿色校园”主题征文活动。请你给外教Chris写一封邮件，邀请他担任评委，内容包括活动目的、时间地点和评委职责。",
+            "genre": "letter",
+            "track": "cet4",
+            "rubric_id": "gaokao25",
+            "word_range": [
+              120,
+              180
+            ],
+            "minutes": 30
+          }
+        },
+        "stem": "Write an essay in English according to the prompt.",
+        "difficulty": 3,
+        "tags": [
+          "essay",
+          "cet4",
+          "letter",
+          "email"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Structure: introduction - body - conclusion; one idea per paragraph; keep within the word range."
+      ]
     }
   ]
 }

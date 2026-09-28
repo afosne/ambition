@@ -56,6 +56,8 @@ pub fn error_cause_question(lang: &str) -> JevQuestion;               // error_c
 
 **composite 语义（M5 落地）**：rubric 资产 = `crates/grader/assets/rubrics/<id>.json`（**判分语料红线 #19：不进 `data/`**、include_str 内嵌、按 rubric_id/version 版本化）；每维 Jev `score` ∈ 0..levels-1 → 归一化 `score/(levels-1)` ∈ 0..1（维度 instructions 由代码按 dim key 生成，state 放 prompt+essay，levels = 考纲原文）；`CompositeJudge{dims, triggered_vetoes, confidence=min(dims.confidence)}`；veto 问题**正面表述**（如 "stays on topic"）→ `noul < 0.5` 触发 → `down_band` 降一档；`compose_scores` = Σ(dim.score×weight)×max → 向下取档（band_map 中 ≤ raw 的最大值，raw < 首档 → 0）；confidence < thresholds.accept → 走既有 Pending 进桶（M3 复用；**LLM 不打分**，无第三级复核可用）。**翻译/作文默认 rubric**：题面 `rubric_id` 缺省时按 kind 取内置（Translation → `translation4`：max100、档 60/70/80/90/100、权重 准确.4/完整.25/流畅.2/地道.15、veto=meaning_changed+heavy_chinglish）。**composite verdict 口径**：conf ≥ accept 时按档位比例——score ≥ 60% max → Correct、≥ 30% → Partial、否则 Wrong；veto 映射 error_tags（meaning_changed/off_topic→Logic、heavy_chinglish→Chinglish）。
 
+- **Essay（M5-W3 MVP）**：state = {essay, word_count, genre}（**中文题面 prompt_zh 永不进 state**——CJK 低准确率红线 docs/05 §3.5；task 维按 essay 自身 + genre 判，英文题面字段随契约演进另立，见 PROGRESS 改进建议）；空卷（0 词）→ Pending 桶；词数/时长的**卷面级**硬校验（字数红线/超时/禁粘贴）在卷面模拟层（docs/10 §5，M5-W8）与套卷 run 层（W6），grade() 层不重复扣分；rubric 取题面 `rubric_id`。
+
 ## 4. 第三级：LLM 复核与待裁定桶
 
 ```rust

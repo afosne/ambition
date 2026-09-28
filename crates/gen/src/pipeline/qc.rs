@@ -151,6 +151,12 @@ pub(crate) fn qc_state(
             "reference": body.reference,
             "difficulty": question.difficulty,
         }),
+        // M5-W3：作文 QC——中文题面不进 state（红线），只看 genre/难度/英文指令
+        (ambition_core::QuestionKind::Essay(body), false) => serde_json::json!({
+            "stem": question.stem,
+            "genre": body.genre,
+            "difficulty": question.difficulty,
+        }),
         _ => serde_json::json!({"stem": question.stem}),
     };
     ambition_jev::JevState(value)
@@ -159,12 +165,16 @@ pub(crate) fn qc_state(
 /// 质检问题集（选择类：unique + distractor；全类：key/natural/difficulty_fit）
 pub(crate) fn qc_questions(kind: QuestionKindTag) -> JevQuestions {
     let mut qs = JevQuestions::new();
-    qs.insert(
-        "key_correct".into(),
-        JevQuestion::Noul(NoulQ {
-            instructions: "Is the provided answer key actually correct for this question?".into(),
-        }),
-    );
+    // 作文无答案键（开放作答）→ key_correct 无意义，跳过（M5-W3）
+    if !matches!(kind, QuestionKindTag::Essay) {
+        qs.insert(
+            "key_correct".into(),
+            JevQuestion::Noul(NoulQ {
+                instructions: "Is the provided answer key actually correct for this question?"
+                    .into(),
+            }),
+        );
+    }
     qs.insert(
         "natural".into(),
         JevQuestion::Score(ScoreQ {

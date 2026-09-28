@@ -14,6 +14,7 @@ fn kind_label(kind: &QuestionKind) -> &'static str {
         QuestionKind::SevenOfFive(_) => "七选五",
         QuestionKind::GrammarFill(_) => "语法填空",
         QuestionKind::Translation(_) => "翻译",
+        QuestionKind::Essay(_) => "作文",
     }
 }
 
@@ -80,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn test_kind_label_covers_all_seven_kinds() {
+    fn test_kind_label_covers_all_kinds() {
         let choice = ambition_core::ChoiceBody {
             options: vec![],
             answer: vec![],
@@ -125,6 +126,28 @@ mod tests {
                 blanks: vec![]
             })),
             "语法填空"
+        );
+        assert_eq!(
+            kind_label(&QuestionKind::Translation(ambition_core::TranslationBody {
+                direction: ambition_core::TranslationDirection {
+                    from: ambition_core::LangTag("zh-Hans".into()),
+                    to: ambition_core::LangTag("en".into()),
+                },
+                source_text: "s".into(),
+                reference: "r".into(),
+            })),
+            "翻译"
+        );
+        assert_eq!(
+            kind_label(&QuestionKind::Essay(ambition_core::EssayPrompt {
+                prompt_zh: "题面".into(),
+                genre: "argument".into(),
+                track: "cet4".into(),
+                rubric_id: "gaokao25".into(),
+                word_range: (120, 180),
+                minutes: 30,
+            })),
+            "作文"
         );
     }
 

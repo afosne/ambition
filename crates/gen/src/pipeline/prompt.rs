@@ -50,6 +50,25 @@ pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) ->
     } else {
         String::new()
     };
+    let essay_line = if spec
+        .kinds
+        .iter()
+        .any(|k| matches!(k, QuestionKindTag::Essay))
+    {
+        let l1_name = l1.name_in(name_lang);
+        match name_lang {
+            "zh" => format!(
+                "- `essay` 题型：`passage` = {l1_name} 中文题面（与 `translation` 并列的 {l1_name} 豁免字段），`stem` = 一句英文指令；把体裁（letter|notice|continuation|summary|argument|chart|email）与轨（gaokao|cet4|ielts）放进 `tags`；`answers` 留空。
+"
+            ),
+            _ => format!(
+                    "- For `essay`: `passage` = the {l1_name} prompt (the ONLY {l1_name}-allowed field, same as `translation`), `stem` = a short English instruction; put the genre (letter|notice|continuation|summary|argument|chart|email) and track (gaokao|cet4|ielts) in `tags`; leave `answers` empty.
+"
+            ),
+        }
+    } else {
+        String::new()
+    };
     let mut out = template
         .replace("{{count}}", &needed.to_string())
         .replace("{{kinds}}", &kinds)
@@ -62,6 +81,7 @@ pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) ->
         .replace("{{l2}}", &spec.l2.name_in(name_lang))
         .replace("{{topic_line}}", &topic_line)
         .replace("{{translation_line}}", &translation_line)
+        .replace("{{essay_line}}", &essay_line)
         .replace("{{feedback_line}}", &feedback_line);
     if let Some(words) = &spec.source_words {
         out.push_str(&format!(
@@ -109,7 +129,7 @@ pub(crate) fn draft_schema() -> JsonSchema {
                     "type": "object",
                     "required": ["kind", "stem", "answers", "difficulty", "tags"],
                     "properties": {
-                        "kind": {"type": "string", "enum": ["single_choice", "multi_choice", "fill_blank", "cloze", "reading", "seven_of_five", "grammar_fill", "translation"]},
+                        "kind": {"type": "string", "enum": ["single_choice", "multi_choice", "fill_blank", "cloze", "reading", "seven_of_five", "grammar_fill", "translation", "essay"]},
                         "stem": {"type": "string"},
                         "options": {"type": "array", "items": {"type": "string"}},
                         "answers": {"type": "array", "items": {"type": "string"}},

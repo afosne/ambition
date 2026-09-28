@@ -119,8 +119,8 @@ pub(crate) fn answer_state(question: &Question, answer: &Answer) -> JevState {
             state.insert("passage".into(), serde_json::json!(s75.passage));
             state.insert("options".into(), serde_json::json!(&s75.options));
         }
-        // 翻译/作文：本层不建 state（composite 分支自建：只进 l2，源文 l1 永不进，docs/05 §3.5）
-        QuestionKind::Translation(_) => {}
+        // 翻译/作文：本层不建 state（composite 分支自建：只进 l2，中文题面 l1 永不进，docs/05 §3.5）
+        QuestionKind::Translation(_) | QuestionKind::Essay(_) => {}
     }
     state.insert(
         "student_answer".into(),

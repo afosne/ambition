@@ -6,11 +6,14 @@ impl Grader {
     /// 三级流水线入口（①规则 → ②Jev → ③LLM/桶；永不 Err）
     /// 复合题型（Cloze/Reading/SevenOfFive/GrammarFill）拆子题递归后汇总（docs/07 §1 M4 注记）
     pub async fn grade(&self, question: &Question, answer: &Answer) -> GradeResult {
-        // 翻译题（M5-W2）：无规则层 → composite（LLM 不打分；docs/07 §1 Translation 行）
+        // 翻译/作文（M5-W2/W3）：无规则层 → composite（LLM 不打分；docs/07 §1）
         if let QuestionKind::Translation(body) = &question.kind {
             return self
                 .grade_translation_question(question, body, answer)
                 .await;
+        }
+        if let QuestionKind::Essay(body) = &question.kind {
+            return self.grade_essay_question(question, body, answer).await;
         }
         if question.kind.is_composite() {
             return self.grade_composite(question, answer).await;

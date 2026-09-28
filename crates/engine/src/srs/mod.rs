@@ -284,6 +284,8 @@ pub(crate) fn question_back(kind: &QuestionKind) -> String {
             .join(" | "),
         // 翻译（M5-W2）：卡背面 = 目标语参考译文
         QuestionKind::Translation(body) => body.reference.clone(),
+        // 作文（M5-W3）：无唯一答案 → 背面回显中文题面（复看题面本身）
+        QuestionKind::Essay(body) => body.prompt_zh.clone(),
     }
 }
 

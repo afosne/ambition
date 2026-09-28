@@ -5,6 +5,7 @@
 
 mod arbitrate;
 mod composite;
+mod essay;
 mod fill;
 mod translation;
 

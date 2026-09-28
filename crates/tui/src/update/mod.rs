@@ -330,15 +330,23 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                     }
                     Cmd::Submit(Answer::Group(subs))
                 }
-                // M5-W2：翻译 = 单文本作答（inputs[0] 单位编辑；空文不提交，docs/03 §1）
-                QuestionKind::Translation(_) => {
+                // M5-W2/W3：翻译/作文 = 单文本作答（inputs[0] 单位编辑；空文不提交，docs/03 §1）
+                QuestionKind::Translation(_) | QuestionKind::Essay(_) => {
+                    let hint = if matches!(
+                        state.questions[state.idx].kind,
+                        QuestionKind::Translation(_)
+                    ) {
+                        "译文"
+                    } else {
+                        "作文"
+                    };
                     let text = state
                         .inputs
                         .first()
                         .map(|field| field.trim().to_string())
                         .unwrap_or_default();
                     if text.is_empty() {
-                        state.error = Some("请先输入译文再提交（→ 跳过本题）".to_string());
+                        state.error = Some(format!("请先输入{hint}内容再提交（→ 跳过本题）"));
                         return Cmd::None;
                     }
                     Cmd::Submit(Answer::Text(text))

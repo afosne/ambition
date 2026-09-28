@@ -300,4 +300,36 @@ mod tests {
             Cmd::Submit(Answer::Text("I like spring.".into()))
         );
     }
+
+    #[test]
+    fn test_essay_question_submits_text_and_flags_empty() {
+        use ambition_core::EssayPrompt;
+        let q = Question::new(
+            "Write an essay in English according to the prompt.".into(),
+            QuestionKind::Essay(EssayPrompt {
+                prompt_zh: "以“绿色校园”为题写一篇短文。".into(),
+                genre: "argument".into(),
+                track: "cet4".into(),
+                rubric_id: "gaokao25".into(),
+                word_range: (120, 180),
+                minutes: 30,
+            }),
+            3,
+            vec!["essay".into(), "cet4".into()],
+            ambition_core::Provenance::Seed,
+        );
+        let mut s = new_state(vec![q]);
+        assert_eq!(s.inputs.len(), 1, "作文 = 单文本输入位");
+        assert_eq!(update(&mut s, Msg::Submit), Cmd::None, "空文不提交");
+        assert!(
+            s.error.as_deref().unwrap_or_default().contains("作文"),
+            "提示词按题型区分（作文）"
+        );
+        s.inputs[0] = "Nowadays more students...".to_string();
+        s.error = None;
+        assert_eq!(
+            update(&mut s, Msg::Submit),
+            Cmd::Submit(Answer::Text("Nowadays more students...".into()))
+        );
+    }
 }

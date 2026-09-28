@@ -26,8 +26,8 @@ pub use pipeline::*;
 pub use rule::*;
 
 use ambition_core::{
-    Answer, ChoiceBody, DimScore, ErrorTag, FillBody, GradeDetail, GradeResult, GradedBy,
-    ItemResult, Question, QuestionKind, TranslationBody, Verdict, normalize_text,
+    Answer, ChoiceBody, DimScore, ErrorTag, EssayPrompt, FillBody, GradeDetail, GradeResult,
+    GradedBy, ItemResult, Question, QuestionKind, TranslationBody, Verdict, normalize_text,
 };
 use ambition_jev::Route;
 use ambition_jev::{

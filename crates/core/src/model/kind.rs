@@ -119,15 +119,15 @@ impl QuestionKind {
             Self::FillBlank(body) => body.blanks.len(),
             Self::Cloze(body) => body.blanks.len(),
             Self::GrammarFill(body) => body.blanks.len(),
-            // 翻译（M5-W2）：单文本输入位（TUI 编辑路由据此初始化 inputs）
-            Self::Translation(_) => 1,
+            // 翻译/作文（M5-W2/W3）：单文本输入位（TUI 编辑路由据此初始化 inputs）
+            Self::Translation(_) | Self::Essay(_) => 1,
             _ => 0,
         }
     }
 
     /// 是否单文本输入（填空类 + 翻译/作文；TUI 打字编辑路由据此，docs/03 §1，M5-W2）
     pub fn is_text_input(&self) -> bool {
-        self.is_fill() || matches!(self, Self::Translation(_))
+        self.is_fill() || matches!(self, Self::Translation(_) | Self::Essay(_))
     }
 
     /// 选项数（选择类；填空类 0——TUI 光标移动据此）
@@ -157,6 +157,18 @@ mod tests {
             })
             .is_text_input(),
             "翻译 = 文本输入"
+        );
+        assert!(
+            QuestionKind::Essay(crate::EssayPrompt {
+                prompt_zh: "p".into(),
+                genre: "argument".into(),
+                track: "cet4".into(),
+                rubric_id: "gaokao25".into(),
+                word_range: (120, 180),
+                minutes: 30,
+            })
+            .is_text_input(),
+            "作文 = 文本输入"
         );
         assert!(
             !QuestionKind::SingleChoice(crate::ChoiceBody {

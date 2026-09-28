@@ -83,7 +83,24 @@ pub struct TranslationBody {
     pub reference: String,
 }
 
-/// 题型（M1 三型 + M4 题型补全：完形/阅读/七选五/语法填空；M5-W2 翻译；DESIGN §13.4）
+/// 作文题面（考试向；M5-W3，docs/02 §1）——`prompt_zh` 仅题面展示，**永不进 Jev state**
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EssayPrompt {
+    /// 中文题面（l1，展示用）
+    pub prompt_zh: String,
+    /// 体裁（letter|notice|continuation|summary|argument|chart|email…；进 state 用英文标签）
+    pub genre: String,
+    /// 考试轨（gaokao|cet4…）
+    pub track: String,
+    /// 判分口径 rubric_id（资产缺失 → Pending）
+    pub rubric_id: String,
+    /// 字数红线 (min, max)（卷面校验用，docs/10 §5）
+    pub word_range: (u16, u16),
+    /// 限时（分钟，卷面计时用）
+    pub minutes: u16,
+}
+
+/// 题型（M1 三型 + M4 题型补全：完形/阅读/七选五/语法填空；M5-W2 翻译/W3 作文；DESIGN §13.4）
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QuestionKind {
@@ -95,6 +112,7 @@ pub enum QuestionKind {
     SevenOfFive(SevenOfFiveBody),
     GrammarFill(GrammarFillBody),
     Translation(TranslationBody),
+    Essay(EssayPrompt),
 }
 
 /// 题目内容（参与 qid 寻址的字段集 —— 具名结构，schema 演化不致串位，docs/02-core-store §2）
