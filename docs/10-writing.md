@@ -24,6 +24,7 @@ pub struct ScaffoldPara { pub label_zh: String, pub lines: Vec<String> }  // Ful
 pub struct ScaffoldView { pub template_id: String, pub stage: ScaffoldStage, pub paragraphs: Vec<ScaffoldPara> }
 pub fn scaffold(t: &Template, stage: ScaffoldStage) -> ScaffoldView;      // 三阶段渐退：Full=句模板含占位；Half=只段落功能提示；Free=空骨架
 pub fn render(t: &Template, fills: &BTreeMap<String,String>) -> String;    // 套槽成文；缺槽保留 {{id}} 并 tracing::warn（不静默）
+pub struct ScaffoldCheck { pub meaning_kept: f32, pub fits_prompt: f32, pub passed: bool }  // W4 落地：Jev noul×2、双 prob ≥0.5 过（passed）；LLM 模板痕迹检测随 W5
 pub async fn check_scaffold(&self, essay, t) -> Result<ScaffoldCheck>;    // Jev noul×2（meaning_kept/fits_prompt）+ LLM 模板痕迹检测
 pub async fn personalize(&self, t, user_style) -> Result<Template>;       // 个人化变体（防被判模板）
 pub async fn promote_to_personal(&self, sentence, essay_id) -> Result<Template>;  // 佳句升格个人模板 → 08-adaptive(Phrase 卡)

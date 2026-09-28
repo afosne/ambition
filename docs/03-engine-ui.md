@@ -32,7 +32,7 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 //   （weekly_quiz / vocab_probe_* / spelling_material 随 M5+，docs/08 §1 注记）
 // 复习/词汇（S2）：due_list / review_answer / enroll_words / wrong_wordbook / word_detail / vocab_probe_* / weekly_quiz
 // 出题/题包（S4/S6）：generate / variant_drill / export_pack / import_pack / share_code / pack_updates
-// 写作（S3）：scaffold / submit_essay / model_essays / upgrade_sentence / translate_grade / writing_drills / drill_submit / long_sentence / polish
+// 写作（S3）：scaffold / templates / save_template / check_scaffold / render_template / submit_essay / model_essays / upgrade_sentence / translate_grade / writing_drills / drill_submit / long_sentence / polish
 // 笔记/日记/TODO：note_* / diary_write / diary_review / plan_for_exam / todo_complete
 // 打字/游戏/听说：typing_start / typing_finish / game_round / game_settle / speak / shadowing
 // 词汇深水/句式：pattern_* / sense_drill / rare_sense_queue / word_mastery

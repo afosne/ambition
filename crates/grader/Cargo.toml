@@ -7,6 +7,7 @@ edition.workspace = true
 ambition-core = { path = "../core" }
 ambition-jev = { path = "../jev" }
 ambition-llm = { path = "../llm" }
+ambition-writing = { path = "../writing" }
 serde = "1"
 serde_json = "1"
 tracing = "0.1"

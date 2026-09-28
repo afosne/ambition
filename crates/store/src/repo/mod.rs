@@ -4,6 +4,7 @@
 pub mod arbitration;
 pub mod attempts;
 pub mod cards;
+pub mod essay;
 pub mod kv;
 pub mod question_repo;
 pub mod usage;
@@ -11,6 +12,7 @@ pub mod usage;
 pub use arbitration::*;
 pub use attempts::*;
 pub use cards::*;
+pub use essay::*;
 pub use kv::*;
 pub use question_repo::*;
 pub use usage::*;

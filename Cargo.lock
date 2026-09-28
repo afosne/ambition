@@ -38,6 +38,7 @@ dependencies = [
  "ambition-llm",
  "ambition-srs",
  "ambition-store",
+ "ambition-writing",
  "async-trait",
  "serde",
  "serde_json",
@@ -77,6 +78,7 @@ dependencies = [
  "ambition-core",
  "ambition-jev",
  "ambition-llm",
+ "ambition-writing",
  "async-trait",
  "serde",
  "serde_json",
@@ -130,6 +132,7 @@ version = "0.1.0"
 dependencies = [
  "ambition-core",
  "ambition-srs",
+ "ambition-writing",
  "serde",
  "serde_json",
  "sqlx",

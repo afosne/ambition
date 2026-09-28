@@ -7,6 +7,7 @@ mod arbitrate;
 mod composite;
 mod essay;
 mod fill;
+mod scaffold_check;
 mod translation;
 
 pub use arbitrate::*;

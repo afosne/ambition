@@ -110,3 +110,14 @@ mod tests {
         assert_eq!(t.source, TemplateSource::Builtin, "serde(default) 兜底");
     }
 }
+
+/// 脚手架自查结果（M5-W4，docs/10 §1；Jev noul×2 双 prob、均 ≥0.5 → passed；LLM 模板痕迹检测随 W5）
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ScaffoldCheck {
+    /// 草稿保留所填槽位原意的概率（正面表述 noul）
+    pub meaning_kept: f32,
+    /// 草稿贴合体裁/目的的概率（正面表述 noul）
+    pub fits_prompt: f32,
+    /// 双项过线 = 通过
+    pub passed: bool,
+}

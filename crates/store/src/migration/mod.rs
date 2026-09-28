@@ -90,11 +90,42 @@ CREATE INDEX IF NOT EXISTS idx_srs_queue_due ON srs_queue(due_at);
 CREATE INDEX IF NOT EXISTS idx_srs_queue_wrong ON srs_queue(wrong_count);
 "#;
 
+const MIGRATION_V4: &str = r#"
+CREATE TABLE IF NOT EXISTS templates (
+    template_id TEXT PRIMARY KEY,
+    track       TEXT NOT NULL,
+    genre       TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    payload     TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS essays (
+    essay_id       TEXT PRIMARY KEY,
+    qid            TEXT,
+    prompt         TEXT NOT NULL,
+    genre          TEXT NOT NULL,
+    body           TEXT NOT NULL,
+    word_count     INTEGER NOT NULL,
+    scaffold_stage TEXT NOT NULL DEFAULT '',
+    template_id    TEXT NOT NULL DEFAULT '',
+    created_at     INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS essay_grades (
+    essay_id  TEXT PRIMARY KEY,
+    payload   TEXT NOT NULL,
+    graded_at INTEGER NOT NULL
+);
+"#;
+
 /// 迁移清单（只增不改；序号 = 目标版本）
-const MIGRATIONS: &[(i32, &str)] = &[(1, MIGRATION_V1), (2, MIGRATION_V2), (3, MIGRATION_V3)];
+const MIGRATIONS: &[(i32, &str)] = &[
+    (1, MIGRATION_V1),
+    (2, MIGRATION_V2),
+    (3, MIGRATION_V3),
+    (4, MIGRATION_V4),
+];
 
 /// 当前目标 schema 版本（清单最大号）
-pub const SCHEMA_VERSION: i32 = 3;
+pub const SCHEMA_VERSION: i32 = 4;
 
 /// 建库 + 迁移（幂等：已到目标版本则跳过；docs/02-core-store §2）
 pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
