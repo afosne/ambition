@@ -1,0 +1,85 @@
+{
+  "template_id": "cet4_argument_procon",
+  "track": "cet4",
+  "genre": "argument",
+  "skeleton": [
+    {
+      "key": "hook",
+      "label_zh": "引出话题 + 中心论点",
+      "lines": [
+        "In recent years, {{topic}} has sparked widespread concern.",
+        "{{thesis}}"
+      ]
+    },
+    {
+      "key": "body_pro",
+      "label_zh": "正面论证段",
+      "lines": [
+        "To begin with, {{reason_pro}}.",
+        "For instance, {{example_pro}}."
+      ]
+    },
+    {
+      "key": "conclusion",
+      "label_zh": "结论 + 呼吁",
+      "lines": [
+        "{{conclusion}}",
+        "Only in this way can we {{appeal}}."
+      ]
+    }
+  ],
+  "slots": [
+    {
+      "id": "topic",
+      "label_zh": "话题名词",
+      "options_en": ["college students' mental health", "environmental protection on campus"]
+    },
+    {
+      "id": "thesis",
+      "label_zh": "中心论点句",
+      "options_en": [
+        "From my perspective, immediate action is needed.",
+        "I hold the view that we should not turn a blind eye to it."
+      ]
+    },
+    {
+      "id": "reason_pro",
+      "label_zh": "正面理由句",
+      "options_en": [
+        "it brings tangible benefits to our daily life.",
+        "it helps us build a better habit in the long run."
+      ]
+    },
+    {
+      "id": "example_pro",
+      "label_zh": "例证句",
+      "options_en": [
+        "a recent survey shows that over 70% of students agree on this point.",
+        "our school tried it last semester and the result was encouraging."
+      ]
+    },
+    {
+      "id": "conclusion",
+      "label_zh": "结论句",
+      "options_en": [
+        "In a word, we should strike a balance between study and relaxation.",
+        "Taking all factors into account, it is worth our effort."
+      ]
+    },
+    {
+      "id": "appeal",
+      "label_zh": "呼吁行动",
+      "options_en": ["protect our mother earth together", "start from today and keep it up"]
+    }
+  ],
+  "phrases": [
+    { "text": "There is no denying that", "register": "neutral", "level": 3 },
+    { "text": "take ... into account", "register": "formal", "level": 4 },
+    { "text": "play a crucial role in", "register": "formal", "level": 4 }
+  ],
+  "anti_patterns": [
+    { "pattern_en": "Nowadays with the development of society and economy", "note_zh": "模板痕迹过重，考官反感，改写成具体话题句" },
+    { "pattern_en": "Everything has two sides", "note_zh": "中式万能句，改写成正反具体观点" },
+    { "pattern_en": "I think this is very good", "note_zh": "口语化、无论证，升级为具体结论句" }
+  ]
+}

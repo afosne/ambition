@@ -6,11 +6,24 @@
 ## 1. 模板作文（脚手架三阶段，最终脱模板）
 
 ```rust
-pub struct Template { template_id, track, genre /*Letter|Notice|Continuation|Summary|Argument|Chart|Email…*/,
-                      skeleton: Vec<ParaFunc>, slots: Vec<Slot>, phrases: Vec<Phrase>, anti_patterns: Vec<AntiPattern>, source: Builtin|Personal }
+// —— M5-W4 精确化契约（2026-09-28；实现 crates/writing，内置库 data/templates/*.json、个人模板 SQLite templates 表）——
+pub enum TemplateSource { Builtin, Personal }
+/// 段落功能（骨架一环；lines = 该段句模板，含 {{slot_id}} 占位）
+pub struct ParaFunc { pub key: String, pub label_zh: String, pub lines: Vec<String> }
+/// 内容槽位（{{id}} 出现在 ParaFunc.lines；options_en = 槽位备选高级句）
+pub struct Slot { pub id: String, pub label_zh: String, pub options_en: Vec<String> }
+/// 亮点词汇/句式（语域分档）
+pub struct Phrase { pub text: String, pub register: String, pub level: u8 }
+/// 反模板黑名单（模板痕迹句式）
+pub struct AntiPattern { pub pattern_en: String, pub note_zh: String }
+pub struct Template { pub template_id: String, pub track: String, pub genre: String,
+                      pub skeleton: Vec<ParaFunc>, pub slots: Vec<Slot>, pub phrases: Vec<Phrase>,
+                      pub anti_patterns: Vec<AntiPattern>, pub source: TemplateSource }
 pub enum ScaffoldStage { Full, Half, Free }
-pub fn scaffold(t: &Template, stage: ScaffoldStage) -> ScaffoldView;
-pub fn render(t: &Template, fills: &BTreeMap<String,String>) -> String;
+pub struct ScaffoldPara { pub label_zh: String, pub lines: Vec<String> }  // Full=句模板；Half/Free 隐藏 lines
+pub struct ScaffoldView { pub template_id: String, pub stage: ScaffoldStage, pub paragraphs: Vec<ScaffoldPara> }
+pub fn scaffold(t: &Template, stage: ScaffoldStage) -> ScaffoldView;      // 三阶段渐退：Full=句模板含占位；Half=只段落功能提示；Free=空骨架
+pub fn render(t: &Template, fills: &BTreeMap<String,String>) -> String;    // 套槽成文；缺槽保留 {{id}} 并 tracing::warn（不静默）
 pub async fn check_scaffold(&self, essay, t) -> Result<ScaffoldCheck>;    // Jev noul×2（meaning_kept/fits_prompt）+ LLM 模板痕迹检测
 pub async fn personalize(&self, t, user_style) -> Result<Template>;       // 个人化变体（防被判模板）
 pub async fn promote_to_personal(&self, sentence, essay_id) -> Result<Template>;  // 佳句升格个人模板 → 08-adaptive(Phrase 卡)

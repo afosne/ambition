@@ -156,6 +156,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ambition-writing"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "assert-json-diff"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

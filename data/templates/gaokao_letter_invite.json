@@ -1,0 +1,72 @@
+{
+  "template_id": "gaokao_letter_invite",
+  "track": "gaokao",
+  "genre": "letter",
+  "skeleton": [
+    {
+      "key": "greeting",
+      "label_zh": "称呼与问候",
+      "lines": ["Dear {{recipient}},"]
+    },
+    {
+      "key": "purpose",
+      "label_zh": "写信目的",
+      "lines": ["I am writing to {{purpose}}."]
+    },
+    {
+      "key": "details",
+      "label_zh": "细节展开（时间/地点/安排）",
+      "lines": ["{{detail_time}}", "{{detail_place}}", "{{detail_arrangement}}"]
+    },
+    {
+      "key": "closing",
+      "label_zh": "期待回复与落款",
+      "lines": ["I am looking forward to your early reply.", "Yours, {{signature}}"]
+    }
+  ],
+  "slots": [
+    {
+      "id": "recipient",
+      "label_zh": "称呼",
+      "options_en": ["Mr. Smith", "the headmaster", "Professor Lee"]
+    },
+    {
+      "id": "purpose",
+      "label_zh": "写信目的",
+      "options_en": [
+        "invite you to attend the English Speech Contest as a judge",
+        "ask for your advice on our after-school reading program"
+      ]
+    },
+    {
+      "id": "detail_time",
+      "label_zh": "时间细节句",
+      "options_en": ["The contest will be held in the school hall at 3 p.m. next Friday."]
+    },
+    {
+      "id": "detail_place",
+      "label_zh": "地点细节句",
+      "options_en": ["All the students of Grade 3 will be present there."]
+    },
+    {
+      "id": "detail_arrangement",
+      "label_zh": "安排细节句",
+      "options_en": [
+        "Five speakers will each give a five-minute speech, followed by your comments."
+      ]
+    },
+    {
+      "id": "signature",
+      "label_zh": "落款",
+      "options_en": ["Li Hua", "Li Hua from Class 1"]
+    }
+  ],
+  "phrases": [
+    { "text": "I would be more than grateful if you could", "register": "formal", "level": 4 },
+    { "text": "Please do not hesitate to contact me", "register": "formal", "level": 3 }
+  ],
+  "anti_patterns": [
+    { "pattern_en": "I am writing to you to invite you", "note_zh": "啰嗦直译，合并为一句目的句" },
+    { "pattern_en": "I am fine thank you and you", "note_zh": "口语万能开场，书信开场用 I am writing..." }
+  ]
+}

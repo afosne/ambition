@@ -12,6 +12,7 @@ members = [
   "crates/store",
   "crates/engine",
   "crates/tui",
+  "crates/writing",
 ]
 
 [workspace.package]

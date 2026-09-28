@@ -45,6 +45,12 @@ lexicon/<lang>/            # **词库资源**（EC-DICT 构建产物：JSONL+索
   "writing": { "genres": ["letter","continuation"], "rubric": "gaokao25", "word_range": [80,120], "minutes": 30 },
   "thresholds": { "jev_accept": 0.75, "jev_reject": 0.35 }, "error_weights": {…}, "daily_budget": { "new_words": 20, "reviews": 60, "drills": 1, "diary": 1 },
   "features": { "long_sentence": true, "phonics": false } }
+// templates/<id>.json（内置模板库，M5-W4；个人模板在 SQLite templates 表——02-core-store §2 EssayRepo）
+{ "template_id": "cet4_argument_procon", "track": "cet4", "genre": "argument",
+  "skeleton": [ { "key": "hook", "label_zh": "引入与中心论点", "lines": ["{{thesis}}", "This issue has aroused wide attention."] } ],
+  "slots": [ { "id": "thesis", "label_zh": "中心论点句", "options_en": ["It is high time that we took action.", "Only in this way can we make a difference."] } ],
+  "phrases": [ { "text": "From my perspective,", "register": "neutral", "level": 3 } ],
+  "anti_patterns": [ { "pattern_en": "Nowadays with the development of society", "note_zh": "模板痕迹过重，考官反感" } ] }
 // rubrics/<id>.json（判分口径 version 化；M5 起实际存放 = crates/grader/assets/rubrics/<id>.json——判分语料红线 #19，不进 data/）
 { "rubric_id": "gaokao25", "version": 1, "max": 25, "band_map": [5,10,15,20,25],
   "dims": [ { "key": "task", "weight": 0.25, "levels_en": ["…档位英文描述…"] }, … ], "veto": ["off_topic","meaning_changed","heavy_chinglish"] }
