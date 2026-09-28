@@ -110,32 +110,6 @@ mod tests {
         std::env::temp_dir().join(format!("ambition-engine-{tag}-{}.db", std::process::id()))
     }
 
-    fn multi_pick_two() -> Question {
-        Question::new(
-            "pick two".into(),
-            QuestionKind::MultiChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "a".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "b".into(),
-                    },
-                    OptionItem {
-                        id: 2,
-                        text: "c".into(),
-                    },
-                ],
-                answer: vec![0, 2],
-            }),
-            2,
-            vec![],
-            ambition_core::Provenance::Seed,
-        )
-    }
-
     #[tokio::test]
     async fn test_open_memory_creates_business_schema() {
         let engine = Engine::open_memory().await.expect("打开内存库");

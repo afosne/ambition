@@ -136,25 +136,10 @@ impl QuestionKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::question::{BlankItem, ChoiceBody, FillBody, OptionItem, ReadingBody, ReadingItem};
+    use crate::common::fixtures::*;
+    use crate::question::{BlankItem, FillBody, OptionItem, ReadingBody, ReadingItem};
 
     /// 共享夹具（P-16：跨模块 helper 非 test_ 前缀——但钩子按 test_ 前缀识别测试，fixture 用 test_ 前缀在本文件亦可）
-    fn test_choice_body() -> ChoiceBody {
-        ChoiceBody {
-            options: vec![
-                OptionItem {
-                    id: 0,
-                    text: "quick".into(),
-                },
-                OptionItem {
-                    id: 1,
-                    text: "slowly".into(),
-                },
-            ],
-            answer: vec![0],
-        }
-    }
-
     #[test]
     fn test_is_choice_matches_single_and_multi_only() {
         assert!(QuestionKind::SingleChoice(test_choice_body()).is_choice());

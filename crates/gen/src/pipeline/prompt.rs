@@ -106,14 +106,7 @@ pub(crate) fn draft_schema() -> JsonSchema {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn spec() -> GenSpec {
-        GenSpec::new(
-            "cet4",
-            vec![QuestionKindTag::SingleChoice, QuestionKindTag::FillBlank],
-            3,
-        )
-    }
+    use crate::common::*;
 
     #[test]
     fn test_render_prompt_substitutes_placeholders_and_feedback() {

@@ -4,6 +4,9 @@ use ambition_core::{
     BlankItem, ChoiceBody, FillBody, OptionItem, Provenance, Question, QuestionKind,
 };
 
+use ambition_jev::JevClient;
+use wiremock::MockServer;
+
 use crate::Grader;
 
 /// 单选样例题（一二级判定 / Jev 升级 / 仲裁测试共用）
@@ -77,6 +80,16 @@ pub(crate) fn offline_router() -> Grader {
     Grader::offline()
 }
 
+/// 指向 wiremock 服务器的 Jev 客户端（`{uri}/v1` + key=k；Jev 升级用例共用）
+pub(crate) async fn client_with(server: &MockServer) -> JevClient {
+    JevClient::with_options(
+        &format!("{}/v1", server.uri()),
+        ambition_jev::DEFAULT_JEV_MODEL,
+        Some("k".into()),
+        None,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,5 +136,13 @@ mod tests {
             "离线形态默认英语阈值档"
         );
         assert!(grader.jev.is_none() && grader.llm.is_none(), "无 AI 供给方");
+    }
+
+    #[tokio::test]
+    async fn test_client_with_fixture_builds_against_mock_server() {
+        let server = MockServer::start().await;
+        let client = client_with(&server).await;
+        // 端点/key 为内部字段；wire 形状由 fill/ring 的 wiremock 用例覆盖，此处钉构造路径
+        drop(client);
     }
 }

@@ -8,6 +8,8 @@
 //! - `content/`   内容资产（qpack 题包 + chinglish 错式库）
 
 // 模块分层（docs/01 §组织：lib.rs 薄壳，文件 ≤500 行，pre-commit 门禁强制）
+#[cfg(test)]
+mod common;
 mod content;
 mod draft;
 mod pipeline;

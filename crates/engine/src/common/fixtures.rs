@@ -62,6 +62,33 @@ pub(crate) fn attempt_for(qid: Qid, selected: Vec<u32>, id: &str) -> Attempt {
     }
 }
 
+/// 多选样例题（三选二；待裁定桶与装配测试共用）
+pub(crate) fn multi_pick_two() -> Question {
+    Question::new(
+        "pick two".into(),
+        QuestionKind::MultiChoice(ChoiceBody {
+            options: vec![
+                OptionItem {
+                    id: 0,
+                    text: "a".into(),
+                },
+                OptionItem {
+                    id: 1,
+                    text: "b".into(),
+                },
+                OptionItem {
+                    id: 2,
+                    text: "c".into(),
+                },
+            ],
+            answer: vec![0, 2],
+        }),
+        2,
+        vec![],
+        ambition_core::Provenance::Seed,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,5 +118,15 @@ mod tests {
         assert!(matches!(attempt.answer, Answer::Choice(ids) if ids == vec![0, 2]));
         assert_eq!(attempt.mode, AttemptMode::Practice);
         assert!(attempt.timing.is_none(), "无计时（非假对基线样本）");
+    }
+
+    #[test]
+    fn test_multi_pick_two_fixture_answers_two_of_three() {
+        let q = multi_pick_two();
+        let QuestionKind::MultiChoice(choice) = &q.kind else {
+            panic!("多选夹具必须是 MultiChoice");
+        };
+        assert_eq!(choice.answer, vec![0, 2], "三选二夹具");
+        assert_eq!(choice.options.len(), 3);
     }
 }

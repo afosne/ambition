@@ -6,6 +6,9 @@ pub mod ids;
 pub mod sync;
 pub mod time;
 
+#[cfg(test)]
+pub(crate) mod fixtures;
+
 pub use analysis::*;
 pub use ids::*;
 pub use sync::*;

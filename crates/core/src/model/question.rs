@@ -162,22 +162,7 @@ impl Question {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn test_choice_body() -> ChoiceBody {
-        ChoiceBody {
-            options: vec![
-                OptionItem {
-                    id: 0,
-                    text: "quick".into(),
-                },
-                OptionItem {
-                    id: 1,
-                    text: "slowly".into(),
-                },
-            ],
-            answer: vec![0],
-        }
-    }
+    use crate::common::fixtures::*;
 
     #[test]
     fn test_new_computes_stable_qid() {

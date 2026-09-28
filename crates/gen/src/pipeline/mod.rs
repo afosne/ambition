@@ -136,17 +136,10 @@ impl Generator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::*;
     use ambition_core::Provenance;
     use wiremock::matchers::{body_string_contains, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    fn spec() -> GenSpec {
-        GenSpec::new(
-            "cet4",
-            vec![QuestionKindTag::SingleChoice, QuestionKindTag::FillBlank],
-            3,
-        )
-    }
 
     fn choice_draft_json() -> serde_json::Value {
         serde_json::json!({

@@ -85,14 +85,7 @@ impl GenSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn spec() -> GenSpec {
-        GenSpec::new(
-            "cet4",
-            vec![QuestionKindTag::SingleChoice, QuestionKindTag::FillBlank],
-            3,
-        )
-    }
+    use crate::common::*;
 
     #[test]
     fn test_new_gen_spec_defaults() {

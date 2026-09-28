@@ -1,5 +1,6 @@
 //! Anthropic Messages 协议（结构化输出强制 tool input_schema，docs/05 §1）
 
+use super::ProviderConn;
 use crate::{GenRequest, LlmError, LlmOut, LlmProvider};
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -7,10 +8,7 @@ const EMIT_TOOL_NAME: &str = "emit_json";
 
 /// Anthropic 供给方
 pub struct Anthropic {
-    http: reqwest::Client,
-    base_url: String,
-    api_key: Option<String>,
-    model: String,
+    conn: ProviderConn,
 }
 
 impl Anthropic {
@@ -21,10 +19,7 @@ impl Anthropic {
         api_key: Option<String>,
     ) -> Self {
         Self {
-            http: reqwest::Client::new(),
-            base_url: base_url.into().trim_end_matches('/').to_string(),
-            api_key,
-            model: model.into(),
+            conn: ProviderConn::new(base_url, model, api_key),
         }
     }
 
@@ -110,14 +105,15 @@ impl Anthropic {
 
     /// 发一次请求
     async fn send(&self, req: &GenRequest) -> Result<LlmOut, LlmError> {
-        let api_key = self.api_key.as_deref().ok_or(LlmError::Offline)?;
-        let url = format!("{}/messages", self.base_url);
+        let api_key = self.conn.api_key.as_deref().ok_or(LlmError::Offline)?;
+        let url = format!("{}/messages", self.conn.base_url);
         let resp = self
+            .conn
             .http
             .post(&url)
             .header("x-api-key", api_key)
             .header("anthropic-version", ANTHROPIC_VERSION)
-            .json(&Self::build_body(req, &self.model))
+            .json(&Self::build_body(req, &self.conn.model))
             .send()
             .await
             .map_err(|_| LlmError::Http {
@@ -135,7 +131,7 @@ impl Anthropic {
                 status: 502,
                 retryable: true,
             })?;
-        Self::parse_response(&body, &self.model)
+        Self::parse_response(&body, &self.conn.model)
     }
 }
 
@@ -146,7 +142,7 @@ impl LlmProvider for Anthropic {
     }
 
     fn model(&self) -> &str {
-        &self.model
+        &self.conn.model
     }
 }
 
@@ -161,9 +157,9 @@ mod tests {
     #[test]
     fn test_new_trims_base_url_and_defaults_keyless() {
         let p = Anthropic::new("https://api.anthropic.com/v1/", "claude", None);
-        assert_eq!(p.base_url, "https://api.anthropic.com/v1");
-        assert!(p.api_key.is_none());
-        assert_eq!(p.model, "claude");
+        assert_eq!(p.conn.base_url, "https://api.anthropic.com/v1");
+        assert!(p.conn.api_key.is_none());
+        assert_eq!(p.conn.model, "claude");
     }
 
     #[test]

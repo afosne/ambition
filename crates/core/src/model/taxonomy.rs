@@ -280,23 +280,8 @@ impl AttemptMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Answer, ChoiceBody, OptionItem, Question, QuestionKind};
-
-    fn test_choice_body() -> ChoiceBody {
-        ChoiceBody {
-            options: vec![
-                OptionItem {
-                    id: 0,
-                    text: "quick".into(),
-                },
-                OptionItem {
-                    id: 1,
-                    text: "slowly".into(),
-                },
-            ],
-            answer: vec![0],
-        }
-    }
+    use crate::common::fixtures::*;
+    use crate::{Answer, Question, QuestionKind};
 
     #[test]
     fn test_as_str_is_snake_case() {

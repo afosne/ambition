@@ -1,14 +1,12 @@
 //! OpenAI 兼容协议（chat/completions；含 DeepSeek/Qwen/Moonshot/Ollama 同款路径）
 //! response_format=json_schema 约束结构化输出，400/422 时降级 json_object + schema 内嵌 system。
 
+use super::ProviderConn;
 use crate::{GenRequest, JsonSchema, LlmError, LlmOut, LlmProvider};
 
 /// OpenAI 兼容供给方
 pub struct OpenAiCompat {
-    http: reqwest::Client,
-    base_url: String,
-    api_key: Option<String>,
-    model: String,
+    conn: ProviderConn,
 }
 
 impl OpenAiCompat {
@@ -19,10 +17,7 @@ impl OpenAiCompat {
         api_key: Option<String>,
     ) -> Self {
         Self {
-            http: reqwest::Client::new(),
-            base_url: base_url.into().trim_end_matches('/').to_string(),
-            api_key,
-            model: model.into(),
+            conn: ProviderConn::new(base_url, model, api_key),
         }
     }
 
@@ -106,15 +101,16 @@ impl OpenAiCompat {
 
     /// 发一次请求（schema 模式先试 json_schema，400/422 自动降级 json_object）
     async fn send(&self, req: &GenRequest) -> Result<LlmOut, LlmError> {
-        let api_key = self.api_key.as_deref().ok_or(LlmError::Offline)?;
-        let url = format!("{}/chat/completions", self.base_url);
+        let api_key = self.conn.api_key.as_deref().ok_or(LlmError::Offline)?;
+        let url = format!("{}/chat/completions", self.conn.base_url);
         let json_schema_mode = req.schema.is_some();
 
         let resp = self
+            .conn
             .http
             .post(&url)
             .bearer_auth(api_key)
-            .json(&Self::build_body(req, &self.model, json_schema_mode))
+            .json(&Self::build_body(req, &self.conn.model, json_schema_mode))
             .send()
             .await
             .map_err(|_| LlmError::Http {
@@ -126,10 +122,11 @@ impl OpenAiCompat {
         // 结构化模式被拒（旧供应商不认 json_schema）→ 降级 json_object + 内嵌 schema 重发
         if json_schema_mode && (status == 400 || status == 422) {
             let fallback = self
+                .conn
                 .http
                 .post(&url)
                 .bearer_auth(api_key)
-                .json(&Self::build_fallback_body(req, &self.model))
+                .json(&Self::build_fallback_body(req, &self.conn.model))
                 .send()
                 .await
                 .map_err(|_| LlmError::Http {
@@ -147,7 +144,7 @@ impl OpenAiCompat {
                     status: 502,
                     retryable: true,
                 })?;
-            return Self::parse_response(&body, &self.model);
+            return Self::parse_response(&body, &self.conn.model);
         }
 
         // 非成功状态先分类（401 等错误体可能非 JSON，不能先 parse）
@@ -162,7 +159,7 @@ impl OpenAiCompat {
                 status: 502,
                 retryable: true,
             })?;
-        Self::parse_response(&body, &self.model)
+        Self::parse_response(&body, &self.conn.model)
     }
 }
 
@@ -173,7 +170,7 @@ impl LlmProvider for OpenAiCompat {
     }
 
     fn model(&self) -> &str {
-        &self.model
+        &self.conn.model
     }
 }
 
@@ -195,9 +192,9 @@ mod tests {
     #[test]
     fn test_new_trims_base_url_and_defaults_keyless() {
         let p = OpenAiCompat::new("http://x/v1/", "m1", None);
-        assert_eq!(p.base_url, "http://x/v1", "尾斜杠修剪");
-        assert!(p.api_key.is_none());
-        assert_eq!(p.model, "m1");
+        assert_eq!(p.conn.base_url, "http://x/v1", "尾斜杠修剪");
+        assert!(p.conn.api_key.is_none());
+        assert_eq!(p.conn.model, "m1");
     }
 
     #[test]

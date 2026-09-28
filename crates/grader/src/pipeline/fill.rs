@@ -203,15 +203,6 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    async fn client_with(server: &MockServer) -> JevClient {
-        JevClient::with_options(
-            &format!("{}/v1", server.uri()),
-            ambition_jev::DEFAULT_JEV_MODEL,
-            Some("k".into()),
-            None,
-        )
-    }
-
     #[tokio::test]
     async fn test_grade_fill_jev_flips_variant_to_acceptable() {
         let server = MockServer::start().await;

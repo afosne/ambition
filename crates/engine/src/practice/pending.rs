@@ -80,35 +80,7 @@ impl Engine {
 mod tests {
     use super::*;
     use crate::common::*;
-    use ambition_core::{
-        Attempt, BlankItem, ChoiceBody, FillBody, OptionItem, QuestionKind, UsageRecord,
-    };
-
-    fn multi_pick_two() -> Question {
-        Question::new(
-            "pick two".into(),
-            QuestionKind::MultiChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "a".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "b".into(),
-                    },
-                    OptionItem {
-                        id: 2,
-                        text: "c".into(),
-                    },
-                ],
-                answer: vec![0, 2],
-            }),
-            2,
-            vec![],
-            ambition_core::Provenance::Seed,
-        )
-    }
+    use ambition_core::{Attempt, BlankItem, FillBody, QuestionKind, UsageRecord};
 
     #[tokio::test]
     async fn test_pending_bucket_lists_only_pending_entries() {
