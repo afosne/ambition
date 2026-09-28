@@ -39,7 +39,7 @@ pub fn grade_single_choice(body: &ChoiceBody, selected: &[u32]) -> GradeResult {
         max: 1.0,
         confidence: 1.0,
         graded_by: GradedBy::Rule,
-        items: vec![ItemResult { index: 0, correct }],
+        detail: GradeDetail::Items(vec![ItemResult { index: 0, correct }]),
         error_tags: vec![],
     }
 }
@@ -58,10 +58,10 @@ pub fn grade_multi_choice_rule(body: &ChoiceBody, selected: &[u32]) -> Option<Gr
             max: 1.0,
             confidence: 1.0,
             graded_by: GradedBy::Rule,
-            items: vec![ItemResult {
+            detail: GradeDetail::Items(vec![ItemResult {
                 index: 0,
                 correct: false,
-            }],
+            }]),
             error_tags: vec![],
         });
     }
@@ -94,7 +94,7 @@ pub fn grade_fill_blank_rule(fill: &FillBody, answers: &[String]) -> GradeResult
         max: items.len() as f32,
         confidence: 1.0,
         graded_by: GradedBy::Rule,
-        items,
+        detail: GradeDetail::Items(items),
         error_tags: vec![],
     }
 }
@@ -225,14 +225,14 @@ mod tests {
         assert_eq!(ok.verdict, Verdict::Correct);
         assert_eq!((ok.score, ok.max), (2.0, 2.0), "子题分累加");
         assert_eq!(ok.graded_by, GradedBy::Rule);
-        assert_eq!(ok.items.len(), 2, "两子题两 item");
+        assert_eq!(ok.items().len(), 2, "两子题两 item");
         // 一对一半错 → Partial
         let partial = grader
             .grade(&q, &Answer::Fill(vec!["am".into(), "wrong".into()]))
             .await;
         assert_eq!(partial.verdict, Verdict::Partial);
         assert_eq!((partial.score, partial.max), (1.0, 2.0));
-        assert!(partial.items[0].correct && !partial.items[1].correct);
+        assert!(partial.items()[0].correct && !partial.items()[1].correct);
         // 全错 → Wrong
         let wrong = grader
             .grade(&q, &Answer::Fill(vec!["x".into(), "y".into()]))
@@ -257,7 +257,7 @@ mod tests {
             .await;
         assert_eq!(all_right.verdict, Verdict::Correct);
         assert_eq!((all_right.score, all_right.max), (2.0, 2.0));
-        assert_eq!(all_right.items.len(), 2);
+        assert_eq!(all_right.items().len(), 2);
         let one_wrong = grader
             .grade(
                 &q,
@@ -265,7 +265,7 @@ mod tests {
             )
             .await;
         assert_eq!(one_wrong.verdict, Verdict::Partial);
-        assert!(!one_wrong.items[1].correct, "第二子题错");
+        assert!(!one_wrong.items()[1].correct, "第二子题错");
         let all_wrong = grader
             .grade(
                 &q,
@@ -288,10 +288,10 @@ mod tests {
         let ok = grader.grade(&q, &Answer::Choice(vec![0, 2])).await;
         assert_eq!(ok.verdict, Verdict::Correct);
         assert_eq!((ok.score, ok.max), (2.0, 2.0), "两缺口两子题");
-        assert!(ok.items.iter().all(|i| i.correct));
+        assert!(ok.items().iter().all(|i| i.correct));
         let half = grader.grade(&q, &Answer::Choice(vec![0, 1])).await;
         assert_eq!(half.verdict, Verdict::Partial);
-        assert!(!half.items[1].correct);
+        assert!(!half.items()[1].correct);
         let wrong = grader.grade(&q, &Answer::Choice(vec![1, 1])).await;
         assert_eq!(wrong.verdict, Verdict::Wrong);
         // Choice 位数不齐 → 防御 Pending
@@ -360,7 +360,7 @@ mod tests {
         assert_eq!(half.verdict, Verdict::Wrong);
         assert_eq!(half.score, 1.0);
         assert_eq!(
-            half.items,
+            half.items().to_vec(),
             vec![
                 ItemResult {
                     index: 0,

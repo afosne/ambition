@@ -17,6 +17,7 @@ mod rule;
 pub use common::judges::*;
 pub use common::thresholds::*;
 pub(crate) use common::*;
+pub use corpus::rubric::{Rubric, RubricDim, load_rubric};
 pub use corpus::{
     ERROR_TAGS_VERSION, corpus_version, error_cause_question, error_cause_questions,
     error_criteria, tag_error_cause,
@@ -25,11 +26,12 @@ pub use pipeline::*;
 pub use rule::*;
 
 use ambition_core::{
-    Answer, ChoiceBody, ErrorTag, FillBody, GradeResult, GradedBy, ItemResult, Question,
-    QuestionKind, Verdict, normalize_text,
+    Answer, ChoiceBody, DimScore, ErrorTag, FillBody, GradeDetail, GradeResult, GradedBy,
+    ItemResult, Question, QuestionKind, Verdict, normalize_text,
 };
 use ambition_jev::Route;
 use ambition_jev::{
-    JevClient, JevError, JevQuestion, JevQuestions, JevState, NoulQ, route_from_margin,
+    JevAnswer, JevClient, JevError, JevQuestion, JevQuestions, JevState, NoulQ, ScoreQ,
+    route_from_margin,
 };
 use ambition_llm::{GenRequest, LlmError, LlmKind, LlmRouter};

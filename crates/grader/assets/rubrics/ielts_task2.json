@@ -1,0 +1,45 @@
+{
+  "rubric_id": "ielts_task2",
+  "version": 1,
+  "max": 9,
+  "band_map": [4, 5, 6, 7, 8, 9],
+  "dims": [
+    {
+      "key": "task_response",
+      "weight": 0.25,
+      "levels_en": [
+        "does not address the task, no relevant position",
+        "addresses the task only partially, position partly clear",
+        "fully addresses all parts of the task with a clear and extended position"
+      ]
+    },
+    {
+      "key": "coherence_cohesion",
+      "weight": 0.25,
+      "levels_en": [
+        "no clear progression, ideas disconnected",
+        "coherent overall with some lapses in cohesion",
+        "skillfully manages cohesion, progression and referencing"
+      ]
+    },
+    {
+      "key": "lexical_resource",
+      "weight": 0.25,
+      "levels_en": [
+        "limited range, frequent errors impede meaning",
+        "adequate range with some inaccuracies",
+        "wide range used precisely, naturally and appropriately"
+      ]
+    },
+    {
+      "key": "grammatical_range",
+      "weight": 0.25,
+      "levels_en": [
+        "limited range with frequent errors",
+        "mix of simple and complex forms with some errors",
+        "wide range of structures used accurately and appropriately"
+      ]
+    }
+  ],
+  "veto": ["off_topic", "meaning_changed", "heavy_chinglish"]
+}

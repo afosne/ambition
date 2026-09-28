@@ -213,7 +213,7 @@ mod tests {
             max: 1.0,
             confidence: 1.0,
             graded_by: ambition_core::GradedBy::Human,
-            items: vec![],
+            detail: ambition_core::GradeDetail::Plain,
             error_tags: vec![],
         }
     }

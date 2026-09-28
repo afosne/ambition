@@ -161,7 +161,7 @@ mod tests {
             max: 2.0,
             confidence: 0.0,
             graded_by: GradedBy::Rule,
-            items: vec![],
+            detail: ambition_core::GradeDetail::Plain,
             error_tags: vec![],
         }
     }

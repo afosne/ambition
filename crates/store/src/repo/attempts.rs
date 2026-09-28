@@ -261,7 +261,10 @@ mod tests {
                         .fetch_one(&pool)
                         .await
                         .expect("payload 列");
-                assert!(payload.contains("\"items\""), "负载列名 payload: {payload}");
+                assert!(
+                    payload.contains("\"detail\""),
+                    "负载列名 payload（M5 detail 字段随行）: {payload}"
+                );
             });
     }
 }

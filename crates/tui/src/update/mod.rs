@@ -407,7 +407,7 @@ mod tests {
             max: 1.0,
             confidence: 1.0,
             graded_by: ambition_core::GradedBy::Rule,
-            items: vec![],
+            detail: ambition_core::GradeDetail::Plain,
             error_tags: vec![],
         });
         assert_eq!(update(&mut s, Msg::Submit), Cmd::None, "已判分忽略提交");

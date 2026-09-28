@@ -22,7 +22,7 @@ pub(crate) fn pending_grade(
         max,
         confidence: 0.0,
         graded_by: GradedBy::Rule,
-        items,
+        detail: GradeDetail::Items(items),
         error_tags,
     }
 }

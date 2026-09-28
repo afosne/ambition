@@ -16,11 +16,13 @@ impl Grader {
         let max = result.max;
         let mut flipped = 0usize;
         let mut undecided = false;
-        for slot in 0..result.items.len() {
-            if result.items[slot].correct {
+        // 逐项判定取出改写（M5 detail 收口：take_items/set_items配对，非 Items 变体原样放回）
+        let mut items = result.take_items();
+        for slot in 0..items.len() {
+            if items[slot].correct {
                 continue;
             }
-            let blank_index = result.items[slot].index;
+            let blank_index = items[slot].index;
             let typed = match answer {
                 Answer::Fill(values) => values.get(blank_index).cloned().unwrap_or_default(),
                 _ => String::new(),
@@ -30,6 +32,7 @@ impl Grader {
                 Err(err) => {
                     // Jev 中途失败 = Jev 离线：保持规则结果（离线矩阵），标签缺失可见
                     tracing::warn!(error = %err, "jev_blank failed, keeping rule result");
+                    result.set_items(items);
                     return result;
                 }
             };
@@ -40,7 +43,7 @@ impl Grader {
                 thresholds.reject,
             )) {
                 Route::AutoAccept => {
-                    result.items[slot].correct = true;
+                    items[slot].correct = true;
                     flipped += 1;
                 }
                 Route::AutoReject => {
@@ -52,7 +55,7 @@ impl Grader {
                 }
                 Route::LlmReview => undecided = true,
                 Route::HumanReview => {
-                    return pending_grade(rule_score, max, result.items, result.error_tags);
+                    return pending_grade(rule_score, max, items, result.error_tags);
                 }
             }
         }
@@ -64,7 +67,7 @@ impl Grader {
                     Provisional {
                         score: rule_score,
                         max,
-                        items: result.items,
+                        items,
                         error_tags: result.error_tags,
                     },
                 )
@@ -88,7 +91,7 @@ impl Grader {
                 min_margin
             },
             graded_by: GradedBy::Jev,
-            items: result.items,
+            detail: GradeDetail::Items(items),
             error_tags: result.error_tags,
         }
     }

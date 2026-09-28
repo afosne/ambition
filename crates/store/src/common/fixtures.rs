@@ -1,8 +1,8 @@
 //! store 跨文件测试夹具（收口前 7 个文件逐字复制：memory_pool ×7、sample_* ×3；2026-09-27 复用合并）
 
 use ambition_core::{
-    Answer, Attempt, AttemptMode, BlankItem, FillBody, GradeResult, GradedBy, Provenance, Qid,
-    Question, QuestionKind, Verdict,
+    Answer, Attempt, AttemptMode, BlankItem, FillBody, GradeDetail, GradeResult, GradedBy,
+    Provenance, Qid, Question, QuestionKind, Verdict,
 };
 
 /// 填空样例题（题库读写与作答事务测试共用）
@@ -41,7 +41,7 @@ pub(crate) fn sample_grade(verdict: Verdict) -> GradeResult {
         max: 1.0,
         confidence: 1.0,
         graded_by: GradedBy::Rule,
-        items: vec![],
+        detail: GradeDetail::Plain,
         error_tags: vec![],
     }
 }

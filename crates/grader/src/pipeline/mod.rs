@@ -4,9 +4,11 @@
 //! 跨域引用一律 `use crate::*`（组内共享导入留在 lib.rs，docs/01 §1 组织规范）。
 
 mod arbitrate;
+mod composite;
 mod fill;
 
 pub use arbitrate::*;
+pub use composite::*;
 
 use crate::*;
 

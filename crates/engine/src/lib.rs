@@ -84,7 +84,7 @@ mod tests {
                 max: 1.0,
                 confidence: 1.0,
                 graded_by: ambition_core::GradedBy::Rule,
-                items: vec![],
+                detail: ambition_core::GradeDetail::Plain,
                 error_tags: vec![],
             },
             effects: vec![ambition_gamify::GameEffect::Xp(2)],

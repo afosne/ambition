@@ -24,10 +24,10 @@ pub trait TextNormalizer { fn normalize(&self, s: &str) -> String; }  // en 大�
 
 ## 3. 目录布局（data/）
 
-> **data/ 只放用户可导入/可读的内容资源**（词表、题包、错式库、听力材料…）与随包内置内容；**prompt 模板与判分语料不进 data/**——源文件在各 crate 的 `assets/`（`crates/gen/assets/prompts/`、`crates/grader/assets/{prompts,jev}/`），编译期 `include_str!` 内嵌、**无运行时文件读取，用户改了不生效也不允许**（措辞即判分口径，docs/05 §3）；assets 内容按 **l2 目标语分版**（`<kind>/<l2>.md`、`jev/<l2>.json`），**缺版回退 en**（§1 语言包缺失降级同款）。
+> **data/ 只放用户可导入/可读的内容资源**（词表、题包、错式库、听力材料…）与随包内置内容；**prompt 模板与判分语料不进 data/**——源文件在各 crate 的 `assets/`（`crates/gen/assets/prompts/`、`crates/grader/assets/{prompts,jev,rubrics}/`），编译期 `include_str!` 内嵌、**无运行时文件读取，用户改了不生效也不允许**（措辞即判分口径，docs/05 §3）；assets 内容按 **l2 目标语分版**（`<kind>/<l2>.md`、`jev/<l2>.json`），**缺版回退 en**（§1 语言包缺失降级同款）。
 
 ```
-stages/<lang>/<track>.json   词表 wordlists/   rubric rubrics/   模板 templates/   句式 patterns/<lang>/
+stages/<lang>/<track>.json   词表 wordlists/   模板 templates/   句式 patterns/<lang>/
 错式库 chinglish/   观点库 arguments/<lang>/   中国文化 culture/   听力材料 listening/<lang>/   场景 scenes/<lang>/
 打字课程 typing/
 qpack.schema.json   importers/（Anki/CSV 映射 profile）
@@ -45,7 +45,7 @@ lexicon/<lang>/            # **词库资源**（EC-DICT 构建产物：JSONL+索
   "writing": { "genres": ["letter","continuation"], "rubric": "gaokao25", "word_range": [80,120], "minutes": 30 },
   "thresholds": { "jev_accept": 0.75, "jev_reject": 0.35 }, "error_weights": {…}, "daily_budget": { "new_words": 20, "reviews": 60, "drills": 1, "diary": 1 },
   "features": { "long_sentence": true, "phonics": false } }
-// rubrics/<id>.json（判分口径 version 化）
+// rubrics/<id>.json（判分口径 version 化；M5 起实际存放 = crates/grader/assets/rubrics/<id>.json——判分语料红线 #19，不进 data/）
 { "rubric_id": "gaokao25", "version": 1, "max": 25, "band_map": [5,10,15,20,25],
   "dims": [ { "key": "task", "weight": 0.25, "levels_en": ["…档位英文描述…"] }, … ], "veto": ["off_topic","meaning_changed","heavy_chinglish"] }
 ```

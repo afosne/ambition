@@ -1,0 +1,63 @@
+{
+  "rubric_id": "gaokao25",
+  "version": 1,
+  "max": 25,
+  "band_map": [5, 10, 15, 20, 25],
+  "dims": [
+    {
+      "key": "task",
+      "weight": 0.25,
+      "levels_en": [
+        "off-task or entirely irrelevant to the prompt",
+        "partially addresses the prompt with major gaps in content",
+        "fully addresses the prompt with adequate and relevant detail"
+      ]
+    },
+    {
+      "key": "structure",
+      "weight": 0.2,
+      "levels_en": [
+        "no discernible organization, ideas scattered",
+        "basic structure with weak cohesion or paragraphing",
+        "clear progression with sound paragraphing and logical flow"
+      ]
+    },
+    {
+      "key": "grammar",
+      "weight": 0.2,
+      "levels_en": [
+        "pervasive grammatical errors that block meaning",
+        "noticeable errors but the meaning stays intact",
+        "few errors with varied and accurate sentence structures"
+      ]
+    },
+    {
+      "key": "lexicon",
+      "weight": 0.15,
+      "levels_en": [
+        "very limited vocabulary with frequent repetition",
+        "adequate range with some inaccuracy or collocation errors",
+        "precise, flexible and appropriate word choice"
+      ]
+    },
+    {
+      "key": "coherence",
+      "weight": 0.1,
+      "levels_en": [
+        "ideas disconnected, no linking devices",
+        "basic linking devices used but cohesion is mechanical",
+        "smooth cohesion with effective referencing and progression"
+      ]
+    },
+    {
+      "key": "format",
+      "weight": 0.1,
+      "levels_en": [
+        "format and mechanics ignored",
+        "mostly appropriate format with some lapses",
+        "correct format, punctuation and mechanics throughout"
+      ]
+    }
+  ],
+  "veto": ["off_topic", "meaning_changed", "heavy_chinglish"]
+}

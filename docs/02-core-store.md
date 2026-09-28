@@ -37,6 +37,7 @@ pub struct GradeResult { pub attempt_id: AttemptId, pub verdict: Verdict, pub sc
 pub enum Verdict { Correct, Partial, Wrong, Acceptable /*Jev 模糊通过*/, Pending /*待裁定*/ }
 pub enum GradedBy { Rule, Jev, LlmReview, Human }
 pub enum GradeDetail { Items(Vec<ItemResult>), Dims(Vec<DimScore>), Plain }
+pub struct DimScore { pub key: String, pub score: f32 /* 0..1 归一化 */, pub confidence: f32 }   // M5：composite 维度分（GradeDetail::Dims 载体）
 
 pub enum ErrorTag { WordSense, Confusable, Collocation, Preposition, Spelling, PosMix, Article, Countability,
                     Tense, Voice, Sva, ClauseLinker, NonFinite, Subjunctive, InversionEmphasis, SentenceStructure,

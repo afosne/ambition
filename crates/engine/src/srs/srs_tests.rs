@@ -7,7 +7,7 @@ mod tests {
     use crate::*;
     use ambition_core::{
         Answer, Attempt, AttemptMode, BlankItem, CardSource, ChoiceBody, ErrorTag, FillBody,
-        GradeResult, OptionItem, QuestionKind, Timing, Verdict, now_unix,
+        GradeDetail, GradeResult, OptionItem, QuestionKind, Timing, Verdict, now_unix,
     };
     use ambition_srs::{Card, CardAction, Rating};
 
@@ -69,7 +69,7 @@ mod tests {
             max: 1.0,
             confidence: 1.0,
             graded_by: ambition_core::GradedBy::Rule,
-            items: vec![],
+            detail: GradeDetail::Plain,
             error_tags: vec![ErrorTag::WordSense],
         };
         let action = engine.srs_after_attempt(&wrong, &grade, false).await;
@@ -127,7 +127,7 @@ mod tests {
             max: 1.0,
             confidence: 1.0,
             graded_by: ambition_core::GradedBy::Rule,
-            items: vec![],
+            detail: GradeDetail::Plain,
             error_tags: vec![ErrorTag::Tense],
         };
         engine.srs_after_attempt(&wrong, &grade, false).await;

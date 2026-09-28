@@ -2,7 +2,8 @@
 //! 2026-09-27 复用合并）
 
 use ambition_core::{
-    BlankItem, FillBody, GradeResult, GradedBy, Provenance, Question, QuestionKind, Verdict,
+    BlankItem, FillBody, GradeDetail, GradeResult, GradedBy, Provenance, Question, QuestionKind,
+    Verdict,
 };
 
 use crate::AppState;
@@ -19,7 +20,7 @@ pub(crate) fn grade(verdict: Verdict) -> GradeResult {
         max: 1.0,
         confidence: 1.0,
         graded_by: GradedBy::Rule,
-        items: vec![],
+        detail: GradeDetail::Plain,
         error_tags: vec![],
     }
 }

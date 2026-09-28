@@ -78,6 +78,7 @@ dependencies = [
  "ambition-jev",
  "ambition-llm",
  "async-trait",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",

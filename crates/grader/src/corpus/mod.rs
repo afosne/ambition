@@ -2,6 +2,8 @@
 //! （docs/05 §3：措辞即判分口径，变更必升 version——全部语言文件与代码常量同步）
 //! criteria 键 = `core::ErrorTag` snake_case 全集；instructions/description 语言 = 该版 l2（l1 永不进 Jev 请求）。
 
+pub mod rubric;
+
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 

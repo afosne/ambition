@@ -47,11 +47,14 @@ normalize_for_compare(s)   // core::normalize_text + 按 track 可选忽略冠�
 ```rust
 pub async fn jev_blank(&self, q, blank, typed) -> Result<BlankJudge>;    // acceptable(noul)+error_cause(choice)（M3 落地；severity 展示随讲解层 GradeDetail）
 pub async fn jev_multi_items(&self, q, sel) -> Result<MultiJudge>;    // 逐项 noul 部分分（M3：只判漏选项 answer\sel；MultiJudge{items: Vec<ItemJudge{index, belongs, margin}>, error_tags}；无 Jev → Offline）
-pub async fn jev_composite(&self, state, dims: &[RubricDim]) -> Result<CompositeJudge>;  // M5：每维 score + veto×3
-pub fn compose_scores(dims: &[DimScore], weights, band_map) -> f32;   // M5：加权→档位（rubric 版本化）
+pub async fn jev_composite(&self, state: &JevState, rubric: &Rubric) -> Result<CompositeJudge>;  // M5 落地：rubric 单源携带 dims+veto；每维 Score + veto×3（Noul，正面表述、noul<0.5 触发）
+pub fn compose_scores(dims: &[DimScore], rubric: &Rubric) -> f32;   // M5 落地：按 key 取 weight 加权 → 档位（band_map 下界 floor；rubric 版本化）
+pub fn down_band(band: f32, band_map: &[f32]) -> f32;               // M5 落地：veto 一票降一档（按 band_map 降到下一档；已是最低/低于首档 → 0）
 pub fn tag_error_cause(answers: &JevAnswers) -> Vec<ErrorTag>;        // 唯一错因归类口（M3：error_cause choice → ErrorTag；未知 key tracing::warn 跳过）
 pub fn error_cause_question(lang: &str) -> JevQuestion;               // error_cause 判断集：criteria+instructions 按题目 l2 选版、缺版回退 en（05 §3，M3→i18n）
 ```
+
+**composite 语义（M5 落地）**：rubric 资产 = `crates/grader/assets/rubrics/<id>.json`（**判分语料红线 #19：不进 `data/`**、include_str 内嵌、按 rubric_id/version 版本化）；每维 Jev `score` ∈ 0..levels-1 → 归一化 `score/(levels-1)` ∈ 0..1（维度 instructions 由代码按 dim key 生成，state 放 prompt+essay，levels = 考纲原文）；`CompositeJudge{dims, triggered_vetoes, confidence=min(dims.confidence)}`；veto 问题**正面表述**（如 "stays on topic"）→ `noul < 0.5` 触发 → `down_band` 降一档；`compose_scores` = Σ(dim.score×weight)×max → 向下取档（band_map 中 ≤ raw 的最大值，raw < 首档 → 0）；confidence < thresholds.accept → 走既有 Pending 进桶（M3 复用）。
 
 ## 4. 第三级：LLM 复核与待裁定桶
 
@@ -90,5 +93,5 @@ pub async fn llm_arbitrate(&self, q, a) -> Result<Arbitration>;            // ac
 - [x] M1 三题型三路径（fake/wiremock AI）；route 灰区 → Pending；离线矩阵（Jev 无 key / LLM 无 key / 全离线）；错因归类概率阈值测试；
 - [x] 裁决回流 → 二次作答规则直判闭环（M3）；
 - [x] 复合题型递归判分（M4：Cloze/Reading/SevenOfFive/GrammarFill 子题拆解 + 汇总口径 + 任一 Pending 整体 Pending）；
-- [ ] composite 加权/档位边界（高考 25 分档/雅思 band）；veto 降档（M5）；
+- [x] composite 加权/档位边界（高考 25 分档/雅思 band）；veto 降档（M5——W1 落地：rubric 资产内嵌 + compose/down_band + wiremock composite 全链，79 测试）；
 - [ ] **无 LLM key 时结构化讲解完整**（错因+概率分布+规则 diff）；explain 的 prompt payload 含 Jev 错因标签（断言）（随讲解层，06::explain）。

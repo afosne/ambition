@@ -93,7 +93,7 @@ impl Grader {
             max: total_max,
             confidence: 1.0,
             graded_by,
-            items,
+            detail: GradeDetail::Items(items),
             error_tags,
         }
     }
@@ -166,7 +166,7 @@ impl Grader {
                     max,
                     confidence: min_margin(&judge.items),
                     graded_by: GradedBy::Jev,
-                    items: vec![],
+                    detail: GradeDetail::Plain,
                     error_tags: if complete { vec![] } else { judge.error_tags },
                 }
             }

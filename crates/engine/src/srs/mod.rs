@@ -351,7 +351,7 @@ mod tests {
             max: 1.0,
             confidence: 0.0,
             graded_by: ambition_core::GradedBy::Rule,
-            items: vec![],
+            detail: ambition_core::GradeDetail::Plain,
             error_tags: vec![],
         };
         assert_eq!(

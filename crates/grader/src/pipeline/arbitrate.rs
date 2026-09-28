@@ -38,7 +38,7 @@ impl Grader {
                     max,
                     confidence: LLM_JUDGE_CONFIDENCE,
                     graded_by: GradedBy::LlmReview,
-                    items,
+                    detail: GradeDetail::Items(items),
                     error_tags,
                 }
             }
