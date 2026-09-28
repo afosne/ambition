@@ -22,6 +22,29 @@ MVP_STAGE: 4/6
 
 ## 进度日志
 
+### 2026-09-27 · 模块目录细分 + 代码复用收口（非阶段任务，用户手动发起）
+
+- **背景与指令**：用户两问——①「每个模块还能继续细分：模块/src/细分功能/组件/工具/通用等，**不要单个文件**」；②「检查代码复用，**能合并的功能尽量合并成一个**，防止代码无限变大」。
+- **摸底**：11 crate 的 src/ 全平铺单层（tui 13 文件、core/gen/grader 9-11），typing/gamify 单文件巨石；重复实测：测试夹具 `choice_question` ×11（grader 内 6 份逐字节同、engine 内 4 份同）、`fill_question` ×7、`render_to` ×7、`now_unix()` ×3（实现全同）、l2 选版 match ×4、锁中毒恢复样板 6 处、store `from_str+map_err` ×5；另发现 pre-commit 结构门禁 glob 只盖 `src/` 一层——**目录细分前必须先升级，否则门禁失明**。
+- **改动（5 提交）**：
+  - `4387881` **文档+门禁先行**：docs/01 §1 组织规范入册目录细分（lib.rs 薄壳 + `<feature>/mod.rs` + 组件文件 + 跨域 `use crate::*`；移动文件时 include_str!/crate:: 路径同步改）；pre-commit 第 4 步行数/配对扫描 glob → `find` 任意深度；docs/03 键位入口路径同步 `keys/mod.rs`。
+  - `b82afcd` **11 crate 目录重组**（87 文件，git mv 保历史，+1463/-1319）：core `model/+common/`；typing 拆巨石 `model/+metrics/`、gamify 拆 `model/+projector/+rules/`；srs `model/+schedule/`；store `repo/+migration/`；llm `api/+provider/+router/+ledger/`；jev `wire/+client/+route/`；gen `draft/+pipeline/+content/`；grader `rule/+pipeline/+common/+corpus/`；engine `assembly/+practice/+srs/`；tui `keys/+state/+update/+render/`。模块路径经 `pub mod`+`pub use` 再导出链保持（`crate::question`/`crate::update`/`crate::breaker` 等既有引用零改）；移动文件 `use super::*` → `use crate::*`（薄壳子目录）或保持（hub 子组件经 `use crate::*` 链传递）；include_str! 相对路径随文件目录深度同步（新坑 P-19）。
+  - `04b61a1` **生产码复用收口**（+237/-229）：core 新增 `common/time::now_unix`（收 tui/llm/engine 三处逐字重复）、`common/sync::lock_recover`（收 gamify/llm·router·llm·ledger/engine·practice 六处锁中毒恢复样板，含 catch_unwind 真中毒测试）、`common/ids::{is_zh_lang,pick_edition}`（收 core name_in + gen prompt + grader arbitrate/corpus 四处 zh 谱系 match 同构 = **改进建议 #21「选版三处同构」完成**）；store `repo::decode_payload` 收 attempts/arbitration/cards/question_repo 五处 from_str+map_err；`clamp_unix_range` 升 pub(crate) 并钉 `kv::cache_purge_before`（P-15 同口径 + i64::MAX 回归测试）；store 加 serde 直依赖。
+  - `4423096` **测试夹具按 crate 收口**（39 文件，+592/-856 = 净 -264 行）：jev `{ok_body,sample_questions}` ×2→1、llm `ok_json` ×2→1、store `{sample_question×3, sample_attempt×2, sample_grade×2}`、grader `{choice_question×6, fill_question×4, multi_question×3, offline_router×4}`、engine `{choice_question×4 + srs 带标签变体 choice_question_tagged}`、tui `{grade×3, fill_question×3, multi_question×2, render_sized}`——**7 处宽度感知渲染收集（P-2 续格口径）收口单实现**，各测试 1 行委托保留原面板尺寸（72×18/72×20/76×24/76×22），32 处调用点零改动。
+  - `762288b` **seed_gen 去重**：cloze/grammar_fill 逐字重复构造收口 `PassageFill` struct + `passage_fill`（docs/01 参数 >5 组 struct）；重跑 `cargo run -p ambition-gen --example seed_gen` 211 题、**data/ 零 diff**（#17 幂等）。
+- **验证**：`cargo fmt --check` ✓；`clippy --workspace --all-targets -D warnings` 0 警告 ✓；**412 测试全绿只增不减**（Phase B 后 396 → 收口 +16，全部是收口夹具/新工具的同文件配对桩，P-16 终态规则全程守住）；结构门禁（find 版行数+配对）PASS；七步钩子 5 提交全过；seed_gen 重跑 data/ 零 diff；**P-14 真机冒烟**：ambition.exe 4s → 0 panic、`Space`/`Ctrl+Q`/`Ambition`/`[1/211]`/`Enter` 全在场；`data/` 仍只含 seed/chinglish/lexicon/patterns 内容资产、无任何运行时读提示词。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：文档与门禁先行（4387881 先于全部移动提交）；5 提交七步钩子 7/7；412 测试只增不减，+16 全为收口夹具的配对测试；文件全 ≤500（`gen/pipeline/mod.rs` 500 压线，已列入改进建议 #30）；新坑入册 P-19、P-17 复犯补记（cargo fix 被陈旧元数据误导 + 行号降序位移坑）。
+- **实际使用**：真机冒烟 0 panic、211 题 seed 正常入队上屏；seed_gen 重跑 data/ 零 diff；**增减功能成本下降**——每个 crate src/ 顶只剩 lib.rs（+tui main.rs），36 个功能目录，新功能 = 进对应目录加组件文件；对外 API 零变化（再导出链保路径），两壳（tui/engine 壳层外）下游一行未改即编译通过。
+- **代码耦合度**：依赖方向不变（11 crate 单向无环）；跨目录统一 `use crate::*` + 共享导入留 lib.rs（docs/01 §1 入册），hub 链（mod.rs `use crate::*` → 子组件 `use super::*`）保持组内共享；收口工具全落 core（now_unix/lock_recover/pick_edition）= 向下复用不新增环；夹具按 crate 收口不跨 crate 共享，测试隔离不变。
+- **鲁棒性**：锁中毒恢复单实现（core::lock_recover，含真中毒恢复测试）；P-15 补防（kv 淘汰超界钳制 + i64::MAX 回归，原超界会 NULL 静默不删）；载荷解码单口显式 Decode 不静默；include_str 移动断裂被编译期拦截（P-19 入册）；锁样板合并后消息带 where_ 定位（`MemLedger.cache_get` 等）可见性不降。
+
+**后续观察**：
+- [ ] #21 已完成选版部分（core::pick_edition，04b61a1）；剩 include_str loader 单入口随 16-config。
+- [ ] #30 `gen/pipeline/mod.rs` 500 行压线——再增内容前先把 generator 测试拆 `generator_tests.rs`（留同文件配对桩，P-16）。
+
 ### 2026-09-27 · M4 记忆：FSRS 接线 + 复习队列 + 假对上线 + 词库句式入卡（阶段任务；用户指令「继续实现 m4」）
 
 - **范围拍板（用户确认）**：①全部 9 项含 TUI 复习屏；②词库数据由 agent 生成小规模种子；③**承接项 #15 题型补全（完形/阅读/七选五/语法填空）一并做**。中途另裁定**取消配对桩**（结构门禁配对范围放宽到同 crate，见 P-16 修订/P-18）。
@@ -224,7 +247,7 @@ MVP_STAGE: 4/6
 - [ ] 18. 成本面板与题包屏入 TUI：`cost_summary` → Profile/Settings 展示（M3 已有门面）；题包 `Ctrl+O` 导入 / `Ctrl+X` 导出 键位（承接 #13；docs/03 §5.3 禁单字母）
 - [x] 19. 假对检测合流：从 attempts.timing 算用户延迟基线（p50/p90 滚动）→ `is_guess(timing, self_confidence, baseline)` 接 `srs::decide_action`（M4 完成，bc2f244：recent_timings(exclude) 排除本次 + srs_after_attempt 接线）
 - [ ] 20. 裁决增强：选择题人工裁决回流 `ChoiceBody.answer` 集（当前只回流填空 acceptable）；`arbitration.reason` 分值区分灰区/离线两态
-- [ ] 21. 资源 loader 统一：`crates/grader/assets/jev`、`data/chinglish`、`crates/{gen,grader}/assets/prompts` 三处 include_str 收口到 16-config 单入口（**仅内容类资源 chinglish/seed 允许用户目录覆盖；prompt 与判分语料永不放开**——2026-09-27 已从 data/ 移出并删除运行时覆盖；选版函数三处同构（l2 match+回退 en），一并收口）
+- [ ] 21. 资源 loader 统一：`crates/grader/assets/jev`、`data/chinglish`、`crates/{gen,grader}/assets/prompts` 三处 include_str 收口到 16-config 单入口（**仅内容类资源 chinglish/seed 允许用户目录覆盖；prompt 与判分语料永不放开**——2026-09-27 已从 data/ 移出并删除运行时覆盖；**选版函数三处同构已收口** = `core::pick_edition/is_zh_lang`（04b61a1），剩 include_str loader 单入口随 16-config）
 - [ ] 23. 质检指令本地化：gen `qc.rs` 五问 instructions 仍英文硬编码（l2≠en 时 Jev 质检指令不随语种；与 arbitrate/error_cause 同法按 l2 分版即可）
 - [ ] 24. TUI 帮助屏：`?` 弹出键位帮助（docs/03 §5.3 承诺未实现；文案直接复用 `keys::hint` 全表，禁止硬编码）
 - [ ] 22. `evaluate_many` 消费方：M5 套卷批量判题接入（当前仅有契约测试）
@@ -236,6 +259,7 @@ MVP_STAGE: 4/6
 - [ ] 27. 词库数据扩充：31 义项/11 词 + 8 句式仅够验收（bank/light/run 抽检达标）；EC-DICT 全量导入/`crates/vocab` 独立 crate/五模式训练随 M5+（docs/09 §1 注记）；word_detail 与复习条目每次全量解析 JSON——数据量大后需索引/懒加载（docs/09 §1 mmap 注记）
 - [ ] 28. 复习屏体验：评分反馈只显「N 天后」，可加 next_interval 卡片化/连续复习统计；`due_list` limit 20 一轮，队列深度与 daily_budget（16-config §6）打通
 - [ ] 29. 裁决（resolve_pending）返回值不带 SRS 处置（签名仍是 GradeResult）——若要 UI 提示需扩返回类型（改 docs/03 §2 契约先行）
+- [ ] 30. `gen/pipeline/mod.rs` 500 行压线（目录细分后为 generator 内容+域声明）——再增内容前先把 generator 测试拆 `pipeline/generator_tests.rs`（被测 fn 留同文件配对桩，P-16）
 
 （承接 M3 未完项：#13 题包屏 / #14 seed 降级开关 / #16 seed 扩轨 / #17 讲解层 / #18 成本面板入 TUI / #20 裁决增强 / #21 资源 loader 收口 / #22 evaluate_many 消费方 / #23 qc 指令本地化 / #24 帮助屏——均仍欠，随 M5+ 处理。）
 
