@@ -140,3 +140,10 @@
 - **根因**：include_str! 按**源文件所在目录**解析相对路径，与模块路径深度无关——`x.rs → x/mod.rs` 模块深度没变，但文件目录多了一层，`../assets` 会指到 `src/assets`；engine 的 `../../../data` 与 lexicon 测试同样 +1 层才对。
 - **解决**：移动到目录内时同步把 `../` 加一层（`../assets→../../assets`、`../../../data→../../../../data`）；按编译器报错逐处改到全绿（含测试 target）。
 - **预防**：移动文件前先 `grep -rn 'include_str!\|include_bytes!' crates` 列路径清单，移动后与 `use crate::*` 改写一并 sed + 全 target 编译复核；include_str 是编译期展开、漏改必报错不会静默——但**别跳过 build 直接提交**。
+
+## P-20 Ctrl+字母是直达表保留字（上下文动作键一律走 F 区）——2026-09-29
+
+- **症状**：M5 里我把「模板自查绑 `Ctrl+S`、判分后批注绑 `Ctrl+E`」，与 docs/03 §5.3 直达表的 **Settings=`Ctrl+S`、Writing=`Ctrl+E`** 同键冲突——恒定层先返回，保留键的直达永远被上下文层截胡（反向也一样：直达一按下，动作键在该屏失效）。写 hint 时才被全表复读抓到。
+- **根因**：新建动作键只数了「已用 Ctrl 字母（q/c/a/r/m/w）」，没查**直达表保留字**（B/G/K/N/O/P/S/T/V/E/D/X/F 都被屏名占着，题包 bullet 里还有 Ctrl+O/X/F）；恒定层在 key_to_msg 最前，冲突方向还容易排查跑偏。
+- **解决**：动作键改 **F 区**（`F3` 模板自查、`F4` 判分后批注——F1 选题/F2 模板之外空闲）；Ctrl+字母只留给屏幕直达；`keys_tests` 补断言「`Ctrl+E`/`Ctrl+S` 在任何 ctx → None（保留字不动作）」；docs/03 模板/批注 bullet 与 hint 同笔改（同源）——提交 `a47442c`。
+- **预防**：绑任何 `Ctrl+字母` 前先 `grep` docs/03 §5.3 直达表**与各屏 bullet 的上下文键**（保留名单含 Ctrl+O/X/F/T/M/E/S…）；新动作键优先 F3–F12、方向键、Tab/Space；hint 文案与 docs/03 bullet 必须同笔提交（键位同源红线 §5.3）。

@@ -12,7 +12,7 @@ MVP_STAGE: 4/6
 | 2 | M2 出题 | llm crate（OpenAI/Anthropic 协议）+ 结构化出题 + Jev 质检回路 + qpack 导入导出 + seed 题库 | ✅ 完成（2026-09-24，提交 b39efef） |
 | 3 | M3 判题 | jev crate 客户端 + 待裁定桶 + 错因分类 + 中式英语错式库 + 成本台账 | ✅ 完成（2026-09-24，提交 75408b0） |
 | 4 | M4 记忆 | FSRS 接线 fsrs-rs + 错词本/义项/句式 + 假对上线 + 复习队列 | ✅ 完成（2026-09-27，提交 8769432；含用户加码的题型补全） |
-| 5 | M5 写作 | composite scoring + 批注 + 模板作文填槽 + 翻译题型 + 套卷估分 | ⬜ 待施工 |
+| 5 | M5 写作 | composite scoring + 批注 + 模板作文填槽 + 翻译题型 + 套卷估分 | ✅ 完成（2026-09-29，W1-W8 十四笔；588 测试；模板屏/模考屏/翻译工作台/卷面为表外加码交付） |
 | 6 | M6 闭环 | 笔记/日记/TODO + 画像聚合 + 个性化出题 + 周报 + 游戏全量 | ⬜ 待施工 |
 
 > 自动推进规则：定时任务读 `MVP_STAGE: n/6` → 唤起 pi 执行第 n 阶段 → 成功则 n+1 并**连跑下一阶段**，失败不推进、下轮重试；`6/6` 且状态全 ✅ 时停止。
@@ -20,6 +20,27 @@ MVP_STAGE: 4/6
 ---
 
 ## 进度日志
+
+### 2026-09-29 · M5 写作：composite 判分 + 作文/翻译题型 + 模板/批注/卷面 + 套卷模考 + 翻译工作台（阶段任务；用户指令「开始实施 M5」）
+
+- **拆波**：M5 → W1–W8 八波分笔提交（每波 fmt/clippy/test + 结构双门禁 + TUI 冒烟）；**docs 契约先行**共9处（02 迁移 v4/v5/v6 + 类型补全、03 键位/门面、05 LlmKind::Translate、06 Paper 类型、07 composite 落地语义、10 §1/§2/§5/§6 落地注记、11 §1/§2/§4 落地注记、13 事件入游戏表）。
+- **改动（13 提交）**：
+  - `283a554` **W1 composite scoring**：GradeResult.items → detail{Items|Dims|Plain}（02 §2 契约同构；serde(default) 兼容 M1-M4 旧 payload；34 构造点 + fill 升级路径 take/set 迁移）；`assets/rubrics/{gaokao25,ielts_task2}.json`（判分语料入 assets=红线#19；权重和=1/band_map 升序/levels≥2 门禁测试）；`jev_composite` 单请求 fan-out（每维 Score÷(levels-1) 归一化 + 每条 veto 正面表述 Noul≥0.5 判过、缺维保守 0 分 0 置信）；`compose_scores` 按 key 取权 → ×max → band_map 下档 floor（15 含界/14.9 取下/越界封顶/首档下→0）；`down_band` 逐档、最低档→0。
+  - `0e41a96` **W2 翻译题型**：core `TranslationBody{direction,source_text,reference}` + `Answer::Text`；grader `translation4` rubric（准确/完整/流畅/地道）+ `grade_text_composite` 单源（离线→Pending、conf<accept→桶、≥60%/≥30%→Correct/Partial、veto 映射错因标签）；gen 全链（kind tag/qc 双语 state/schema enum/双语提示行）+ seed 8 题；TUI `is_text_input` 单文本输入位。
+  - `b408af2` **W3 作文题型**：core `EssayPrompt{prompt_zh,genre,track,rubric_id,word_range,minutes}`；grader 空卷硬校验→桶 + gaokao25 六维 composite；engine `grade_essay` 落 essays+essay_grades（payload=GradeResult）+ 发 `EssayGraded` → gamify Xp(5) 不进连击；gen essay 出题（tags 推 genre/track、字数/限时按轨）+ seed 2 篇。
+  - `de5c7ee`+`0f20be8`+`ac5510f` **W4 模板作文**：writing 纯件（Template/ParaFunc/Slot + Full→Half→Free 三阶段 scaffold + 套槽 render 缺槽保留占位 + `data/templates` include_str 内置库 + AntiPattern.replacement_en 同义升级）；迁移 v4 写作三表 + EssayRepo{upsert_template/templates}；engine scaffold/check_scaffold（Jev noul×2 双 prob≥0.5 过线）/templates/render_template；TUI **F2 模板屏**（阶段循环·槽位编辑·成文预览·自查回填）。
+  - `5a0bb53`+`3398540`+`272dbe6` **W5 批注+加分项**：writing 批注域（Comments/Annotation/SrsTarget/Upgrade/Recommendation + comments/model_essay 双 schema、annotate/model_essays 双语提示资产、upgrade_sentence 本地反模板+同义表、recommend_after 纯函数、phrase_bank 汇聚）；grader `verify_upgrade` noul（0.3→拦下语义走样）；store insert_essay/essay_history（LEFT JOIN grade）；engine grade_essay/annotate（LlmKind::Explain+run_loop 缓存）/upgrade_sentence/verify_upgrade/model_essays + rubric_id_for；TUI **F4 批注浮层**（升级/亮点/入卡目标，判分图标与浮层同源）。
+  - `b3ace42` **W6 套卷模考**：core `Paper/PaperSpec/PaperSection` + `kind_key()`；迁移 v5 papers/paper_runs + `paper_score`（rowid 窗口每 qid 最新一答）；engine `assemble_paper`（quality≥IMPORT_QUALITY_FLOOR、按 kind 取用、不足→Paper 错）+ `mock_start/mock_finish`（均匀满分口径换算卷面总分、发布 `PaperFinished`→Xp(10)）；TUI **Ctrl+M 模考屏**（屏顶倒计时 + 收卷得分；末题 Next 即交卷；估分函数按契约唯一随 M6）。
+  - `fcc2967`+`5eda53e`（+`a47442c`） **W7 翻译工作台**：translate crate（TranslateOpts/Alignment/AlignSeg/DiffPoint LCS 中英差异按字切 + 双语提示资产 + translate/align 双 schema）；迁移 v6 translations/tx_favorites + TranslateRepo 四口；engine translate/align/my_turn（l2=en 走 W2 composite、其它 grade=None 降级）/history/favorite/to_practice/favorites 七门面；TUI **Ctrl+W 四屏**（出译·对齐分段·我来翻差异 `~-+` 标记·历史♥收藏转练习）。中途**修键位保留字违约**：Ctrl+S/E 归还直达表、动作键改 F3/F4（P-20，a47442c）。
+  - `5ef039a` **W8 卷面模拟**：writing sheet 纯件（exam_sheet 收卷铃 deadline=起始+分钟、sheet_violations 字数红线 word_range 边界0不设限/超时/Pasted、typing_speed 60s 防除零）；engine `hand_in`（violations 非空=拒收不评分、干净卷面走 W3 composite 同链）；TUI `Event::Paste` 纸笔口径错误行反馈。
+- **验证**：**425 → 588 测试全绿**（+163 全为配对/夹具/场景测试，只增不减）；14 笔七步钩子全过；每波真机冒烟 0 panic（seed 221 题=211+8 翻译+2 作文；F2/Ctrl+M/Ctrl+W 三直达可用）；**MVP 表五项全交付**（估分函数与语域 polish 按 docs/00 分别随 M6/M8，已挂 #32/#34）。
+- **纪律执行**：两处外部改动按 P-18 取证→ask（PROGRESS「定时施工」行保持删除+删净评估）；键位违约自查当轮修复并入册 P-20；`MVP_STAGE` 行未动（#16/#18 用户手动推进，当前仍 4/6——表状态与阶段号分离）。
+
+#### 本项代码评估（四段）
+- **代码质量**：9 处 docs 契约先于实现码；13 笔提交七步钩子 0 失败；两处自证测试关键语义（down_band 边界、paper_score 最新一答、verify_upgrade 0.3 拦截、违规拒收、缓存幂等）；发现自己两处违约（键位保留字 P-20）当轮修复入册。
+- **实际使用**：真机冒烟全流程（模板屏填槽成文自查 → Ctrl+M 模考倒计时交卷得分 → Ctrl+W 出译/对齐/我来翻/历史收藏 → F4 批注浮层）；seed 221 题两类新题型正常上屏作答判分。
+- **代码耦合**：workspace 11→12 crate（新增 translate 纯件域，依赖仅 core）；writing 由模板单域扩为模板/批注/卷面三域；engine 新增 scaffold/paper/essay/translate 四门面域（25 个 pub 方法，docs/03 S3 同步）；依赖保持无环（store 不反向依赖 writing/translate，行类型走 core）。
+- **鲁棒性**：离线矩阵贯穿五个 AI 判分口（composite/annotate/upgrade/model_essays/translate → Pending 或 Offline，不伪造）；迁移 v4/v5/v6 只增且 schema_version 连续；事件双新（EssayGraded/PaperFinished）进 gamify Xp(5)/Xp(10) 不进连击；P-19/P-17 在本阶段两次复现按既方处置。
 
 ### 2026-09-28 · 全量文件重复扫描与收口（非阶段任务，用户指令「继续检查所有文件的重复并收口」）
 
@@ -304,6 +325,9 @@ MVP_STAGE: 4/6
 - [ ] 29. 裁决（resolve_pending）返回值不带 SRS 处置（签名仍是 GradeResult）——若要 UI 提示需扩返回类型（改 docs/03 §2 契约先行）
 - [ ] 30. `gen/pipeline/mod.rs` 500 行压线（目录细分后为 generator 内容+域声明）——再增内容前先把 generator 测试拆 `pipeline/generator_tests.rs`（被测 fn 留同文件配对桩，P-16）
 - [ ] 31. 裸 bool 参数违例（docs/01 §1「禁裸 bool」，模块交叉检查发现）：srs `due_queue(…, interleave: bool)`——engine 生产调用点传字面 `true`，语义在调用点丢失，改 `Interleave` 枚举（契约先行 docs/08）；grader `normalize_for_compare(…, ignore_articles: bool)`——生产无调用仅测试，改 `ArticlePolicy` 枚举（契约先行 docs/07）
+- [ ] 32. 套卷估分回归：W6 已落 paper_runs（score/max 卷面分）——`12-notes-profile::predict_score`（α·近三次均分 + 起点回归）按 docs/00 §6 随 **M6** 落地，估分唯一实现不得外溢（M5 只交数据与本次得分）；
+- [ ] 33. 非英语评分降级集成测试：`translate_my_turn` l2≠en → `grade=None` 分支目前只有离线路径覆盖（先返 Offline 到不了该分支）——需 Scripted 供给方级 LLM stub 集成测试，随 M9 多语波次补（docs/11 §4 已挂未勾）；
+- [ ] 34. hand_in 违规注入批注流：W8 现为 violations 非空即拒收（Err 不评分）——「violations 进批注与档位说明」完整口径 = Violation 转 Comments.annotations，随 M6 手交屏接线；harvest 四类随 M7（17 单写者）、个人模板→SRS 卡/语域 polish/register_check 随 M8（docs/10 §4、§2 未勾项即追踪面）
 
 （承接 M3 未完项：#13 题包屏 / #14 seed 降级开关 / #16 seed 扩轨 / #17 讲解层 / #18 成本面板入 TUI / #20 裁决增强 / #21 资源 loader 收口 / #22 evaluate_many 消费方 / #23 qc 指令本地化 / #24 帮助屏——均仍欠，随 M5+ 处理。）
 

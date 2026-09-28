@@ -41,6 +41,7 @@ pub async fn to_practice(&self, tx_id: &str) -> Result<Question>;               
 
 ## 4. 验证点
 
-- [ ] 缓存命中（同文本同方向不重复调 LLM）；glossary 术语一致；
-- [ ] my_turn 差异对齐（中英/中日 fixture）；非英语评分降级路径；
+- [x] 缓存命中（tx_id = hash(文本+方向+术语表) 与 llm effective_cache_key 同源幂等，run_loop 自动 get/put；同文同向不重复调）；glossary 术语一致（提示词术语表强制 + glossary_hits 本地统计测试）；
+- [x] my_turn 差异对齐（中英 fixture + CJK 按字切、相邻缺/余配对成 Changed）；
+- [ ] 非英语评分降级路径的 LLM stub 集成测试（离线先返 Offline 覆盖不到 l2≠en → grade=None 分支；随 M9 多语波次补，PROGRESS #33）；
 - [ ] 四类 harvest 落库正确（单写者不变）。

@@ -95,6 +95,7 @@ pub fn typing_speed(&self, sheet) -> f32;                                  // 04
 
 ## 6. 验证点
 
-- [ ] 三阶段渲染快照；verify_upgrade 拦语义走样；veto 降档；annotate 缓存；个人模板→SRS 卡；
+- [x] 三阶段渲染快照（W4a scaffold 测试）；verify_upgrade 拦语义走样（W5：noul 0.3 → false）；veto 降档（W1 down_band 逐档、最低档→0）；annotate 缓存（llm run_loop effective_cache_key 自动 get/put，同文同向命中）；
+- [ ] 个人模板→SRS 卡（Phrase 卡随 08-adaptive M8，docs/10 §1 注记）；
 - [ ] 数据句 caveat 必填 + fact_plausible 拦截；正反论点成对；cite_into 语气一致；
-- [ ] 字数红线与 rubric word_range 一致；粘贴/超时检测；收卷批改链与普通作文一致。
+- [x] 字数红线与 rubric word_range 一致（sheet_violations 取 EssayPrompt.word_range、边界0=不设限）；粘贴/超时检测（Pasted 旗标 + TUI Event::Paste 错误行反馈 + Overtime now≥deadline）；收卷批改链与普通作文一致（hand_in 干净卷面走 W3 essay composite 同一路径）；
