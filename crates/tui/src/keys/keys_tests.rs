@@ -27,14 +27,14 @@ mod tests {
             Some(ScaffoldRender)
         );
         assert_eq!(
-            key_to_msg(KeyCtx::Scaffold, K::Char('s'), M::CONTROL),
+            key_to_msg(KeyCtx::Scaffold, K::F(3), mods()),
             Some(ScaffoldCheck),
-            "Ctrl+S 自查"
+            "F3 自查（动作键 F 区）"
         );
         assert_eq!(
             key_to_msg(KeyCtx::Choice, K::Char('s'), M::CONTROL),
             None,
-            "非模板屏 Ctrl+S 无操作"
+            "Ctrl+S 保留 Settings 直达（docs/03 §5.3）"
         );
         assert_eq!(
             key_to_msg(KeyCtx::Scaffold, K::Tab, mods()),
@@ -88,15 +88,15 @@ mod tests {
     }
 
     #[test]
-    fn test_key_to_msg_ctrl_e_annotates_only_in_graded_ctx() {
+    fn test_key_to_msg_f4_annotates_only_in_graded_ctx() {
         use Msg::*;
         assert_eq!(
-            key_to_msg(KeyCtx::Graded, K::Char('e'), M::CONTROL),
+            key_to_msg(KeyCtx::Graded, K::F(4), mods()),
             Some(Annotate),
-            "判分屏 Ctrl+E → 批注"
+            "判分屏 F4 → 批注（动作键走 F 区）"
         );
         assert_eq!(
-            key_to_msg(KeyCtx::Choice, K::Char('e'), M::CONTROL),
+            key_to_msg(KeyCtx::Choice, K::F(4), mods()),
             None,
             "非判分屏无操作"
         );
@@ -104,6 +104,16 @@ mod tests {
             key_to_msg(KeyCtx::Graded, K::Char('e'), mods()),
             None,
             "单字母 e 不批注（禁单字母快捷键）"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Graded, K::Char('e'), M::CONTROL),
+            None,
+            "Ctrl+E 保留 Writing 直达（docs/03 §5.3）"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Choice, K::Char('e'), M::CONTROL),
+            None,
+            "Ctrl+E 在任何答题态都保留给 Writing"
         );
     }
 

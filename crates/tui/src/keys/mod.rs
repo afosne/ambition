@@ -36,10 +36,6 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
             // 屏幕直达（docs/03 §5.3 直达表落地：Practice=Ctrl+A、Review=Ctrl+R；其余屏随后续阶段）
             KeyCode::Char('a') => Some(Msg::Screen(Screen::Practice)),
             KeyCode::Char('r') => Some(Msg::Screen(Screen::Review)),
-            // M5-W4b：模板屏自查（上下文层语义——Ctrl+S 仅 Scaffold 屏有操作，docs/03 §5.3）
-            KeyCode::Char('s') if ctx == KeyCtx::Scaffold => Some(Msg::ScaffoldCheck),
-            // M5-W5：判分后批注（上下文层语义——Ctrl+E 仅 Graded 屏有操作，docs/03 §5.3）
-            KeyCode::Char('e') if ctx == KeyCtx::Graded => Some(Msg::Annotate),
             // M5-W6：开模考（上下文层语义——Ctrl+M 仅答题/完成态可开卷，docs/03 §5.3 直达表）
             KeyCode::Char('m')
                 if matches!(ctx, KeyCtx::Choice | KeyCtx::Graded | KeyCtx::Finished) =>
@@ -115,11 +111,15 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
         // 面板内列表导航
         (KeyCtx::Picker, KeyCode::Down) => Some(Msg::MoveDown),
         (KeyCtx::Picker, KeyCode::Up) => Some(Msg::MoveUp),
+        // 判分后批注（M5-W5，F4——动作键走 F 区；Ctrl+E 保留 Writing 直达，docs/03 §5.3）
+        (KeyCtx::Graded, KeyCode::F(4)) => Some(Msg::Annotate),
         // 模板作文屏（M5-W4b，docs/03 §5.3 scaffold 族）
         (KeyCtx::Scaffold, KeyCode::Up) => Some(Msg::ScaffoldUp),
         (KeyCtx::Scaffold, KeyCode::Down) => Some(Msg::ScaffoldDown),
         (KeyCtx::Scaffold, KeyCode::Tab | KeyCode::Right) => Some(Msg::ScaffoldSlotNext),
         (KeyCtx::Scaffold, KeyCode::BackTab | KeyCode::Left) => Some(Msg::ScaffoldSlotPrev),
+        // M5-W4b：草稿自查（F3——动作键走 F 区；Ctrl+S 保留 Settings 直达，docs/03 §5.3）
+        (KeyCtx::Scaffold, KeyCode::F(3)) => Some(Msg::ScaffoldCheck),
         (KeyCtx::Scaffold, KeyCode::Char(' ')) => Some(Msg::ScaffoldStage),
         (KeyCtx::Scaffold, KeyCode::Char(c)) => Some(Msg::Char(c)),
         (KeyCtx::Scaffold, KeyCode::Backspace) => Some(Msg::Backspace),
@@ -141,7 +141,7 @@ pub fn hint(ctx: KeyCtx) -> &'static str {
         }
         KeyCtx::Pending => " ←/→ 选择判对判错 · Enter 确认裁决 · Esc 跳过 · Ctrl+Q 退出",
         KeyCtx::Graded => {
-            " Enter/→ 下一题 · ← 上一题 · F1 选题 · Ctrl+E 批注（作文/翻译）· Ctrl+M 模考 · Ctrl+Q 退出"
+            " Enter/→ 下一题 · ← 上一题 · F1 选题 · F4 批注（作文/翻译）· Ctrl+M 模考 · Ctrl+Q 退出"
         }
         KeyCtx::Finished => " Ctrl+Q 退出",
         KeyCtx::Review => {
@@ -149,7 +149,7 @@ pub fn hint(ctx: KeyCtx) -> &'static str {
         }
         KeyCtx::Picker => " ↑/↓ 选择题目 · Enter 跳转 · Esc/F1 返回 · Ctrl+Q 退出",
         KeyCtx::Scaffold => {
-            " ↑/↓ 选模板 · Tab/←→ 换槽 · Space 切阶段 · Enter 成文 · Ctrl+S 自查 · Esc 返回 · Ctrl+Q 退出"
+            " ↑/↓ 选模板 · Tab/←→ 换槽 · Space 切阶段 · Enter 成文 · F3 自查 · Esc 返回 · Ctrl+Q 退出"
         }
     }
 }

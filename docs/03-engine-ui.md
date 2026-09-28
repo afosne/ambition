@@ -36,7 +36,7 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 // 笔记/日记/TODO：note_* / diary_write / diary_review / plan_for_exam / todo_complete
 // 打字/游戏/听说：typing_start / typing_finish / game_round / game_settle / speak / shadowing
 // 词汇深水/句式：pattern_* / sense_drill / rare_sense_queue / word_mastery
-// 翻译工作台：translate / translate_align / translate_my_turn / translate_harvest / translate_history
+// 翻译工作台（M5-W7）：translate / translate_align / translate_my_turn / translate_history / translate_favorite / translate_to_practice（translate_harvest 随 M7·17 单写者）
 // 素材中枢：material_ingest_text / material_ingest_image / material_proofread / material_derive / material_usage / material_drop
 // 画像/模考：profile / weekly_report / export_report / mock_start / mock_finish
 // 云（server_url 空则 EngineError::CloudDisabled）：login_pair_start / login_pair_finish / sync_now / cloud_generate
@@ -111,6 +111,7 @@ ambition                 # 进入 TUI：无需账号、无需服务、无需联�
 | Review 复习 | `Ctrl+R`（M4：`Tab` 从答题屏切入） | Pack 题包 | `Ctrl+O` |
 | Wordbook 单词 | `Ctrl+V` | Profile 画像 | `Ctrl+P` |
 | Typing 打字 | `Ctrl+T` | Mock 模考 | `Ctrl+M` |
+| Translate 翻译工作台 | `Ctrl+W` | （W7 落地） |  |
 | Writing 写作 | `Ctrl+E` | Settings | `Ctrl+S` |
 
 - 全局：**`Ctrl+Q`/`Ctrl+C` 恒退出（任何状态，含填空编辑中；单字母 `q` 退出已废除）** · `Ctrl+字母` 屏幕直达（**M4 落地 `Msg::Screen`：`Ctrl+A`=Practice、`Ctrl+R`=Review**，其余屏随后续阶段） · `?` 帮助 · `Tab`/`Shift+Tab` 切面板或字段 · `Esc` 返回/退出/跳过；
@@ -120,7 +121,8 @@ ambition                 # 进入 TUI：无需账号、无需服务、无需联�
 - 待裁定（Pending ctx，**2026-09-27 裁决键修订**）：**`←/→`（或 `↑/↓`）高亮选择「判对/判错」· `Enter` 确认裁决 · `Esc` 跳过（保持待裁定桶）**；裁决回流规则层（同类题下次直判，resolve 后浮层变 graded_by=human）；单字母 `y/n` 已废除；
 - 复习翻卡：`Space`/`Enter` 翻面 · `1/2/3/4` = Again/Hard/Good/Easy（FSRS，M4 落地：`Tab` 进入/退出复习屏，空队列显「暂无到期卡片」）；
 - 选题面板（`F1`，2026-09-27）：全屏列出题库（序号 + 题型标签 + 题干摘要），`↑/↓` 选择 · `Enter` 跳转到该题（状态复位）· `Esc`/`F1` 返回；任何有题状态（Choice/Graded/Finished）可呼出；
-- 模板作文屏（`F2` 呼出，M5-W4b，docs/10 §1）：屏顶模板列表（`↑/↓` 选 · track/体裁可见）→ 中部三阶段脚手架视图 · **`Space` 阶段循环（全模板→半模板→脱模板）** · `Tab`/`Shift+Tab`、`←/→` 切换槽位 · 字符直接填当前槽 · **`Enter` 套槽成文**（缺槽保留 `{{id}}` 不静默）· **`Ctrl+S` 草稿自查**（Jev noul×2 双 prob≥0.5 过；无 key → 离线配置提示）· 屏底成文预览与自查结果（原意/贴合分项）· `Esc` 返回答题；任何有题状态可呼出；
+- 模板作文屏（`F2` 呼出，M5-W4b，docs/10 §1）：屏顶模板列表（`↑/↓` 选 · track/体裁可见）→ 中部三阶段脚手架视图 · **`Space` 阶段循环（全模板→半模板→脱模板）** · `Tab`/`Shift+Tab`、`←/→` 切换槽位 · 字符直接填当前槽 · **`Enter` 套槽成文**（缺槽保留 `{{id}}` 不静默）· **`F3` 草稿自查**（Jev noul×2 双 prob≥0.5 过；无 key → 离线配置提示）· 屏底成文预览与自查结果（原意/贴合分项）· `Esc` 返回答题；任何有题状态可呼出；
+- 批注（`F4` 呼出，M5-W5，docs/10 §2）：**判分后作文/翻译题** → LLM 逐句批注（升级/亮点 + 短评 + 入卡目标，sentence 原句 verbatim）· 浮层随判分层展示（升级句 `→` 目标、短评、入卡目标行）· 随题 reset 清空；动作键走 `F` 区（`Ctrl+E` 保留 Writing 直达、`Ctrl+S` 保留 Settings 直达——docs/03 §5.3 保留字回归，2026-09-28）；
 - 打字：直接输入，`Esc` 结束结算 WPM；
 - 题包：`Ctrl+O` 导入（文件/口令码）· `Ctrl+X` 导出 · `Ctrl+F` 关注更新。
 
