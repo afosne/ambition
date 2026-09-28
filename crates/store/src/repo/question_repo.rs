@@ -69,6 +69,7 @@ pub async fn list_questions(pool: &SqlitePool) -> Result<Vec<Question>, sqlx::Er
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::repo::fixtures::*;
     use ambition_core::{BlankItem, Provenance, QuestionKind};
     use sqlx::sqlite::SqlitePoolOptions;
 
@@ -80,21 +81,6 @@ mod tests {
             .expect("内存库");
         init_db(&pool).await.expect("建表");
         pool
-    }
-
-    fn sample_question() -> Question {
-        Question::new(
-            "She is ___ student.".into(),
-            QuestionKind::FillBlank(ambition_core::FillBody {
-                sentence: "She is ___ student.".into(),
-                blanks: vec![BlankItem {
-                    acceptable: vec!["a".into()],
-                }],
-            }),
-            2,
-            vec!["article".into()],
-            Provenance::Seed,
-        )
     }
 
     #[test]

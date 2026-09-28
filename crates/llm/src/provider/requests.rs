@@ -140,6 +140,7 @@ impl LlmRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::*;
     use crate::router::breaker::{BREAKER_FAIL_LIMIT, BREAKER_SKIP_LIMIT};
     use crate::{LlmKind, LlmOut, MemLedger};
     use std::sync::Mutex;
@@ -192,10 +193,6 @@ mod tests {
 
     fn json_req() -> GenRequest {
         GenRequest::new(LlmKind::QuestionGen, "sys", "usr")
-    }
-
-    fn ok_json() -> String {
-        r#"{"questions": []}"#.to_string()
     }
 
     /// 恒定失败的供给方（非可重试 400：单次调用即错、无退避等待，熔断测试用）

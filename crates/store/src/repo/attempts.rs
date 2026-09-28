@@ -111,10 +111,8 @@ pub async fn recent_timings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ambition_core::{
-        Answer, Attempt, AttemptMode, BlankItem, GradeResult, GradedBy, Provenance, QuestionKind,
-        Verdict,
-    };
+    use crate::repo::fixtures::*;
+    use ambition_core::{AttemptMode, GradedBy, Verdict};
     use sqlx::sqlite::SqlitePoolOptions;
 
     async fn memory_pool() -> SqlitePool {
@@ -125,44 +123,6 @@ mod tests {
             .expect("内存库");
         init_db(&pool).await.expect("建表");
         pool
-    }
-
-    fn sample_question() -> Question {
-        Question::new(
-            "She is ___ student.".into(),
-            QuestionKind::FillBlank(ambition_core::FillBody {
-                sentence: "She is ___ student.".into(),
-                blanks: vec![BlankItem {
-                    acceptable: vec!["a".into()],
-                }],
-            }),
-            2,
-            vec!["article".into()],
-            Provenance::Seed,
-        )
-    }
-
-    fn sample_attempt(qid: Qid) -> Attempt {
-        Attempt {
-            attempt_id: "t-1".into(),
-            qid,
-            answer: Answer::Fill(vec!["a".into()]),
-            timing: None,
-            self_confidence: None,
-            mode: AttemptMode::Practice,
-        }
-    }
-
-    fn sample_grade(verdict: Verdict) -> GradeResult {
-        GradeResult {
-            verdict,
-            score: 1.0,
-            max: 1.0,
-            confidence: 1.0,
-            graded_by: GradedBy::Rule,
-            items: vec![],
-            error_tags: vec![],
-        }
     }
 
     #[test]

@@ -8,6 +8,8 @@
 
 // 模块分层（docs/01 §组织：lib.rs 薄壳 + 细分功能目录 wire/client/route，文件 ≤500 行，pre-commit 门禁强制）
 mod client;
+#[cfg(test)]
+mod common;
 mod route;
 mod wire;
 

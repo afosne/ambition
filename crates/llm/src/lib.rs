@@ -8,6 +8,8 @@
 //! - `ledger/`   进程内账本（MemLedger；SQLite 实现经 engine 装配）
 
 mod api;
+#[cfg(test)]
+mod common;
 mod ledger;
 mod provider;
 mod router;

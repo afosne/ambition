@@ -72,21 +72,10 @@ pub fn render_picker(frame: &mut Frame, state: &AppState) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unicode_width::UnicodeWidthStr;
 
     fn render_to(s: &AppState) -> String {
-        let mut terminal =
-            ratatui::Terminal::new(ratatui::backend::TestBackend::new(76, 24)).expect("terminal");
-        terminal.draw(|f| render_picker(f, s)).expect("draw");
-        let cells = &terminal.backend().buffer().content;
-        let mut out = String::new();
-        let mut i = 0;
-        while i < cells.len() {
-            let sym = cells[i].symbol();
-            out.push_str(sym);
-            i += 1 + usize::from(sym.width() == 2);
-        }
-        out
+        // 宽度感知收集收口到 common::fixtures::render_sized（P-2 续格口径）
+        crate::common::render_sized(s, 76, 24)
     }
 
     #[test]

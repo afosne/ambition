@@ -3,73 +3,11 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use ambition_core::{BlankItem, ChoiceBody, FillBody, OptionItem, Provenance};
+    use crate::common::fixtures::*;
+    use ambition_core::{BlankItem, Provenance};
     use std::sync::Arc;
     use wiremock::matchers::{body_string_contains, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    fn choice_question() -> Question {
-        Question::new(
-            "She is quick.".into(),
-            QuestionKind::SingleChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "quick".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "slowly".into(),
-                    },
-                ],
-                answer: vec![0],
-            }),
-            2,
-            vec!["vocab".into()],
-            Provenance::Seed,
-        )
-    }
-
-    fn multi_question() -> Question {
-        Question::new(
-            "Pick two.".into(),
-            QuestionKind::MultiChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "alpha".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "beta".into(),
-                    },
-                    OptionItem {
-                        id: 2,
-                        text: "gamma".into(),
-                    },
-                ],
-                answer: vec![0, 2],
-            }),
-            2,
-            vec![],
-            Provenance::Seed,
-        )
-    }
-
-    fn fill_question() -> Question {
-        Question::new(
-            "She ___ a student.".into(),
-            QuestionKind::FillBlank(FillBody {
-                sentence: "She ___ a student.".into(),
-                blanks: vec![BlankItem {
-                    acceptable: vec!["is".into(), "'s".into()],
-                }],
-            }),
-            2,
-            vec!["grammar".into()],
-            Provenance::Seed,
-        )
-    }
 
     async fn client_with(server: &MockServer) -> JevClient {
         JevClient::with_options(
@@ -78,10 +16,6 @@ mod tests {
             Some("k".into()),
             None,
         )
-    }
-
-    fn offline_router() -> Grader {
-        Grader::offline()
     }
 
     #[tokio::test]

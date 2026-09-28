@@ -4,6 +4,8 @@
 //! 2026-09-27 键位统一：keys.rs（KeyCtx 唯一路由 + hint 同源）· Space 多选 · Esc 退出编辑保留输入
 
 // 模块分层（docs/01 §组织：lib.rs 薄壳 + 细分功能目录 keys/state/update/render，文件 ≤500 行，pre-commit 门禁强制）
+#[cfg(test)]
+mod common;
 mod keys;
 mod render;
 mod state;

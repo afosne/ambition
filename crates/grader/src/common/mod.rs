@@ -1,6 +1,9 @@
 //! 判分通用组件（细分域，docs/07-grading）：三方共用辅助（helpers 内容）+ 判词载荷（judges）+ 语言阈值带（thresholds）
 //! 跨域引用一律 `use crate::*`（组内共享导入留在 lib.rs，docs/01 §1 组织规范）。
 
+#[cfg(test)]
+pub(crate) mod fixtures;
+
 pub mod judges;
 pub mod thresholds;
 
@@ -143,44 +146,7 @@ pub(crate) fn answer_display(answer: &Answer) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ambition_core::{BlankItem, ChoiceBody, FillBody, OptionItem, Provenance};
-
-    fn choice_question() -> Question {
-        Question::new(
-            "She is quick.".into(),
-            QuestionKind::SingleChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "quick".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "slowly".into(),
-                    },
-                ],
-                answer: vec![0],
-            }),
-            2,
-            vec!["vocab".into()],
-            Provenance::Seed,
-        )
-    }
-
-    fn fill_question() -> Question {
-        Question::new(
-            "She ___ a student.".into(),
-            QuestionKind::FillBlank(FillBody {
-                sentence: "She ___ a student.".into(),
-                blanks: vec![BlankItem {
-                    acceptable: vec!["is".into(), "'s".into()],
-                }],
-            }),
-            2,
-            vec!["grammar".into()],
-            Provenance::Seed,
-        )
-    }
+    use crate::common::fixtures::*;
 
     #[test]
     fn test_split_answer_separates_choice_and_fill() {

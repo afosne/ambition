@@ -1,68 +1,12 @@
 //! update 状态机测试（从 update.rs 拆出，docs/01 §组织：文件 ≤500 行；P-16 测试随被测物走）
 
 use super::*;
-use ambition_core::{BlankItem, FillBody, GradedBy, Provenance, Verdict};
+use ambition_core::Verdict;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn grade(verdict: Verdict) -> GradeResult {
-        GradeResult {
-            verdict,
-            score: if verdict == Verdict::Correct {
-                1.0
-            } else {
-                0.0
-            },
-            max: 1.0,
-            confidence: 1.0,
-            graded_by: GradedBy::Rule,
-            items: vec![],
-            error_tags: vec![],
-        }
-    }
-
-    fn fill_question(blanks: usize) -> Question {
-        let sentence = if blanks == 1 {
-            "I ___ a student.".to_string()
-        } else {
-            "She ___ to school ___ bus.".to_string()
-        };
-        Question::new(
-            sentence.clone(),
-            QuestionKind::FillBlank(FillBody {
-                sentence,
-                blanks: (0..blanks)
-                    .map(|_| BlankItem {
-                        acceptable: vec!["am".into(), "by".into()],
-                    })
-                    .collect(),
-            }),
-            1,
-            vec!["grammar".into()],
-            Provenance::Seed,
-        )
-    }
-
-    /// 多选题夹具（测试内 helper）
-    fn multi_question() -> Question {
-        Question::new(
-            "Pick two.".into(),
-            QuestionKind::MultiChoice(ambition_core::ChoiceBody {
-                options: (0..3)
-                    .map(|i| ambition_core::OptionItem {
-                        id: i,
-                        text: format!("opt{i}"),
-                    })
-                    .collect(),
-                answer: vec![0, 2],
-            }),
-            2,
-            vec![],
-            Provenance::Seed,
-        )
-    }
+    use crate::common::*;
 
     #[test]
     fn test_update_moves_selection_with_wrap() {

@@ -2,28 +2,14 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::render::*;
     use crate::*;
     use ambition_core::{BlankItem, Provenance, Question, QuestionKind};
 
     #[test]
     fn test_render_draws_passage_kinds() {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
-        use unicode_width::UnicodeWidthStr;
-
         fn render_to(s: &AppState) -> String {
-            let mut terminal = Terminal::new(TestBackend::new(76, 24)).expect("terminal");
-            terminal.draw(|f| render(f, s)).expect("draw");
-            let cells = &terminal.backend().buffer().content;
-            let mut out = String::new();
-            let mut i = 0;
-            while i < cells.len() {
-                let sym = cells[i].symbol();
-                out.push_str(sym);
-                i += 1 + usize::from(sym.width() == 2);
-            }
-            out
+            // 宽度感知收集收口到 common::fixtures::render_sized（P-2 续格口径）
+            crate::common::render_sized(s, 76, 24)
         }
 
         // 完形：语篇 + 逐空输入行（M4 题型补全）

@@ -55,6 +55,7 @@ impl LlmRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::*;
     use crate::router::breaker::{BREAKER_FAIL_LIMIT, BREAKER_SKIP_LIMIT};
     use crate::{GenRequest, LlmError, LlmOut, MemLedger};
     use std::sync::Mutex;
@@ -99,10 +100,6 @@ mod tests {
         fn model(&self) -> &str {
             self.model
         }
-    }
-
-    fn ok_json() -> String {
-        r#"{"questions": []}"#.to_string()
     }
 
     #[test]

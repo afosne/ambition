@@ -2,35 +2,14 @@
 
 #[cfg(test)]
 mod tests {
+    use crate::common::*;
     use crate::srs::*;
     use crate::*;
     use ambition_core::{
         Answer, Attempt, AttemptMode, BlankItem, CardSource, ChoiceBody, ErrorTag, FillBody,
-        GradeResult, OptionItem, Provenance, Question, QuestionKind, Timing, Verdict, now_unix,
+        GradeResult, OptionItem, QuestionKind, Timing, Verdict, now_unix,
     };
     use ambition_srs::{Card, CardAction, Rating};
-
-    fn choice_question(tag: &str) -> Question {
-        Question::new(
-            "She is quick.".into(),
-            QuestionKind::SingleChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "quick".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "slowly".into(),
-                    },
-                ],
-                answer: vec![0],
-            }),
-            2,
-            vec![tag.to_string()],
-            Provenance::Seed,
-        )
-    }
 
     fn attempt(qid: ambition_core::Qid, pick: u32, id: &str) -> Attempt {
         Attempt {
@@ -81,7 +60,7 @@ mod tests {
     #[tokio::test]
     async fn test_srs_after_attempt_creates_card_on_wrong_and_schedules_on_correct() {
         let engine = Engine::open_memory().await.expect("打开");
-        let q = choice_question("vocab");
+        let q = choice_question_tagged("vocab");
         engine.add_question(&q).await.expect("注入");
         let wrong = attempt(q.qid.clone(), 1, "srs-1");
         let grade = GradeResult {
@@ -121,7 +100,7 @@ mod tests {
         let action = engine.srs_after_attempt(&ok, &ok_grade, false).await;
         assert_eq!(action, Some(CardAction::Schedule(Rating::Good)));
         // 答对且无卡、非假对 → Skip（不入卡）
-        let q2 = choice_question("other-tag");
+        let q2 = choice_question_tagged("other-tag");
         engine.add_question(&q2).await.expect("注入");
         let fresh = attempt(q2.qid.clone(), 0, "srs-4");
         let action = engine.srs_after_attempt(&fresh, &ok_grade, false).await;
@@ -138,7 +117,7 @@ mod tests {
     #[tokio::test]
     async fn test_due_list_review_answer_and_wrong_wordbook() {
         let engine = Engine::open_memory().await.expect("打开");
-        let q = choice_question("grammar");
+        let q = choice_question_tagged("grammar");
         engine.add_question(&q).await.expect("注入");
         // 错题入卡 → 到期
         let wrong = attempt(q.qid.clone(), 1, "dl-1");
@@ -187,7 +166,7 @@ mod tests {
     #[tokio::test]
     async fn test_is_guess_attempt_uses_baseline_window() {
         let engine = Engine::open_memory().await.expect("打开");
-        let q = choice_question("vocab");
+        let q = choice_question_tagged("vocab");
         engine.add_question(&q).await.expect("注入");
         // 空历史：默认基线 15s/60s → 10s 中速 + conf3 不是假对
         let normal = attempt(q.qid.clone(), 0, "g-1");

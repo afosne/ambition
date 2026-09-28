@@ -225,31 +225,10 @@ impl Grader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::fixtures::*;
     use ambition_core::{BlankItem, ChoiceBody, OptionItem, Provenance};
 
     // 配对桩（门禁：同文件 fn↔test 配对；完整场景测试在 rule_tests.rs）
-
-    fn choice_question() -> Question {
-        Question::new(
-            "She is quick.".into(),
-            QuestionKind::SingleChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "quick".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "slowly".into(),
-                    },
-                ],
-                answer: vec![0],
-            }),
-            2,
-            vec!["vocab".into()],
-            Provenance::Seed,
-        )
-    }
 
     #[tokio::test]
     async fn test_grade_rule_path_decides_choice() {

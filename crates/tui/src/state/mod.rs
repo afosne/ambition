@@ -243,45 +243,8 @@ pub fn fill_answers(kind: &QuestionKind) -> Vec<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ambition_core::{BlankItem, FillBody, GradedBy, Provenance, Verdict};
-
-    fn grade(verdict: Verdict) -> GradeResult {
-        GradeResult {
-            verdict,
-            score: if verdict == Verdict::Correct {
-                1.0
-            } else {
-                0.0
-            },
-            max: 1.0,
-            confidence: 1.0,
-            graded_by: GradedBy::Rule,
-            items: vec![],
-            error_tags: vec![],
-        }
-    }
-
-    fn fill_question(blanks: usize) -> Question {
-        let sentence = if blanks == 1 {
-            "I ___ a student.".to_string()
-        } else {
-            "She ___ to school ___ bus.".to_string()
-        };
-        Question::new(
-            sentence.clone(),
-            QuestionKind::FillBlank(FillBody {
-                sentence,
-                blanks: (0..blanks)
-                    .map(|_| BlankItem {
-                        acceptable: vec!["am".into(), "by".into()],
-                    })
-                    .collect(),
-            }),
-            1,
-            vec!["grammar".into()],
-            Provenance::Seed,
-        )
-    }
+    use crate::common::*;
+    use ambition_core::{Provenance, Verdict};
 
     #[test]
     fn test_new_state_initializes_position() {

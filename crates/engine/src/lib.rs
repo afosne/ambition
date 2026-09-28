@@ -5,6 +5,8 @@
 //! 成本台账（StoreLedger + cost_summary）、中式英语改错训练（add_chinglish_drills）。
 
 mod assembly;
+#[cfg(test)]
+mod common;
 mod practice;
 mod srs;
 // 各模块只承载 impl 块与 crate 内部 fns——impl 自动生效，无项可再导出

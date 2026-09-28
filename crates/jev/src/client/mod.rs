@@ -147,52 +147,11 @@ impl JevClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::*;
     use ambition_llm::MemLedger;
     use std::sync::Arc;
     use wiremock::matchers::{body_string_contains, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    fn sample_questions() -> JevQuestions {
-        let mut qs = JevQuestions::new();
-        qs.insert(
-            "unique_answer".into(),
-            JevQuestion::Noul(NoulQ {
-                instructions: "Is exactly one option correct?".into(),
-            }),
-        );
-        qs.insert(
-            "natural".into(),
-            JevQuestion::Score(ScoreQ {
-                instructions: "How natural is the sentence?".into(),
-                levels: vec!["unnatural".into(), "ok".into(), "natural".into()],
-            }),
-        );
-        qs.insert(
-            "error_cause".into(),
-            JevQuestion::Choice(ChoiceQ {
-                instructions: "Classify the mistake.".into(),
-                criteria: [("word_sense".to_string(), "wrong sense".to_string())]
-                    .into_iter()
-                    .collect(),
-            }),
-        );
-        qs
-    }
-
-    fn ok_body() -> serde_json::Value {
-        serde_json::json!({
-            "model": "jev-1.13.0",
-            "answers": {
-                "unique_answer": {"type": "noul", "noul": 0.95},
-                "natural": {"type": "score", "score": 1.9, "confidence": 0.9,
-                            "legend": {"0":"unnatural","1":"ok","2":"natural"},
-                            "probabilities": {"0":0.0,"1":0.05,"2":0.95}},
-                "error_cause": {"type": "choice", "choice": "word_sense",
-                                "probabilities": {"word_sense": 0.9}, "confidence": 0.88}
-            },
-            "usage": {"input_tokens": 300, "output_tokens": 25}
-        })
-    }
 
     fn fanout_job(marker: &str) -> JevJob {
         JevJob {

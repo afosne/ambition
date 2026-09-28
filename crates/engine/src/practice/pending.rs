@@ -79,31 +79,10 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::*;
     use ambition_core::{
         Attempt, AttemptMode, BlankItem, ChoiceBody, FillBody, OptionItem, QuestionKind,
     };
-
-    fn choice_question() -> Question {
-        Question::new(
-            "She is quick.".into(),
-            QuestionKind::SingleChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "quick".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "slow".into(),
-                    },
-                ],
-                answer: vec![0],
-            }),
-            1,
-            vec!["vocab".into()],
-            ambition_core::Provenance::Seed,
-        )
-    }
 
     fn attempt_for(qid: ambition_core::Qid, selected: Vec<u32>, id: &str) -> Attempt {
         Attempt {

@@ -136,78 +136,12 @@ fn arbitrate_schema() -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::fixtures::*;
     use crate::corpus::ERROR_TAGS_VERSION;
-    use ambition_core::{BlankItem, ChoiceBody, FillBody, OptionItem, Provenance};
+
     use std::sync::Arc;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    fn choice_question() -> Question {
-        Question::new(
-            "She is quick.".into(),
-            QuestionKind::SingleChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "quick".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "slowly".into(),
-                    },
-                ],
-                answer: vec![0],
-            }),
-            2,
-            vec!["vocab".into()],
-            Provenance::Seed,
-        )
-    }
-
-    fn multi_question() -> Question {
-        Question::new(
-            "Pick two.".into(),
-            QuestionKind::MultiChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "alpha".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "beta".into(),
-                    },
-                    OptionItem {
-                        id: 2,
-                        text: "gamma".into(),
-                    },
-                ],
-                answer: vec![0, 2],
-            }),
-            2,
-            vec![],
-            Provenance::Seed,
-        )
-    }
-
-    fn fill_question() -> Question {
-        Question::new(
-            "She ___ a student.".into(),
-            QuestionKind::FillBlank(FillBody {
-                sentence: "She ___ a student.".into(),
-                blanks: vec![BlankItem {
-                    acceptable: vec!["is".into(), "'s".into()],
-                }],
-            }),
-            2,
-            vec!["grammar".into()],
-            Provenance::Seed,
-        )
-    }
-
-    fn offline_router() -> Grader {
-        Grader::offline()
-    }
 
     #[test]
     fn test_arbitrate_request_pins_schema_temperature_and_prompt() {

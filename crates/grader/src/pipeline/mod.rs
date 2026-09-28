@@ -57,34 +57,9 @@ impl Grader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ambition_core::{ChoiceBody, OptionItem, Provenance};
+    use crate::common::fixtures::*;
+
     use std::sync::Arc;
-
-    fn choice_question() -> Question {
-        Question::new(
-            "She is quick.".into(),
-            QuestionKind::SingleChoice(ChoiceBody {
-                options: vec![
-                    OptionItem {
-                        id: 0,
-                        text: "quick".into(),
-                    },
-                    OptionItem {
-                        id: 1,
-                        text: "slowly".into(),
-                    },
-                ],
-                answer: vec![0],
-            }),
-            2,
-            vec!["vocab".into()],
-            Provenance::Seed,
-        )
-    }
-
-    fn offline_router() -> Grader {
-        Grader::offline()
-    }
 
     /// 无供给方请求的路由器占位（downgrade 判「有 LLM」用；structured 永不被调到）
     fn dummy_router() -> LlmRouter {

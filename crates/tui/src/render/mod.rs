@@ -167,85 +167,15 @@ pub fn render(frame: &mut Frame, state: &AppState) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ambition_core::{BlankItem, FillBody, GradedBy, Provenance, Verdict};
-
-    fn grade(verdict: Verdict) -> GradeResult {
-        GradeResult {
-            verdict,
-            score: if verdict == Verdict::Correct {
-                1.0
-            } else {
-                0.0
-            },
-            max: 1.0,
-            confidence: 1.0,
-            graded_by: GradedBy::Rule,
-            items: vec![],
-            error_tags: vec![],
-        }
-    }
-
-    fn fill_question(blanks: usize) -> Question {
-        let sentence = if blanks == 1 {
-            "I ___ a student.".to_string()
-        } else {
-            "She ___ to school ___ bus.".to_string()
-        };
-        Question::new(
-            sentence.clone(),
-            QuestionKind::FillBlank(FillBody {
-                sentence,
-                blanks: (0..blanks)
-                    .map(|_| BlankItem {
-                        acceptable: vec!["am".into(), "by".into()],
-                    })
-                    .collect(),
-            }),
-            1,
-            vec!["grammar".into()],
-            Provenance::Seed,
-        )
-    }
-
-    /// 多选题夹具（测试内 helper）
-    fn multi_question() -> Question {
-        Question::new(
-            "Pick two.".into(),
-            QuestionKind::MultiChoice(ambition_core::ChoiceBody {
-                options: (0..3)
-                    .map(|i| ambition_core::OptionItem {
-                        id: i,
-                        text: format!("opt{i}"),
-                    })
-                    .collect(),
-                answer: vec![0, 2],
-            }),
-            2,
-            vec![],
-            Provenance::Seed,
-        )
-    }
+    use crate::common::*;
+    use ambition_core::Verdict;
 
     #[test]
     fn test_render_draws_stem_options_and_grade() {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
-
         // 每个状态用全新终端渲染；按显示宽度跳过宽字符续格（ratatui 续格不落笔）
         fn render_to(s: &AppState) -> String {
-            use unicode_width::UnicodeWidthStr;
-
-            let mut terminal = Terminal::new(TestBackend::new(72, 18)).expect("terminal");
-            terminal.draw(|f| render(f, s)).expect("draw");
-            let cells = &terminal.backend().buffer().content;
-            let mut out = String::new();
-            let mut i = 0;
-            while i < cells.len() {
-                let sym = cells[i].symbol();
-                out.push_str(sym);
-                i += 1 + usize::from(sym.width() == 2);
-            }
-            out
+            // 宽度感知收集收口到 common::fixtures::render_sized（P-2 续格口径）
+            crate::common::render_sized(s, 72, 18)
         }
 
         let mut s = new_state(vec![sample_question()]);
@@ -262,22 +192,9 @@ mod tests {
 
     #[test]
     fn test_render_shows_error_line_and_fill_input_separately() {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
-
         fn render_to(s: &AppState) -> String {
-            use unicode_width::UnicodeWidthStr;
-            let mut terminal = Terminal::new(TestBackend::new(72, 20)).expect("terminal");
-            terminal.draw(|f| render(f, s)).expect("draw");
-            let cells = &terminal.backend().buffer().content;
-            let mut out = String::new();
-            let mut i = 0;
-            while i < cells.len() {
-                let sym = cells[i].symbol();
-                out.push_str(sym);
-                i += 1 + usize::from(sym.width() == 2);
-            }
-            out
+            // 宽度感知收集收口到 common::fixtures::render_sized（P-2 续格口径）
+            crate::common::render_sized(s, 72, 20)
         }
 
         // 错误行独立可见，且没有判分浮层
@@ -311,23 +228,9 @@ mod tests {
 
     #[test]
     fn test_render_marks_checked_option_for_multi_select() {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
-
         fn render_to(s: &AppState) -> String {
-            use unicode_width::UnicodeWidthStr;
-
-            let mut terminal = Terminal::new(TestBackend::new(72, 18)).expect("terminal");
-            terminal.draw(|f| render(f, s)).expect("draw");
-            let cells = &terminal.backend().buffer().content;
-            let mut out = String::new();
-            let mut i = 0;
-            while i < cells.len() {
-                let sym = cells[i].symbol();
-                out.push_str(sym);
-                i += 1 + usize::from(sym.width() == 2);
-            }
-            out
+            // 宽度感知收集收口到 common::fixtures::render_sized（P-2 续格口径）
+            crate::common::render_sized(s, 72, 18)
         }
 
         let mut s = new_state(vec![multi_question()]);
@@ -341,22 +244,9 @@ mod tests {
 
     #[test]
     fn test_render_shows_pending_arbitration_and_error_tags() {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
-
         fn render_to(s: &AppState) -> String {
-            use unicode_width::UnicodeWidthStr;
-            let mut terminal = Terminal::new(TestBackend::new(76, 24)).expect("terminal");
-            terminal.draw(|f| render(f, s)).expect("draw");
-            let cells = &terminal.backend().buffer().content;
-            let mut out = String::new();
-            let mut i = 0;
-            while i < cells.len() {
-                let sym = cells[i].symbol();
-                out.push_str(sym);
-                i += 1 + usize::from(sym.width() == 2);
-            }
-            out
+            // 宽度感知收集收口到 common::fixtures::render_sized（P-2 续格口径）
+            crate::common::render_sized(s, 76, 24)
         }
 
         let mut s = new_state(vec![sample_question()]);
