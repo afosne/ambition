@@ -1,6 +1,7 @@
 //! Ambition 入口（M2 单机 TUI）：壳层只做 I/O，业务全走 engine 门面。
 //! M2：文件库（~/.ambition/ambition.db，AMBI_DB 覆盖）+ seed 题库 + 填空输入 + 独立错误行。
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -8,7 +9,8 @@ use ambition_core::{Attempt, AttemptMode, now_unix};
 use ambition_engine::{Engine, Rating};
 use ambition_tui::{
     Cmd, ReviewCard, Screen, apply_error, apply_grade, apply_review_cards, apply_review_rated,
-    apply_srs_hint, key_to_msg, new_state, render, update,
+    apply_scaffold_check, apply_scaffold_result, apply_scaffold_templates, apply_srs_hint,
+    key_to_msg, new_state, render, update,
 };
 use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::terminal::{
@@ -44,8 +46,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     execute!(stdout, EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
 
-    // finished（答题组完成）后仍可进复习屏（Ctrl+R/Tab），直到显式退出
-    while !state.finished || state.screen == Screen::Review {
+    // finished（答题组完成）后仍可进复习屏/模板屏（Ctrl+R/Tab、F2），直到显式退出
+    while !state.finished || state.screen == Screen::Review || state.screen == Screen::Scaffold {
         terminal.draw(|f| render(f, &state))?;
         let Event::Key(key) = event::read()? else {
             continue;
@@ -115,6 +117,47 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 };
                 match engine.review_answer(&card_id, rating).await {
                     Ok(card) => apply_review_rated(&mut state, card.due_at, now_unix()),
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::ScaffoldLoad => {
+                // 模板列表（内置 + 个人合并；track 暂全量，随16-config 注入当前轨，TODO(16-config): engine.templates(Some(track)))
+                match engine.templates(None).await {
+                    Ok(list) => apply_scaffold_templates(&mut state, list),
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::ScaffoldRender => {
+                // 套槽成文（槽位 id ↔ 填值对齐；缺槽由 writing::render 保留占位 + warn）
+                let Some(t) = state.scaffold_templates.get(state.scaffold_idx) else {
+                    continue;
+                };
+                let fills: BTreeMap<String, String> = t
+                    .slots
+                    .iter()
+                    .enumerate()
+                    .map(|(i, slot)| {
+                        (
+                            slot.id.clone(),
+                            state.scaffold_fills.get(i).cloned().unwrap_or_default(),
+                        )
+                    })
+                    .collect();
+                match engine.render_template(&t.template_id, &fills).await {
+                    Ok(text) => apply_scaffold_result(&mut state, text),
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::ScaffoldCheck => {
+                // 草稿自查（无成文不发 Cmd——scaffold 状态机已拦；此处防御）
+                let Some(t) = state.scaffold_templates.get(state.scaffold_idx) else {
+                    continue;
+                };
+                let Some(essay) = state.scaffold_result.clone() else {
+                    continue;
+                };
+                match engine.check_scaffold(&t.template_id, &essay).await {
+                    Ok(check) => apply_scaffold_check(&mut state, check),
                     Err(err) => apply_error(&mut state, err.to_string()),
                 }
             }

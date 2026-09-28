@@ -2,12 +2,15 @@
 //! 本域含配对测试子组件：`update::update_tests`（状态机）/ `update::update_passage_tests`（语篇作答）。
 //! 跨域引用一律 `use crate::*`（组内共享导入留在 lib.rs，docs/01 §1 组织规范）。
 
+mod scaffold;
 #[cfg(test)]
 mod update_passage_tests;
 #[cfg(test)]
 mod update_tests;
 
 use crate::*;
+
+pub use scaffold::{apply_scaffold_check, apply_scaffold_result, apply_scaffold_templates};
 
 /// 纯状态机：键位语义见 keys.rs（唯一键位表），本层只做状态转移与防误触双保险
 pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
@@ -19,6 +22,9 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
         state.screen = target;
         return if target == Screen::Review {
             Cmd::ReviewLoad
+        } else if target == Screen::Scaffold {
+            // 进模板屏即装载模板列表（M5-W4b，异步回填经 apply_scaffold_templates）
+            Cmd::ScaffoldLoad
         } else {
             Cmd::None
         };
@@ -77,6 +83,10 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             }
             _ => Cmd::None,
         };
+    }
+    // 模板作文屏独立状态机（M5-W4b，docs/03 §5.3 scaffold 族；须在 finished 守卫之前——完成态也可练模板）
+    if state.screen == Screen::Scaffold {
+        return scaffold::scaffold_update(state, msg);
     }
     if state.finished {
         return if matches!(msg, Msg::Quit) {
@@ -373,6 +383,14 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             }
             Cmd::None
         }
+        // 模板屏专属消息在答题流程忽略（顶部分支已拦截；防误触）
+        Msg::ScaffoldUp
+        | Msg::ScaffoldDown
+        | Msg::ScaffoldStage
+        | Msg::ScaffoldSlotNext
+        | Msg::ScaffoldSlotPrev
+        | Msg::ScaffoldRender
+        | Msg::ScaffoldCheck => Cmd::None,
         // 复习屏/面板专属消息在答题流程忽略（顶部分支已拦截；防误触）
         Msg::Screen(_) | Msg::Flip | Msg::Rate(_) | Msg::TogglePicker | Msg::Jump => Cmd::None,
     }

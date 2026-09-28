@@ -8,6 +8,7 @@ pub mod picker_render;
 #[cfg(test)]
 mod render_passage_tests;
 pub mod review_render;
+pub mod scaffold_render;
 
 pub use picker_render::*;
 pub use review_render::*;
@@ -23,6 +24,10 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     }
     if state.screen == Screen::Review {
         render_review(frame, state);
+        return;
+    }
+    if state.screen == Screen::Scaffold {
+        scaffold_render::render_scaffold(frame, state);
         return;
     }
     let mut text = String::from("Ambition · 拾英 —— 单机模式（本地题库）\n\n");

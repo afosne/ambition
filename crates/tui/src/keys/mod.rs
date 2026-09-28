@@ -22,6 +22,8 @@ pub enum KeyCtx {
     Review,
     /// 选题面板（F1；docs/03 §5.3 2026-09-27）：↑↓ 选择 · Enter 跳转 · Esc/F1 返回
     Picker,
+    /// 模板作文屏（F2，M5-W4b）：↑↓选模板 · Tab换槽 · Space阶段 · Enter成文 · Ctrl+S自查 · Esc 返回
+    Scaffold,
 }
 
 /// 键位 → 消息（唯一键位表；docs/03 §5.3）
@@ -34,6 +36,8 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
             // 屏幕直达（docs/03 §5.3 直达表落地：Practice=Ctrl+A、Review=Ctrl+R；其余屏随后续阶段）
             KeyCode::Char('a') => Some(Msg::Screen(Screen::Practice)),
             KeyCode::Char('r') => Some(Msg::Screen(Screen::Review)),
+            // M5-W4b：模板屏自查（上下文层语义——Ctrl+S 仅 Scaffold 屏有操作，docs/03 §5.3）
+            KeyCode::Char('s') if ctx == KeyCtx::Scaffold => Some(Msg::ScaffoldCheck),
             _ => None,
         };
     }
@@ -45,6 +49,7 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Pending => Some(Msg::Next), // 跳过本题（保持待裁定桶）
                 KeyCtx::Review => Some(Msg::Screen(Screen::Practice)), // 复习屏返回答题
                 KeyCtx::Picker => Some(Msg::TogglePicker), // 面板返回答题
+                KeyCtx::Scaffold => Some(Msg::Screen(Screen::Practice)), // 模板屏返回答题
                 _ => Some(Msg::Quit),
             };
         }
@@ -55,6 +60,7 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Graded | KeyCtx::Finished => Msg::Next,
                 KeyCtx::Review => Msg::Flip, // 复习屏 Enter=翻面
                 KeyCtx::Picker => Msg::Jump, // 面板 Enter=跳转到选中题
+                KeyCtx::Scaffold => Msg::ScaffoldRender, // 模板屏 Enter=套槽成文
             });
         }
         _ => {}
@@ -93,10 +99,22 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
         (KeyCtx::Choice | KeyCtx::Graded | KeyCtx::Finished, KeyCode::F(1)) => {
             Some(Msg::TogglePicker)
         }
+        // F2 模板作文屏（Choice/Graded/Finished 可呼出，M5-W4b docs/03 §5.3）
+        (KeyCtx::Choice | KeyCtx::Graded | KeyCtx::Finished, KeyCode::F(2)) => {
+            Some(Msg::Screen(Screen::Scaffold))
+        }
         (KeyCtx::Picker, KeyCode::F(1)) => Some(Msg::TogglePicker),
         // 面板内列表导航
         (KeyCtx::Picker, KeyCode::Down) => Some(Msg::MoveDown),
         (KeyCtx::Picker, KeyCode::Up) => Some(Msg::MoveUp),
+        // 模板作文屏（M5-W4b，docs/03 §5.3 scaffold 族）
+        (KeyCtx::Scaffold, KeyCode::Up) => Some(Msg::ScaffoldUp),
+        (KeyCtx::Scaffold, KeyCode::Down) => Some(Msg::ScaffoldDown),
+        (KeyCtx::Scaffold, KeyCode::Tab | KeyCode::Right) => Some(Msg::ScaffoldSlotNext),
+        (KeyCtx::Scaffold, KeyCode::BackTab | KeyCode::Left) => Some(Msg::ScaffoldSlotPrev),
+        (KeyCtx::Scaffold, KeyCode::Char(' ')) => Some(Msg::ScaffoldStage),
+        (KeyCtx::Scaffold, KeyCode::Char(c)) => Some(Msg::Char(c)),
+        (KeyCtx::Scaffold, KeyCode::Backspace) => Some(Msg::Backspace),
         _ => None,
     }
 }
@@ -120,8 +138,14 @@ pub fn hint(ctx: KeyCtx) -> &'static str {
             " Space/Enter 翻面 · 1-4 评分（Again/Hard/Good/Easy）· Tab/Esc 返回答题 · Ctrl+Q 退出"
         }
         KeyCtx::Picker => " ↑/↓ 选择题目 · Enter 跳转 · Esc/F1 返回 · Ctrl+Q 退出",
+        KeyCtx::Scaffold => {
+            " ↑/↓ 选模板 · Tab/←→ 换槽 · Space 切阶段 · Enter 成文 · Ctrl+S 自查 · Esc 返回 · Ctrl+Q 退出"
+        }
     }
 }
+
+#[cfg(test)]
+mod keys_tests;
 
 #[cfg(test)]
 mod tests {
@@ -132,7 +156,7 @@ mod tests {
         M::empty()
     }
 
-    fn all_ctxs() -> [KeyCtx; 8] {
+    fn all_ctxs() -> [KeyCtx; 9] {
         [
             KeyCtx::Choice,
             KeyCtx::Fill { editing: true },
@@ -142,6 +166,7 @@ mod tests {
             KeyCtx::Finished,
             KeyCtx::Review,
             KeyCtx::Picker,
+            KeyCtx::Scaffold,
         ]
     }
 
@@ -346,40 +371,6 @@ mod tests {
         assert_eq!(
             key_to_msg(KeyCtx::Fill { editing: false }, K::F(1), mods()),
             None
-        );
-    }
-
-    #[test]
-    fn test_hint_matches_context_and_differs() {
-        let all = [
-            hint(KeyCtx::Choice),
-            hint(KeyCtx::Fill { editing: true }),
-            hint(KeyCtx::Fill { editing: false }),
-            hint(KeyCtx::Pending),
-            hint(KeyCtx::Graded),
-            hint(KeyCtx::Finished),
-        ];
-        for h in all {
-            assert!(!h.is_empty(), "提示非空");
-            assert!(!h.contains("j/k"), "提示不含已废单字母: {h}");
-        }
-        let mut uniq: Vec<&str> = all.to_vec();
-        uniq.dedup();
-        assert_eq!(uniq.len(), all.len(), "各上下文提示互异");
-        assert!(hint(KeyCtx::Choice).contains("Space"), "选择提示含选中键");
-        assert!(hint(KeyCtx::Choice).contains("↑/↓"), "选择提示用方向键");
-        assert!(
-            hint(KeyCtx::Fill { editing: true }).contains("Esc 退出编辑"),
-            "填空编辑提示含退出编辑"
-        );
-        assert!(
-            hint(KeyCtx::Fill { editing: true }).contains("下一空"),
-            "填空提示含空位导航"
-        );
-        assert!(hint(KeyCtx::Pending).contains("判对"), "待裁定提示含判对");
-        assert!(
-            hint(KeyCtx::Pending).contains("Enter 确认"),
-            "待裁定提示含确认"
         );
     }
 

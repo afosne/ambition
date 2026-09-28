@@ -145,6 +145,7 @@ version = "0.1.0"
 dependencies = [
  "ambition-core",
  "ambition-engine",
+ "ambition-writing",
  "crossterm",
  "ratatui",
  "tokio",

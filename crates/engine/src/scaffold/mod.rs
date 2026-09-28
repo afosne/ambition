@@ -10,15 +10,17 @@ use ambition_writing::{
 };
 
 impl Engine {
-    /// 模板列表（按轨过滤内置 + DB 个人模板；同 id 个人覆盖内置）
-    pub async fn templates(&self, track: &str) -> Result<Vec<Template>, EngineError> {
+    /// 模板列表（`track=Some` 按轨过滤、`None` 全部；内置 + DB 个人模板、同 id 个人覆盖内置）
+    pub async fn templates(&self, track: Option<&str>) -> Result<Vec<Template>, EngineError> {
         let mut out: Vec<Template> = builtin_templates()
             .iter()
-            .filter(|t| t.track == track)
+            .filter(|t| track.is_none_or(|tr| t.track == tr))
             .cloned()
             .collect();
         for t in ambition_store::templates(&self.pool).await? {
-            if t.track != track {
+            if let Some(tr) = track
+                && t.track != tr
+            {
                 continue;
             }
             out.retain(|b| b.template_id != t.template_id);
@@ -101,7 +103,7 @@ mod tests {
     #[tokio::test]
     async fn test_templates_filters_track_and_merges_personal_overrides() {
         let engine = Engine::open_memory().await.expect("打开内存库");
-        let builtin_list = engine.templates("cet4").await.expect("内置列表");
+        let builtin_list = engine.templates(Some("cet4")).await.expect("内置列表");
         assert!(!builtin_list.is_empty(), "内置 cet4 模板在列");
         assert!(builtin_list.iter().all(|t| t.track == "cet4"), "按轨过滤");
 
@@ -111,7 +113,7 @@ mod tests {
         override_t.source = TemplateSource::Personal;
         engine.save_template(&override_t).await.expect("存覆盖");
 
-        let after = engine.templates("cet4").await.expect("合并列表");
+        let after = engine.templates(Some("cet4")).await.expect("合并列表");
         assert_eq!(after.len(), builtin_list.len(), "同 id 覆盖不增行");
         let merged = after
             .iter()
@@ -120,7 +122,7 @@ mod tests {
         assert_eq!(merged.genre, "email", "个人覆盖内置字段");
         assert_eq!(merged.source, TemplateSource::Personal);
 
-        let other = engine.templates("gaokao").await.expect("高考轨");
+        let other = engine.templates(Some("gaokao")).await.expect("高考轨");
         assert!(other.iter().all(|t| t.track == "gaokao"), "异轨不串");
     }
 
@@ -129,7 +131,7 @@ mod tests {
         let engine = Engine::open_memory().await.expect("打开内存库");
         let t = personal_template("t-save-test");
         engine.save_template(&t).await.expect("保存");
-        let list = engine.templates("cet4").await.expect("列表");
+        let list = engine.templates(Some("cet4")).await.expect("列表");
         assert!(
             list.iter()
                 .any(|x| x.template_id == "t-save-test" && x.genre == "email"),

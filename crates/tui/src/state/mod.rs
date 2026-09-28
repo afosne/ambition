@@ -6,6 +6,7 @@ pub mod review;
 pub use review::*;
 
 use crate::*;
+use ambition_writing::{ScaffoldCheck, ScaffoldStage, Template};
 
 /// 屏幕（M4：Practice + Review；完整 Screen 集见 docs/03-engine-ui）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +14,8 @@ pub enum Screen {
     Practice,
     /// 复习屏（FSRS 翻卡，docs/03 §3 M4）
     Review,
+    /// 模板作文屏（M5-W4b，docs/03 §5.3 scaffold 族）
+    Scaffold,
 }
 
 /// 应用状态
@@ -52,6 +55,20 @@ pub struct AppState {
     pub picker_cursor: usize,
     /// 待裁定裁决高亮（0=判对 1=判错；←/→ 切换，Enter 确认）
     pub arbitration_sel: u8,
+    /// 模板列表（当前轨；F2 进屏时经 Cmd::ScaffoldLoad 异步装载，M5-W4b）
+    pub scaffold_templates: Vec<Template>,
+    /// 选中模板游标
+    pub scaffold_idx: usize,
+    /// 脚手架三阶段（Space 循环）
+    pub scaffold_stage: ScaffoldStage,
+    /// 槽位输入（与选中模板 slots 对齐；换模板即重置）
+    pub scaffold_fills: Vec<String>,
+    /// 当前槽位游标
+    pub scaffold_slot: usize,
+    /// 最近一次成文（Enter 回填；自查以其为输入）
+    pub scaffold_result: Option<String>,
+    /// 最近一次自查结果（Ctrl+S 回填）
+    pub scaffold_check: Option<ScaffoldCheck>,
 }
 
 /// 输入消息
@@ -88,6 +105,18 @@ pub enum Msg {
     TogglePicker,
     /// 面板内跳转（Enter）
     Jump,
+    /// 模板屏：上/下一个模板（↑/↓）
+    ScaffoldUp,
+    ScaffoldDown,
+    /// 模板屏：三阶段循环（Space）
+    ScaffoldStage,
+    /// 模板屏：槽位前/后移（Tab/Shift+Tab、←/→）
+    ScaffoldSlotNext,
+    ScaffoldSlotPrev,
+    /// 模板屏：套槽成文（Enter → Cmd::ScaffoldRender）
+    ScaffoldRender,
+    /// 模板屏：草稿自查（Ctrl+S → Cmd::ScaffoldCheck）
+    ScaffoldCheck,
 }
 
 /// 状态机输出（Quit/Submit 由 main 执行副作用）
@@ -102,6 +131,12 @@ pub enum Cmd {
     ReviewLoad,
     /// 复习评分（main 调 engine.review_answer；u8 = 1-4 档）
     ReviewRate(u8),
+    /// 装载模板列表（main 调 engine.templates）
+    ScaffoldLoad,
+    /// 套槽成文（main 调 engine.render_template）
+    ScaffoldRender,
+    /// 草稿自查（main 调 engine.check_scaffold）
+    ScaffoldCheck,
 }
 
 /// 题目空位数（填空类 = blanks 数；其它题型 = 0——inputs 长度据此重建；M4 题型补全含完形/语法填空）
@@ -137,6 +172,13 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         picker_open: false,
         picker_cursor: 0,
         arbitration_sel: 0,
+        scaffold_templates: Vec::new(),
+        scaffold_idx: 0,
+        scaffold_stage: ScaffoldStage::Full,
+        scaffold_fills: Vec::new(),
+        scaffold_slot: 0,
+        scaffold_result: None,
+        scaffold_check: None,
     }
 }
 
@@ -148,6 +190,9 @@ impl AppState {
 
     /// 键位上下文（keys.rs 唯一路由入参；键位表只此一份）
     pub fn key_ctx(&self) -> KeyCtx {
+        if self.screen == Screen::Scaffold {
+            return KeyCtx::Scaffold;
+        }
         if self.screen == Screen::Review {
             return KeyCtx::Review;
         }
