@@ -282,6 +282,8 @@ pub(crate) fn question_back(kind: &QuestionKind) -> String {
             })
             .collect::<Vec<_>>()
             .join(" | "),
+        // 翻译（M5-W2）：卡背面 = 目标语参考译文
+        QuestionKind::Translation(body) => body.reference.clone(),
     }
 }
 

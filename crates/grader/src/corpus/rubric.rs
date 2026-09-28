@@ -50,6 +50,10 @@ const RUBRICS: &[(&str, &str)] = &[
         "ielts_task2",
         include_str!("../../assets/rubrics/ielts_task2.json"),
     ),
+    (
+        "translation4",
+        include_str!("../../assets/rubrics/translation4.json"),
+    ),
 ];
 
 /// 解析后的 rubric 表（每 id 一个单例；坏文件 tracing::warn 跳过不阻断——同语料口径 P-8 可见降级）
@@ -83,6 +87,10 @@ mod tests {
         let rubrics = rubrics();
         assert!(rubrics.contains_key("gaokao25"), "内置高考 rubric");
         assert!(rubrics.contains_key("ielts_task2"), "内置雅思 rubric");
+        assert!(
+            rubrics.contains_key("translation4"),
+            "内置翻译 rubric（M5-W2）"
+        );
         for rubric in rubrics.values() {
             let sum: f32 = rubric.dims.iter().map(|d| d.weight).sum();
             assert!(

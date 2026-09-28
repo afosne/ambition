@@ -54,6 +54,8 @@ pub(crate) fn split_answer(answer: &Answer) -> (Vec<u32>, Vec<String>) {
         Answer::Choice(ids) => (ids.clone(), Vec::new()),
         Answer::Fill(values) => (Vec::new(), values.clone()),
         Answer::Group(_) => (Vec::new(), Vec::new()),
+        // 文本作答（翻译/作文）本层不拆——composite 分支在 grade() 前置拦截
+        Answer::Text(_) => (Vec::new(), Vec::new()),
     }
 }
 
@@ -117,6 +119,8 @@ pub(crate) fn answer_state(question: &Question, answer: &Answer) -> JevState {
             state.insert("passage".into(), serde_json::json!(s75.passage));
             state.insert("options".into(), serde_json::json!(&s75.options));
         }
+        // 翻译/作文：本层不建 state（composite 分支自建：只进 l2，源文 l1 永不进，docs/05 §3.5）
+        QuestionKind::Translation(_) => {}
     }
     state.insert(
         "student_answer".into(),
@@ -140,6 +144,7 @@ pub(crate) fn answer_display(answer: &Answer) -> String {
             .map(|(i, sub)| format!("{}.{}", i + 1, answer_display(sub)))
             .collect::<Vec<_>>()
             .join(" | "),
+        Answer::Text(text) => text.clone(),
     }
 }
 

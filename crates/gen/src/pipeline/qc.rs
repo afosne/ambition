@@ -146,6 +146,11 @@ pub(crate) fn qc_state(
             "answer_option_texts": s75.answer.iter().map(|id| s75.options.get(*id as usize).cloned().unwrap_or_default()).collect::<Vec<_>>(),
             "difficulty": question.difficulty,
         }),
+        // M5-W2：翻译 QC——state 只进 l2（reference 进、源文 l1 永不进，docs/05 §3.5）
+        (ambition_core::QuestionKind::Translation(body), false) => serde_json::json!({
+            "reference": body.reference,
+            "difficulty": question.difficulty,
+        }),
         _ => serde_json::json!({"stem": question.stem}),
     };
     ambition_jev::JevState(value)

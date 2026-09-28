@@ -9055,6 +9055,230 @@
       "explanations": [
         "Each blank follows logically: fuels → concentrate → releases energy → limit sugar → drink water."
       ]
+    },
+    {
+      "qid": "af59df24defcb9d8",
+      "question": {
+        "qid": "af59df24defcb9d8",
+        "kind": {
+          "translation": {
+            "direction": {
+              "from": "zh-Hans",
+              "to": "en"
+            },
+            "source_text": "这个城市以其悠久的历史和美丽的风景闻名于世。",
+            "reference": "This city is famous the world over for its long history and beautiful scenery."
+          }
+        },
+        "stem": "Translate the following sentence into English.",
+        "difficulty": 2,
+        "tags": [
+          "translation",
+          "cet4"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Keep the original meaning intact; prefer natural collocations over literal wording."
+      ]
+    },
+    {
+      "qid": "5549c142d4287d62",
+      "question": {
+        "qid": "5549c142d4287d62",
+        "kind": {
+          "translation": {
+            "direction": {
+              "from": "zh-Hans",
+              "to": "en"
+            },
+            "source_text": "随着经济的发展，越来越多的家庭拥有了自己的汽车。",
+            "reference": "With the development of the economy, more and more families own their own cars."
+          }
+        },
+        "stem": "Translate the following sentence into English.",
+        "difficulty": 2,
+        "tags": [
+          "translation",
+          "cet4"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Keep the original meaning intact; prefer natural collocations over literal wording."
+      ]
+    },
+    {
+      "qid": "5e85dd2cae004118",
+      "question": {
+        "qid": "5e85dd2cae004118",
+        "kind": {
+          "translation": {
+            "direction": {
+              "from": "zh-Hans",
+              "to": "en"
+            },
+            "source_text": "中国政府高度重视环境保护，并采取了一系列措施。",
+            "reference": "The Chinese government attaches great importance to environmental protection and has taken a series of measures."
+          }
+        },
+        "stem": "Translate the following sentence into English.",
+        "difficulty": 3,
+        "tags": [
+          "translation",
+          "cet4"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Keep the original meaning intact; prefer natural collocations over literal wording."
+      ]
+    },
+    {
+      "qid": "5d2bb4fd557b2983",
+      "question": {
+        "qid": "5d2bb4fd557b2983",
+        "kind": {
+          "translation": {
+            "direction": {
+              "from": "zh-Hans",
+              "to": "en"
+            },
+            "source_text": "剪纸是中国最古老的民间艺术之一，至今仍深受人们喜爱。",
+            "reference": "Paper-cutting is one of China's oldest folk arts and remains deeply loved today."
+          }
+        },
+        "stem": "Translate the following sentence into English.",
+        "difficulty": 3,
+        "tags": [
+          "translation",
+          "cet4"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Keep the original meaning intact; prefer natural collocations over literal wording."
+      ]
+    },
+    {
+      "qid": "6d34e907dda9edb7",
+      "question": {
+        "qid": "6d34e907dda9edb7",
+        "kind": {
+          "translation": {
+            "direction": {
+              "from": "zh-Hans",
+              "to": "en"
+            },
+            "source_text": "大学生应该多参加社会实践，为将来的工作做好准备。",
+            "reference": "College students should take part in more social practice to prepare for their future careers."
+          }
+        },
+        "stem": "Translate the following sentence into English.",
+        "difficulty": 2,
+        "tags": [
+          "translation",
+          "cet4"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Keep the original meaning intact; prefer natural collocations over literal wording."
+      ]
+    },
+    {
+      "qid": "374d438eafd7ecc4",
+      "question": {
+        "qid": "374d438eafd7ecc4",
+        "kind": {
+          "translation": {
+            "direction": {
+              "from": "zh-Hans",
+              "to": "en"
+            },
+            "source_text": "这款新应用让用户能够随时随地学习英语。",
+            "reference": "This new app enables users to learn English anytime, anywhere."
+          }
+        },
+        "stem": "Translate the following sentence into English.",
+        "difficulty": 2,
+        "tags": [
+          "translation",
+          "cet4"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Keep the original meaning intact; prefer natural collocations over literal wording."
+      ]
+    },
+    {
+      "qid": "2753e14361db1268",
+      "question": {
+        "qid": "2753e14361db1268",
+        "kind": {
+          "translation": {
+            "direction": {
+              "from": "zh-Hans",
+              "to": "en"
+            },
+            "source_text": "中医强调预防胜于治疗，注重身心的平衡。",
+            "reference": "Traditional Chinese medicine emphasizes prevention over cure and values the balance of body and mind."
+          }
+        },
+        "stem": "Translate the following sentence into English.",
+        "difficulty": 3,
+        "tags": [
+          "translation",
+          "cet4"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Keep the original meaning intact; prefer natural collocations over literal wording."
+      ]
+    },
+    {
+      "qid": "c5ed9dc7e5f38805",
+      "question": {
+        "qid": "c5ed9dc7e5f38805",
+        "kind": {
+          "translation": {
+            "direction": {
+              "from": "zh-Hans",
+              "to": "en"
+            },
+            "source_text": "春节是中国最重要的传统节日，一家人团聚在一起吃年夜饭。",
+            "reference": "Spring Festival is China's most important traditional festival, when the whole family gathers for the reunion dinner."
+          }
+        },
+        "stem": "Translate the following sentence into English.",
+        "difficulty": 3,
+        "tags": [
+          "translation",
+          "cet4"
+        ],
+        "lang": "en",
+        "provenance": "seed",
+        "quality_score": 1.0
+      },
+      "explanations": [
+        "Keep the original meaning intact; prefer natural collocations over literal wording."
+      ]
     }
   ]
 }

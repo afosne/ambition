@@ -66,7 +66,24 @@ pub struct SevenOfFiveBody {
     pub answer: Vec<u32>,
 }
 
-/// 题型（M1 三型 + M4 题型补全：完形/阅读/七选五/语法填空；DESIGN §13.4）
+/// 翻译方向（from → to；M5-W2，docs/02 §1——源文侧 l1、目标侧 l2，state 只进 l2 侧）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TranslationDirection {
+    pub from: LangTag,
+    pub to: LangTag,
+}
+
+/// 翻译题体（考试向；工作台在 docs/11，M5-W2）
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TranslationBody {
+    pub direction: TranslationDirection,
+    /// 源文（l1；仅题面展示，**永不进 Jev state**，docs/05 §3.5）
+    pub source_text: String,
+    /// 目标语参考译文（l2；进 Jev state 作判分参照）
+    pub reference: String,
+}
+
+/// 题型（M1 三型 + M4 题型补全：完形/阅读/七选五/语法填空；M5-W2 翻译；DESIGN §13.4）
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QuestionKind {
@@ -77,6 +94,7 @@ pub enum QuestionKind {
     Reading(ReadingBody),
     SevenOfFive(SevenOfFiveBody),
     GrammarFill(GrammarFillBody),
+    Translation(TranslationBody),
 }
 
 /// 题目内容（参与 qid 寻址的字段集 —— 具名结构，schema 演化不致串位，docs/02-core-store §2）

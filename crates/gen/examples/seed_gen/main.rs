@@ -1,6 +1,6 @@
 //! 生成内置 seed 题库 `data/seed/en/cet4/core.qpack.json`（内容三级保障①，docs/16 §3）。
 //! 运行：`cargo run -p ambition-gen --example seed_gen`（幂等：重跑覆盖同文件）。
-//! 题目全部英文（Jev state 无中文红线）；qid 由内容哈希自动计算。
+//! 题目全部英文（Jev state 无中文红线；唯一例外 = 翻译题源文 passage 字段——l1 不进 state，docs/05 §3.5）；qid 由内容哈希自动计算。
 
 use std::path::PathBuf;
 
@@ -10,11 +10,13 @@ use ambition_gen::{Manifest, PackItem, QPACK_SCHEMA_VERSION, QPack};
 mod grammar;
 mod mixed;
 mod passage;
+mod translation;
 mod usage;
 
 use grammar::{future_will, past_regular, present_sva};
 use mixed::{fill_blanks, multi_choice, tense_mix};
 use passage::{cloze, grammar_fill, reading, seven_of_five};
+use translation::sentences;
 use usage::{articles, prepositions};
 
 pub(crate) fn choice(
@@ -116,6 +118,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     scored.extend(grammar_fill());
     scored.extend(reading());
     scored.extend(seven_of_five());
+    // M5-W2：翻译题（源文 l1 不进 Jev state，docs/05 §3.5）
+    scored.extend(sentences());
     assert!(
         scored.len() >= 200,
         "docs/16 requires >=200 questions per track, got {}",

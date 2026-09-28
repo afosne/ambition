@@ -92,6 +92,70 @@ impl Grader {
     }
 }
 
+impl Grader {
+    /// 文本类 composite 通用出口（翻译 W2 / 作文 W3 共用，docs/07 §3）：
+    /// Jev 打分 → 加权档位 → veto 逐条降档 + error_tags → 按置信/比例出 verdict
+    pub(crate) async fn grade_text_composite(
+        &self,
+        state: JevState,
+        rubric: &Rubric,
+        lang: &str,
+    ) -> GradeResult {
+        let judge = match self.jev_composite(&state, rubric).await {
+            Ok(judge) => judge,
+            Err(err) => {
+                // Jev 离线/中途失败：规则不可判且 LLM 不打分（docs/00 §3.4）→ Pending 进桶
+                tracing::warn!(error = %err, "composite unavailable, pending");
+                return pending_grade(0.0, rubric.max, vec![], vec![]);
+            }
+        };
+        let mut score = compose_scores(&judge.dims, rubric);
+        let mut error_tags: Vec<ErrorTag> = Vec::new();
+        for veto in &judge.triggered_vetoes {
+            score = down_band(score, &rubric.band_map);
+            if let Some(tag) = veto_error_tag(veto)
+                && !error_tags.contains(&tag)
+            {
+                error_tags.push(tag);
+            }
+        }
+        let thresholds = Thresholds::for_lang(lang);
+        let verdict = if judge.confidence < thresholds.accept {
+            // 灰区/低置信 → 桶（LLM 不打分，无第三级复核；docs/07 §6）
+            Verdict::Pending
+        } else if score >= 0.6 * rubric.max {
+            Verdict::Correct
+        } else if score >= 0.3 * rubric.max {
+            Verdict::Partial
+        } else {
+            Verdict::Wrong
+        };
+        let pending = verdict == Verdict::Pending;
+        GradeResult {
+            verdict,
+            score: if pending { 0.0 } else { score },
+            max: rubric.max,
+            confidence: if pending { 0.0 } else { judge.confidence },
+            graded_by: if pending {
+                GradedBy::Rule
+            } else {
+                GradedBy::Jev
+            },
+            detail: GradeDetail::Dims(judge.dims),
+            error_tags,
+        }
+    }
+}
+
+/// veto → error_tag 映射（docs/07 §3：meaning_changed/off_topic→Logic、heavy_chinglish→Chinglish）
+fn veto_error_tag(veto: &str) -> Option<ErrorTag> {
+    match veto {
+        "off_topic" | "meaning_changed" => Some(ErrorTag::Logic),
+        "heavy_chinglish" => Some(ErrorTag::Chinglish),
+        _ => None,
+    }
+}
+
 /// 维度打分指令（state 提供 prompt+essay 上下文；档位描述在 ScoreQ.levels——考纲原文，docs/16 §4）
 fn dim_instructions(key: &str) -> String {
     format!(
@@ -359,6 +423,27 @@ mod tests {
         assert!(
             veto_instructions("custom_issue").contains("custom_issue"),
             "未知键透传"
+        );
+    }
+
+    #[test]
+    fn test_veto_error_tag_maps_to_grading_tags() {
+        assert_eq!(veto_error_tag("meaning_changed"), Some(ErrorTag::Logic));
+        assert_eq!(veto_error_tag("off_topic"), Some(ErrorTag::Logic));
+        assert_eq!(veto_error_tag("heavy_chinglish"), Some(ErrorTag::Chinglish));
+        assert_eq!(veto_error_tag("unknown_veto"), None, "未知 veto 不臆造标签");
+    }
+
+    #[tokio::test]
+    async fn test_grade_text_composite_pending_when_jev_offline() {
+        let grader = Grader::offline();
+        let state = JevState(serde_json::json!({"reference": "ref", "student_answer": "ans"}));
+        let grade = grader.grade_text_composite(state, gaokao(), "en").await;
+        assert_eq!(grade.verdict, Verdict::Pending, "离线 → 桶");
+        assert_eq!(grade.score, 0.0, "不伪造分");
+        assert!(
+            matches!(grade.detail, GradeDetail::Items(v) if v.is_empty()),
+            "离线 Pending 走 pending_grade（空 items）"
         );
     }
 }

@@ -15,6 +15,7 @@ pub enum QuestionKindTag {
     Reading,
     SevenOfFive,
     GrammarFill,
+    Translation,
 }
 
 impl QuestionKindTag {
@@ -28,6 +29,7 @@ impl QuestionKindTag {
             Self::Reading => "reading",
             Self::SevenOfFive => "seven_of_five",
             Self::GrammarFill => "grammar_fill",
+            Self::Translation => "translation",
         }
     }
 

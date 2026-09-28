@@ -1,0 +1,45 @@
+{
+  "rubric_id": "translation4",
+  "version": 1,
+  "max": 100,
+  "band_map": [60, 70, 80, 90, 100],
+  "dims": [
+    {
+      "key": "accuracy",
+      "weight": 0.4,
+      "levels_en": [
+        "meaning largely lost or seriously distorted",
+        "meaning mostly kept with notable errors",
+        "meaning fully kept; errors minor and not misleading"
+      ]
+    },
+    {
+      "key": "completeness",
+      "weight": 0.25,
+      "levels_en": [
+        "major omissions (a third or more of the information missing)",
+        "minor omissions or added redundancy",
+        "all information conveyed without omission"
+      ]
+    },
+    {
+      "key": "fluency",
+      "weight": 0.2,
+      "levels_en": [
+        "choppy word-by-word rendering, hard to follow",
+        "generally smooth with some awkward spots",
+        "smooth and natural-flowing sentences"
+      ]
+    },
+    {
+      "key": "naturalness",
+      "weight": 0.15,
+      "levels_en": [
+        "heavy translationese, reads like Chinglish",
+        "acceptable but literal in places",
+        "idiomatic target-language phrasing"
+      ]
+    }
+  ],
+  "veto": ["meaning_changed", "heavy_chinglish"]
+}

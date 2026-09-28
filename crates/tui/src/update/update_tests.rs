@@ -266,4 +266,38 @@ mod tests {
         assert!(s.editing, "判分后 StopEdit 忽略（标志不变）");
         assert_eq!(s.key_ctx(), KeyCtx::Graded, "编辑标志不影响已判分 ctx");
     }
+
+    #[test]
+    fn test_translation_question_takes_single_text_input_and_submits_text() {
+        use ambition_core::{LangTag, TranslationBody, TranslationDirection};
+        let q = Question::new(
+            "Translate the following sentence into English.".into(),
+            QuestionKind::Translation(TranslationBody {
+                direction: TranslationDirection {
+                    from: LangTag("zh-Hans".into()),
+                    to: LangTag("en".into()),
+                },
+                source_text: "我喜欢春天。".into(),
+                reference: "I like spring.".into(),
+            }),
+            2,
+            vec!["translation".into()],
+            ambition_core::Provenance::Seed,
+        );
+        let mut s = new_state(vec![q]);
+        assert_eq!(s.inputs.len(), 1, "翻译 = 单文本输入位（blank_count=1）");
+        // 空文提交 → 报错不提交（不伪造作答）
+        assert_eq!(update(&mut s, Msg::Submit), Cmd::None);
+        assert!(
+            s.error.as_deref().unwrap_or_default().contains("译文"),
+            "空文提示可见"
+        );
+        // 键入后提交 → Answer::Text（composite 分支消费）
+        s.inputs[0] = "I like spring.".to_string();
+        s.error = None;
+        assert_eq!(
+            update(&mut s, Msg::Submit),
+            Cmd::Submit(Answer::Text("I like spring.".into()))
+        );
+    }
 }

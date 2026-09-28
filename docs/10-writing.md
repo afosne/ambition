@@ -40,6 +40,8 @@ pub async fn grade_translation(&self, a: &TranslationBody, ans: &str) -> Result<
 pub fn culture_expressions(topic: &str) -> Vec<(String,String)>;          // 中国文化表达库
 ```
 
+> **M5-W2 落地形态**：考试翻译走 `Grader::grade` 的 Translation 分支（pipeline::composite 单源 rubric + `GradeResult{detail::Dims}`，判分唯一实现 00 §5）；`TranslationGrade` 独立包装随批改闭环（W4/加分项）一并补；`culture_expressions`（中国文化表达库）随素材中台（M10）数据落位。
+
 ## 4. 观点素材库 Argument Bank（原 47）
 
 ```rust

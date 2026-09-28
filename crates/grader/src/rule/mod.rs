@@ -111,6 +111,8 @@ pub fn grade_rule(kind: &QuestionKind, answers: &[u32], fills: &[String]) -> Opt
         | QuestionKind::Reading(_)
         | QuestionKind::SevenOfFive(_)
         | QuestionKind::GrammarFill(_) => None,
+        // 翻译（M5-W2）：无规则层 → grade() 前置 composite 分支
+        QuestionKind::Translation(_) => None,
     }
 }
 

@@ -164,6 +164,27 @@ impl DraftQuestion {
                     answer,
                 })
             }
+            // M5-W2 翻译题：passage = 源文（l1，仅题面展示）、answers[0] = 目标语参考译文（l2，进 state）
+            QuestionKindTag::Translation => {
+                if self.passage.trim().is_empty() {
+                    return Err(GenError::InvalidDraft(
+                        "translation needs passage (source)".into(),
+                    ));
+                }
+                if self.answers.len() != 1 || self.answers[0].trim().is_empty() {
+                    return Err(GenError::InvalidDraft(
+                        "translation needs exactly 1 reference answer".into(),
+                    ));
+                }
+                ambition_core::QuestionKind::Translation(ambition_core::TranslationBody {
+                    direction: ambition_core::TranslationDirection {
+                        from: ambition_core::LangTag(ambition_core::DEFAULT_L1.to_string()),
+                        to: ambition_core::LangTag::english(),
+                    },
+                    source_text: self.passage.clone(),
+                    reference: self.answers[0].clone(),
+                })
+            }
         };
         Ok(ambition_core::Question::new(
             self.stem.clone(),
@@ -271,6 +292,39 @@ mod tests {
         // 同内容同 qid
         let again = draft.to_question().expect("转换2");
         assert_eq!(again.qid, q.qid);
+    }
+
+    #[test]
+    fn test_to_question_builds_translation_with_l1_source_and_l2_reference() {
+        let draft: DraftQuestion = serde_json::from_value(serde_json::json!({
+            "kind": "translation",
+            "stem": "Translate the following sentence into English.",
+            "passage": "我喜欢春天。",
+            "answers": ["I like spring."],
+            "difficulty": 2,
+            "tags": ["translation", "cet4"]
+        }))
+        .expect("翻译草稿");
+        let q = draft.to_question().expect("转换");
+        let QuestionKind::Translation(body) = &q.kind else {
+            panic!("题型错误: {:?}", q.kind);
+        };
+        assert_eq!(body.source_text, "我喜欢春天。", "源文 = l1（不进 state）");
+        assert_eq!(body.reference, "I like spring.", "参考译文 = l2");
+        assert_eq!(body.direction.from.0, ambition_core::DEFAULT_L1);
+        assert_eq!(body.direction.to.0, "en");
+
+        // 缺参考译文 → Err（不伪造判分参照）
+        let no_ref: DraftQuestion = serde_json::from_value(serde_json::json!({
+            "kind": "translation",
+            "stem": "Translate ...",
+            "passage": "你好。",
+            "answers": [],
+            "difficulty": 2,
+            "tags": []
+        }))
+        .expect("可反序列化");
+        assert!(no_ref.to_question().is_err(), "缺 reference → Err");
     }
 
     #[test]

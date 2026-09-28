@@ -54,7 +54,7 @@ pub fn tag_error_cause(answers: &JevAnswers) -> Vec<ErrorTag>;        // 唯一�
 pub fn error_cause_question(lang: &str) -> JevQuestion;               // error_cause 判断集：criteria+instructions 按题目 l2 选版、缺版回退 en（05 §3，M3→i18n）
 ```
 
-**composite 语义（M5 落地）**：rubric 资产 = `crates/grader/assets/rubrics/<id>.json`（**判分语料红线 #19：不进 `data/`**、include_str 内嵌、按 rubric_id/version 版本化）；每维 Jev `score` ∈ 0..levels-1 → 归一化 `score/(levels-1)` ∈ 0..1（维度 instructions 由代码按 dim key 生成，state 放 prompt+essay，levels = 考纲原文）；`CompositeJudge{dims, triggered_vetoes, confidence=min(dims.confidence)}`；veto 问题**正面表述**（如 "stays on topic"）→ `noul < 0.5` 触发 → `down_band` 降一档；`compose_scores` = Σ(dim.score×weight)×max → 向下取档（band_map 中 ≤ raw 的最大值，raw < 首档 → 0）；confidence < thresholds.accept → 走既有 Pending 进桶（M3 复用）。
+**composite 语义（M5 落地）**：rubric 资产 = `crates/grader/assets/rubrics/<id>.json`（**判分语料红线 #19：不进 `data/`**、include_str 内嵌、按 rubric_id/version 版本化）；每维 Jev `score` ∈ 0..levels-1 → 归一化 `score/(levels-1)` ∈ 0..1（维度 instructions 由代码按 dim key 生成，state 放 prompt+essay，levels = 考纲原文）；`CompositeJudge{dims, triggered_vetoes, confidence=min(dims.confidence)}`；veto 问题**正面表述**（如 "stays on topic"）→ `noul < 0.5` 触发 → `down_band` 降一档；`compose_scores` = Σ(dim.score×weight)×max → 向下取档（band_map 中 ≤ raw 的最大值，raw < 首档 → 0）；confidence < thresholds.accept → 走既有 Pending 进桶（M3 复用；**LLM 不打分**，无第三级复核可用）。**翻译/作文默认 rubric**：题面 `rubric_id` 缺省时按 kind 取内置（Translation → `translation4`：max100、档 60/70/80/90/100、权重 准确.4/完整.25/流畅.2/地道.15、veto=meaning_changed+heavy_chinglish）。**composite verdict 口径**：conf ≥ accept 时按档位比例——score ≥ 60% max → Correct、≥ 30% → Partial、否则 Wrong；veto 映射 error_tags（meaning_changed/off_topic→Logic、heavy_chinglish→Chinglish）。
 
 ## 4. 第三级：LLM 复核与待裁定桶
 

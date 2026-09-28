@@ -27,7 +27,7 @@ pub use rule::*;
 
 use ambition_core::{
     Answer, ChoiceBody, DimScore, ErrorTag, FillBody, GradeDetail, GradeResult, GradedBy,
-    ItemResult, Question, QuestionKind, Verdict, normalize_text,
+    ItemResult, Question, QuestionKind, TranslationBody, Verdict, normalize_text,
 };
 use ambition_jev::Route;
 use ambition_jev::{

@@ -330,6 +330,19 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                     }
                     Cmd::Submit(Answer::Group(subs))
                 }
+                // M5-W2：翻译 = 单文本作答（inputs[0] 单位编辑；空文不提交，docs/03 §1）
+                QuestionKind::Translation(_) => {
+                    let text = state
+                        .inputs
+                        .first()
+                        .map(|field| field.trim().to_string())
+                        .unwrap_or_default();
+                    if text.is_empty() {
+                        state.error = Some("请先输入译文再提交（→ 跳过本题）".to_string());
+                        return Cmd::None;
+                    }
+                    Cmd::Submit(Answer::Text(text))
+                }
             }
         }
         Msg::Next => {

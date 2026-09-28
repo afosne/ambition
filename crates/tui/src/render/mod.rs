@@ -49,10 +49,19 @@ pub fn render(frame: &mut Frame, state: &AppState) {
                     text.push_str(&format!("  {}{} {}. {}\n", cursor, tick, i + 1, opt.text));
                 }
             }
+            // M5-W2：翻译——源文（l1）题面必显（l1 不进 state 只是判分口径，docs/05 §3.5）
+            QuestionKind::Translation(body) => {
+                text.push_str(&format!(
+                    "
+ 源文: {}
+",
+                    body.source_text
+                ));
+            }
             // 语篇类题型（七选五逐槽反馈/阅读逐子题反馈/完形·语法填空语篇，passage_render.rs）
             _ => render_passage(&mut text, state, q),
         }
-        if q.kind.is_fill() && state.grade.is_none() {
+        if q.kind.is_text_input() && state.grade.is_none() {
             // 每空一位独立输入行；❯+▍ 标当前编辑位（单空不编号）
             for (i, field) in state.inputs.iter().enumerate() {
                 let cursor = if state.blank_sel == i { "❯" } else { " " };
@@ -68,7 +77,7 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         // 键位提示：与路由同源（keys.rs::hint，禁止硬编码）
         text.push_str(&format!("\n{}\n", hint(state.key_ctx())));
         if state.grade.is_none()
-            && !q.kind.is_fill()
+            && !q.kind.is_text_input()
             && let Some(level) = state.self_confidence
         {
             text.push_str(&format!(" 自评把握: {level}/4\n"));
@@ -105,6 +114,9 @@ pub fn render(frame: &mut Frame, state: &AppState) {
                     .map(|set| set.first().map(String::as_str).unwrap_or(""))
                     .collect();
                 text.push_str(&format!("\n 正确答案: {}", answers.join(" ; ")));
+            } else if let QuestionKind::Translation(body) = &q.kind {
+                // M5-W2：判后可见参考译文（对照学习）
+                text.push_str(&format!("\n 参考译文: {}", body.reference));
             } else if let QuestionKind::SingleChoice(body) | QuestionKind::MultiChoice(body) =
                 &q.kind
             {

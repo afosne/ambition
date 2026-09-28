@@ -114,6 +114,7 @@ impl Generator {
             ambition_core::QuestionKind::Reading(_) => QuestionKindTag::Reading,
             ambition_core::QuestionKind::SevenOfFive(_) => QuestionKindTag::SevenOfFive,
             ambition_core::QuestionKind::GrammarFill(_) => QuestionKindTag::GrammarFill,
+            ambition_core::QuestionKind::Translation(_) => QuestionKindTag::Translation,
         };
         let state = qc_state(question, kind_tag);
         let questions = qc_questions(kind_tag);

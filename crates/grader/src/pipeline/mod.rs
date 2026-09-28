@@ -6,6 +6,7 @@
 mod arbitrate;
 mod composite;
 mod fill;
+mod translation;
 
 pub use arbitrate::*;
 pub use composite::*;

@@ -26,7 +26,8 @@ pub enum QuestionKind { SingleChoice(ChoiceBody), MultiChoice(ChoiceBody), FillB
 //   规则层/Jev/LLM 三级流水线逐子题递归后汇总（docs/07 §1 M4 注记）
 // SevenOfFiveBody{passage, options:Vec<String>, answer:Vec<u32>}（七选五：段落 5 个缺口（passage 中 `___` 序）+ 7 候选句，
 //   answer = 按缺口顺序的选中句下标（长度 5）；作答 = Answer::Choice(逐缺口选中项，长度 = 缺口数)）
-// MatchBody / TranslationBody{direction, source_text, reference} / EssayPrompt{prompt_zh, genre, track, rubric_id, word_range, minutes}
+// MatchBody / TranslationBody{direction: TranslationDirection{from,to}, source_text, reference} / EssayPrompt{prompt_zh, genre, track, rubric_id, word_range, minutes}
+//   翻译（M5-W2）：source_text=源文（l1，仅题面展示、**永不进 Jev state**）；reference=目标语参考译文（l2，进 state 作判分参照）；作答 = Answer::Text
 
 pub struct Attempt { pub attempt_id: AttemptId, pub qid: Qid, pub card_id: Option<CardId>, pub answer: Answer,
                      pub timing: Option<Timing>, pub self_confidence: Option<u8>, pub mode: AttemptMode, pub created_at }

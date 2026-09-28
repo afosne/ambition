@@ -10,6 +10,8 @@ pub enum Answer {
     Fill(Vec<String>),
     /// 复合题子题答案（逐子题递归判分，docs/07 §1 M4 注记）
     Group(Vec<Answer>),
+    /// 文本作答（翻译/作文，M5-W2/W3——单段文本，走 composite 判分）
+    Text(String),
 }
 
 /// 计时信号（假对检测输入）

@@ -29,6 +29,27 @@ pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) ->
     };
     // {{l1}}/{{l2}} → 语言名（用模板自身语言书写；l1 现取常量，TODO(16-config)：随 config 注入）
     let l1 = ambition_core::LangTag(ambition_core::DEFAULT_L1.into());
+    // M5-W2：含 translation 时注入段落指令（l1 仅 passage 字段豁免的口径写进提示词；行文随模板语言）
+    let translation_line = if spec
+        .kinds
+        .iter()
+        .any(|k| matches!(k, QuestionKindTag::Translation))
+    {
+        let l1_name = l1.name_in(name_lang);
+        let l2_name = spec.l2.name_in(name_lang);
+        match name_lang {
+            "zh" => format!(
+                "- `translation` 题型：`passage` = {l1_name} 源句（**唯一**允许出现 {l1_name} 文本的字段），`answers[0]` = {l2_name} 参考译文，`stem` = 一句简短指令（如：将下列句子译成{l2_name}）。
+"
+            ),
+            _ => format!(
+                "- For `translation`: `passage` = the source sentence in {l1_name} (the ONLY place {l1_name} text is allowed), `answers[0]` = the reference translation in {l2_name}, `stem` = a short instruction such as: Translate the following sentence into {l2_name}.
+"
+            ),
+        }
+    } else {
+        String::new()
+    };
     let mut out = template
         .replace("{{count}}", &needed.to_string())
         .replace("{{kinds}}", &kinds)
@@ -40,6 +61,7 @@ pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) ->
         .replace("{{l1}}", &l1.name_in(name_lang))
         .replace("{{l2}}", &spec.l2.name_in(name_lang))
         .replace("{{topic_line}}", &topic_line)
+        .replace("{{translation_line}}", &translation_line)
         .replace("{{feedback_line}}", &feedback_line);
     if let Some(words) = &spec.source_words {
         out.push_str(&format!(
@@ -87,7 +109,7 @@ pub(crate) fn draft_schema() -> JsonSchema {
                     "type": "object",
                     "required": ["kind", "stem", "answers", "difficulty", "tags"],
                     "properties": {
-                        "kind": {"type": "string", "enum": ["single_choice", "multi_choice", "fill_blank", "cloze", "reading", "seven_of_five", "grammar_fill"]},
+                        "kind": {"type": "string", "enum": ["single_choice", "multi_choice", "fill_blank", "cloze", "reading", "seven_of_five", "grammar_fill", "translation"]},
                         "stem": {"type": "string"},
                         "options": {"type": "array", "items": {"type": "string"}},
                         "answers": {"type": "array", "items": {"type": "string"}},
@@ -107,6 +129,27 @@ pub(crate) fn draft_schema() -> JsonSchema {
 mod tests {
     use super::*;
     use crate::common::*;
+
+    #[test]
+    fn test_render_prompt_injects_translation_line_only_for_translation_kind() {
+        let plain = crate::GenSpec::new(
+            "cet4",
+            vec![
+                crate::QuestionKindTag::SingleChoice,
+                crate::QuestionKindTag::FillBlank,
+            ],
+            3,
+        );
+        let out = render_prompt(&plain, 3, &[]);
+        assert!(!out.contains("`translation`"), "无翻译题型不注入指令行");
+
+        let with_tx = crate::GenSpec::new("cet4", vec![crate::QuestionKindTag::Translation], 2);
+        let out = render_prompt(&with_tx, 2, &[]);
+        assert!(out.contains("`translation`"), "含翻译题型注入指令行");
+        assert!(out.contains("passage"), "写明 passage = 源文字段");
+        assert!(out.contains("answers[0]"), "写明 answers[0] = 参考译文");
+        assert!(!out.contains("{{translation_line}}"), "占位符已全部替换");
+    }
 
     #[test]
     fn test_render_prompt_substitutes_placeholders_and_feedback() {

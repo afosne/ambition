@@ -143,7 +143,7 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
 impl AppState {
     /// 当前题是否等待填空作答（有题、未判分、题型为填空）
     pub fn is_fill_pending(&self) -> bool {
-        !self.finished && self.grade.is_none() && self.questions[self.idx].kind.is_fill()
+        !self.finished && self.grade.is_none() && self.questions[self.idx].kind.is_text_input()
     }
 
     /// 键位上下文（keys.rs 唯一路由入参；键位表只此一份）

@@ -13,6 +13,7 @@ fn kind_label(kind: &QuestionKind) -> &'static str {
         QuestionKind::Reading(_) => "阅读",
         QuestionKind::SevenOfFive(_) => "七选五",
         QuestionKind::GrammarFill(_) => "语法填空",
+        QuestionKind::Translation(_) => "翻译",
     }
 }
 
