@@ -25,17 +25,17 @@ fi
 say "4/7 结构门禁：函数↔测试配对 + 文件 ≤500 行（docs/01 §组织）"
 pair_fail=0
 shopt -s nullglob
-# 行数：全仓 .rs（src + examples，docs/01 文件 ≤500 行）
-for f in crates/*/src/*.rs crates/*/src/**/*.rs crates/*/examples/*.rs crates/*/examples/**/*.rs; do
+# 行数：全仓 .rs（src + examples，docs/01 文件 ≤500 行；find 任意深度——目录细分后 glob 只盖一层会漏检）
+while IFS= read -r f; do
   [ -f "$f" ] || continue
   lines=$(wc -l < "$f")
   if [ "$lines" -gt 500 ]; then
     echo "  ✗ 文件超 500 行: $f ($lines) → 按职责拆模块（docs/01 §组织）"
     pair_fail=1
   fi
-done
+done < <(find crates -name '*.rs' -type f \( -path '*/src/*' -o -path '*/examples/*' \))
 # 配对：仅同文件（2026-09-27 用户裁定恢复强制配对桩——被测 fn 所在文件必须留 test_ 前缀配对）
-for f in crates/*/src/*.rs crates/*/src/**/*.rs; do
+while IFS= read -r f; do
   [ -f "$f" ] || continue
   names=$(awk '
     /^mod tests/ { skip = 1; next }
@@ -52,7 +52,7 @@ for f in crates/*/src/*.rs crates/*/src/**/*.rs; do
       pair_fail=1
     fi
   done
-done
+done < <(find crates -name '*.rs' -type f -path '*/src/*')
 [ "$pair_fail" -eq 0 ] || bad "结构门禁未过（缺测试/超 500 行）"
 
 say "5/7 cargo test（测试必须全部通过）"

@@ -5,7 +5,7 @@
 ## 1. 代码风格
 
 - 格式化是 CI 门禁：`cargo fmt --check`（max_width=100）/ `prettier --check`；配置入库；
-- 组织：`lib.rs` 薄壳；模块 `model/service/repo/error`；文件 ≤500 行、函数 ≤80 行、参数 ≤5（多则组 struct）；可见性最小化；
+- 组织：`lib.rs` 薄壳（只放 `mod` 声明 / `pub use` 再导出 / 组内共享导入，不放业务函数）；**`src/` 按细分功能分目录（2026-09-27 用户裁定）**：一个功能域一个 `<feature>/` 目录（多组件文件时 `mod.rs` = 该域主体或壳 + `pub mod` 组件；单组件功能可保留 `<feature>.rs` 单文件——禁的是「单文件巨石」而非单文件本身）；旧顶层平铺文件按域收编（如 tui 的 `state/update/render` 三域、grader 的 `rule/pipeline/common` 三域）；跨域引用一律 `use crate::*`（组内共享导入留在 `lib.rs`，与 `use super::*` 等价可见性）或显式 `crate::<feature>::…`；移动文件时 `include_str!` 相对路径与 `crate::` 模块路径同步改；模块层命名仍循 `model/service/repo/error`；文件 ≤500 行、函数 ≤80 行、参数 ≤5（多则组 struct）；可见性最小化；
 - 惯用法：不可变优先、迭代器优先、禁裸 bool 参数、魔法数入 config；
 - **占位/预留参数规则**：签名禁止未使用参数与 `_xxx` 占位（pre-commit grep 强制）；未来需要的参数写 `// TODO(name): 实现该功能时加入 xx 形参`，功能落地时再加——**函数里不留无用形参**；
 - 错误：每 crate 一个 `XxxError`（thiserror），跨层 `EngineError`；外部错误带 `retryable: bool`；库禁 anyhow；**禁 unwrap/expect/panic（非测试）**；
@@ -28,7 +28,7 @@
 ## 3. 质量检测与门禁
 
 - 本地 pre-commit（fmt/clippy 快检/gitleaks）→ PR CI → 发布；clippy `-D warnings` + deny `unwrap_used/expect_used/panic/todo!/dbg!`；`clippy.toml`：too-many-arguments=5、判分路径禁无序 HashMap；
-- **pre-commit 七步门禁**（`.githooks/pre-commit`，全过才允许提交）：①`cargo fmt --check` ②`cargo clippy -D warnings`（含未使用参数/未使用导入）③禁占位参数 grep ④**结构门禁**（内联函数↔测试配对：每个非测试 fn 必须在**同文件**存在 `fn test_<fn名>_…`（**2026-09-27 用户裁定恢复强制配对桩**——测试虽可拆到 `*_tests.rs`，被测 fn 所在文件仍须留同名前缀配对测试；当日早前的「同 crate 跨文件配对」试行版作废）+ **全仓 .rs 文件 ≤500 行**（src 与 examples，钉住本文件 §组织规范））⑤`cargo test` 全绿 ⑥未使用包（cargo-machete，可选）⑦通过；`commit-msg` 强制 Conventional Commits；
+- **pre-commit 七步门禁**（`.githooks/pre-commit`，全过才允许提交）：①`cargo fmt --check` ②`cargo clippy -D warnings`（含未使用参数/未使用导入）③禁占位参数 grep ④**结构门禁**（内联函数↔测试配对：每个非测试 fn 必须在**同文件**存在 `fn test_<fn名>_…`（**2026-09-27 用户裁定恢复强制配对桩**——测试虽可拆到 `*_tests.rs`，被测 fn 所在文件仍须留同名前缀配对测试；当日早前的「同 crate 跨文件配对」试行版作废）+ **全仓 .rs 文件 ≤500 行**（src 与 examples；扫描用 `find` 任意深度——目录细分后旧 glob 只覆盖 `src/` 一层会漏检，钉住本文件 §组织规范））⑤`cargo test` 全绿 ⑥未使用包（cargo-machete，可选）⑦通过；`commit-msg` 强制 Conventional Commits；
 - 测试金字塔：单元（核心库 grader/adaptive/vocab/typing 覆盖率 ≥80%，全仓 ≥70%）/ 属性（proptest：qpack hash、canonical JSON、SRS 单调、CAT 收敛）/ 契约（wiremock + fixture：Jev 三形态、schema 重试）/ 集成（S1–S8）/ E2E（TUI 快照 insta、Web Playwright）；**测试需求来源 = 各分册「验证点」**；doc test 必过；`cargo-llvm-cov` 门禁；
 - 供应链：cargo-deny 许可证白名单（MIT/Apache-2.0/BSD-3；与 PolyForm-NC 兼容、禁 GPL/AGPL）、cargo-audit、lockfile 入库、gitleaks、SQL 一律参数化；
 - 资源/安全：图 ≤20MB、qpack ≤50MB、入 LLM ≤32k tokens 显式截断；日志脱敏（key/日记正文禁入 log）；
