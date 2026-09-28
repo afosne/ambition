@@ -22,6 +22,29 @@ MVP_STAGE: 4/6
 
 ## 进度日志
 
+### 2026-09-28 · 全量文件重复扫描与收口（非阶段任务，用户指令「继续检查所有文件的重复并收口」）
+
+- **背景**：前两轮分别做了「crate 内夹具收口」与「跨模块收口」；本轮扩到**所有文件**全量——补上此前扫描口径的两个盲区：(a) 长度/语句数过滤把**尾表达式型夹具**（0 分号的 `Question::new` 构造等）全部漏掉；(b) 未覆盖 `mod tests` 内全部函数体与「字面量归一化的近似重复」。
+- **扫描口径（升级双轮）**：①全函数体 md5（去掉长度/语句过滤、含 mod tests 内函数、去注释归一化空白）→ **7 组同体**；②字符串→S、数字→N 归一化 → **3 组同名同构、0 组异名同构**。
+- **收口（提交 `0ffb83b`）**：
+  - core `test_choice_body` 夹具（kind/question/taxonomy 三份逐字复制、11 处调用）→ 新建 `core/common/fixtures`（`test_` 前缀按配对门禁口径视为测试支持码，另配 sanity 测试）；
+  - gen `spec` 出题规格夹具（pipeline 三文件逐字复制）→ 新建 `gen/common/`（配对测试钉 cet4/两型/3 题）；
+  - engine `multi_pick_two`（装配/待裁定 ×2）、grader `client_with`（fill/ring ×2 wiremock 客户端构造）→ 各自 `common/fixtures`（各配对测试）；
+  - **llm 双协议状态同构**：`OpenAiCompat` 与 `Anthropic` 的 {http, base_url, api_key, model} 四字段与构造逻辑逐字相同 → 新增 `provider::ProviderConn` **共享连接组件**（12 行构造收口单点；双协议各剩 1 行 `Self { conn: ProviderConn::new(…) }` 委托；字段访问改 `self.conn.*`；配对测试钉尾斜杠归一化 + 无 key 离线形态）。
+- **判定保留（非重复）**：双协议 `new/complete/model` = 兄弟类型对 trait/公共 API 的 1-3 行最小委托（抽宏伤可读性）；engine 与 grader 的 `choice_question` 字面量归一化后同构、但字段按各域断言需要不同（难度1/vocab vs 难度2/slowly），跨 crate 共享夹具须引入 dev 耦合——不引入；异名同构组 0（无隐藏结构重复）。
+- **P-18 并发编辑（外部改动卷入 + 用户裁定）**：施工中 `PROGRESS.md` 于 13:39:25 被**外部（IDE 侧）**删除「2026-09-23 · 定时施工链路修复」段标题+正文 7 行、留下悬挂四段评估——因 `git add -A` 卷进 `0ffb83b`；按 P-18 停手取证（`find -newermt` 窗口 mtime / `git show` 比对缺行 / `.idea/workspace.xml` 活动排除本会话）后 ask 用户，裁定**保持删除并删净评估**（定时施工已废除、scripts/ 已删，条目整体下线）；P-18 补复犯记，提交改分路径精确 add。
+- **验证**：**425 测试全绿**（+5 夹具/组件配对测试）；`clippy -D` 0 警告；配对/行数双门禁 PASS；TUI 冒烟 0 panic（`Space`/`[1/211]` 在场）；七步钩子 `0ffb83b` 7/7。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：扫描两轮脚本化（精确 md5 + 字面量归一化），不留目测死角；新函数/新夹具全部同文件配对桩，425 只增不减；外部改动按 P-18 取证→ask 流程处置、未猜测回滚。
+- **实际使用**：对外行为零变化（纯测试夹具 + 构造组件化；冒烟 211 题正常上屏）；`self.conn.*` 让双协议共享状态一眼可见、base 归一化只此一处；同名夹具/同构构造留有可复跑的扫描口径。
+- **代码耦合度**：依赖零变化（未引入任何跨 crate dev 耦合——engine/grader 同构夹具判定**不**共享是有意保守）；llm provider 域内 openai/anthropic 与连接配置单点耦合、与协议逻辑解耦。
+- **鲁棒性**：ProviderConn 构造单点（尾斜杠归一化原两处现一处）；wiremock 双协议契约测试与冒烟全绿=未碰 wire 路径语义；流程修正 = PROGRESS/PITFALLS 一律分路径 `git add <file>`、见非本人改动先 diff --staged 核对（P-18 复犯教训）。
+
+**后续观察**：
+- [ ] 无新增改进建议（#30 gen 500 行压线、#31 裸 bool 已在册待办）。
+
 ### 2026-09-27 · 模块交叉检查：跨模块参数收口 + 跨模块夹具去重（非阶段任务，用户手动发起）
 
 - **背景与指令**：用户两问——①「模块交叉部分检查：模块应该只转递**少量参数**即可调用其他模块方法」；②「检查不同模块之间代码是否有重复/可以复用的部分」（上一轮只合了模块内重复，本轮专查跨模块）。
@@ -284,16 +307,6 @@ MVP_STAGE: 4/6
 - [ ] 31. 裸 bool 参数违例（docs/01 §1「禁裸 bool」，模块交叉检查发现）：srs `due_queue(…, interleave: bool)`——engine 生产调用点传字面 `true`，语义在调用点丢失，改 `Interleave` 枚举（契约先行 docs/08）；grader `normalize_for_compare(…, ignore_articles: bool)`——生产无调用仅测试，改 `ArticlePolicy` 枚举（契约先行 docs/07）
 
 （承接 M3 未完项：#13 题包屏 / #14 seed 降级开关 / #16 seed 扩轨 / #17 讲解层 / #18 成本面板入 TUI / #20 裁决增强 / #21 资源 loader 收口 / #22 evaluate_many 消费方 / #23 qc 指令本地化 / #24 帮助屏——均仍欠，随 M5+ 处理。）
-
-#### 本项代码评估（四段）
-
-- **代码质量**：无 Rust 改动，钩子七步 7/7 全过；bash 语法 `bash -n` 全绿；修复点均交叉引用 PITFALLS（P-7/P-10/P-11），脚本注释同步。
-- **实际使用**：手动入口与 schtasks 定时入口共用同一 .cmd，已实测 dry-run 无报错且走到“DRY_RUN ok”；真实施工链路待下一次定时触发（04:29）首验。
-- **代码耦合度**：改动收敛在 `scripts/` 与 `.gitattributes`，业务 crate 零接触；锁协议仍单点 `task_lock.sh`（唯一 owner=外层脚本），skill/prompt 只经它交互，无新增耦合。
-- **鲁棒性**：新增“rc=0 但无提交=失败”错误路径；锁三态（刷新/过期接管/拒锁）实测闭环；`unset AMBI_LOCK_HELD` 防环境泄漏误继承。未覆盖：pi 启动静默失败仍无结构化退出信息（靠 --verbose 日志补盲）。
-
-**后续观察（下次真实唤起时做）**：
-- [ ] 9. 用 `--verbose` 日志定位 03:54 型 pi 启动静默 exit=1 根因；确认阶段 2 正常推进到 3/6。
 
 ---
 

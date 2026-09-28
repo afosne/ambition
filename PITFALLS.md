@@ -132,6 +132,8 @@
 - **预防**：凡“源码有、check 找不到，但 test 反而绿”的矛盾 → 先 `cargo clean -p <crate>`，反复复现则全量 `cargo clean`（2026-09-27 实测清 13GB 后连跑多次 check/build/test 全绿），**不要去改源码**。判据是「check 与 test 结果矛盾」——**不能**单凭 `deps/` 有 0 字节 `.rmeta` 判坏（健康 `cargo test` 后每 crate 也会留一个，当时误把它当主因写进过本条）。编辑器（rust-analyzer）里还飘红 = RA 持有旧分析缓存，重启语言窗口/Reload Window 即可；CLI 绿、编辑器红时先重启 RA 再查代码。
 - **复犯（2026-09-27 目录细分任务）**：`cargo fix --lib -p ambition-tui --tests` 构建时报 `unresolved import ambition_core::lock_recover`（gamify/llm 同报），而紧随的 `cargo check -p ambition-gamify -p ambition-llm` 零错误、`cargo test` 全绿——cargo fix 走了陈旧单元图，既误报又**静默不应用修复**（17 条 unused 警告一条没修，还差点误导我改源码）。**预防补充**：cargo fix 失败后先 check 复核再判断；fix 未生效就手动改（本次用脚本按警告行号改，**删除类编辑要按行号降序处理**，否则先行删除会让后续行号位移改错行——本次已踩）。
 
+- **复犯（2026-09-28 全量重复收口）**：施工中 `PROGRESS.md` 于 13:39:25 被**外部（IDE 侧）**删掉「2026-09-23 · 定时施工链路修复」段标题+正文 7 行——我图省事用了 `git add -A`，把它卷进了代码提交 `0ffb83b`（本条预防原文已写“提交前核对 staged 清单、分路径精确 add”，**执行走样而非规则缺失**）。取证三件套：`find -newermt "<时间窗>"` 定位改动落在两次本人操作之间的 mtime、`git show <pre-commit>:PROGRESS.md` 比对缺行、同窗口 `.idea/workspace.xml` 有活动 → 锁定 IDE 侧外部编辑 → 按本条纪律停手 ask 用户（裁定“保持删除并删净评估”）。**预防再强调**：docs 类文件一律 `git add <单文件>`；`git status --short` 见非本人改动先 `git diff --staged` 核对清单，确认无夹带再提交。
+
 ## P-19 include_str! 相对路径基准 = 源文件所在目录（文件移进目录必 +1 层）
 
 - **症状**：`error: couldn't read crates\grader\src\corpus\../assets/jev/zh.json: 系统找不到指定的路径 (os error 3)`——目录重组（src/ 平铺 → 细分目录）后 gen prompt ×3、grader arbitrate ×3 + corpus ×2、engine seed ×3 集中报同类“找不到”。
