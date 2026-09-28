@@ -9,9 +9,10 @@ pub mod lexicon;
 mod srs_tests;
 
 use crate::*;
-use ambition_core::{CardSource, ErrorTag, QuestionKind, baseline_from_timings, is_guess};
+use ambition_core::{
+    CardSource, ErrorTag, QuestionKind, baseline_from_timings, is_guess, now_unix,
+};
 use ambition_srs::{Card, CardAction, Rating, ReviewItem};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 复习卡单行（错词本/画像消费；docs/03 §2 wrong_wordbook）
 #[derive(Debug, Clone, PartialEq)]
@@ -23,14 +24,6 @@ pub struct WrongWordRow {
     /// 展示标题（题卡=题干；义项卡=词条；句式卡=句式 id）
     pub title: String,
     pub due_at: i64,
-}
-
-/// 当前 unix 秒
-pub(crate) fn now_unix() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
 }
 
 /// 假对基线取样窗口（docs/08 §2 近 200 次滚动）
@@ -319,11 +312,6 @@ mod tests {
             vec!["vocab".into()],
             Provenance::Seed,
         )
-    }
-
-    #[test]
-    fn test_now_unix_is_positive_reasonable() {
-        assert!(now_unix() > 1_700_000_000, "当前 unix 秒合理");
     }
 
     #[tokio::test]

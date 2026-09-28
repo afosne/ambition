@@ -3,7 +3,7 @@
 
 pub(crate) mod breaker;
 
-use ambition_core::UsageSummary;
+use ambition_core::{UsageSummary, lock_recover};
 
 use self::breaker::{Breaker, count_failure, window_take};
 use crate::{AiLedger, LlmProvider};
@@ -31,37 +31,19 @@ impl LlmRouter {
         }
     }
 
-    /// 熔断快速检查：窗口内递减计数并拒发（锁不跨 await；中毒取内层 + 可见信号）
+    /// 熔断快速检查：窗口内递减计数并拒发（锁不跨 await；中毒取内层 + 可见信号，core::lock_recover 收口）
     pub(crate) fn breaker_should_skip(&self) -> bool {
-        match self.breaker.lock() {
-            Ok(mut guard) => window_take(&mut guard),
-            Err(poisoned) => {
-                eprintln!("[warn] breaker mutex poisoned, recovering");
-                window_take(&mut poisoned.into_inner())
-            }
-        }
+        window_take(&mut lock_recover(&self.breaker, "LlmRouter.breaker"))
     }
 
     /// 记一次失败：达阈值则开闸（进入快速失败窗口）
     pub(crate) fn breaker_record_failure(&self) {
-        match self.breaker.lock() {
-            Ok(mut guard) => count_failure(&mut guard),
-            Err(poisoned) => {
-                eprintln!("[warn] breaker mutex poisoned, recovering");
-                count_failure(&mut poisoned.into_inner())
-            }
-        }
+        count_failure(&mut lock_recover(&self.breaker, "LlmRouter.breaker"));
     }
 
     /// 成功关闸（计数清零）
     pub(crate) fn breaker_reset(&self) {
-        match self.breaker.lock() {
-            Ok(mut guard) => *guard = Breaker::default(),
-            Err(poisoned) => {
-                eprintln!("[warn] breaker mutex poisoned, recovering");
-                *poisoned.into_inner() = Breaker::default();
-            }
-        }
+        *lock_recover(&self.breaker, "LlmRouter.breaker") = Breaker::default();
     }
 
     /// 成本台账：区间 [from_unix, to_unix) 按 kind 聚合（docs/05 §1，M3 落地）

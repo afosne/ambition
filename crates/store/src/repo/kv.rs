@@ -1,9 +1,12 @@
 //! 键值面：llm_cache（TTL 淘汰）/typing_sessions/game_state 持久化（docs/02 §4）
 
+use super::usage::clamp_unix_range;
 use crate::*;
 
 /// llm_cache TTL 淘汰：删除 created_at < before_unix 的行（返回删除数，docs/05 M3）
 pub async fn cache_purge_before(pool: &SqlitePool, before_unix: i64) -> Result<u64, sqlx::Error> {
+    // P-15 防御：超界上界会让 datetime() 返回 NULL → 静默不删；与 usage_summary 同口径钉到可表达区间
+    let before_unix = clamp_unix_range(0, before_unix).1;
     let result = sqlx::query("DELETE FROM llm_cache WHERE created_at < datetime(?, 'unixepoch')")
         .bind(before_unix)
         .execute(pool)
@@ -235,6 +238,21 @@ mod tests {
                 assert_eq!(cache_get(&pool, "stale").await.expect("读缓存"), None);
                 let none_removed = cache_purge_before(&pool, 0).await.expect("淘汰");
                 assert_eq!(none_removed, 0, "未来时间点无删除");
+            });
+    }
+
+    #[test]
+    fn test_cache_purge_before_clamps_out_of_range_for_sqlite_datetime() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let pool = memory_pool().await;
+                cache_put(&pool, "old", "v").await.expect("写缓存");
+                // P-15：i64::MAX 超出 datetime() 表达范围——未钉住会返回 NULL → 静默不删
+                let removed = cache_purge_before(&pool, i64::MAX).await.expect("淘汰");
+                assert_eq!(removed, 1, "超界上界钳到 9999-12-31 → 全部落入淘汰范围");
             });
     }
 

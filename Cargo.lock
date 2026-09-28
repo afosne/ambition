@@ -129,6 +129,7 @@ version = "0.1.0"
 dependencies = [
  "ambition-core",
  "ambition-srs",
+ "serde",
  "serde_json",
  "sqlx",
  "tokio",

@@ -1,6 +1,7 @@
 //! srs_queue 卡片 CRUD：upsert_card/get_card/due_cards/wrong_cards/list_cards（docs/02 §2 迁移 v3）
 //! 单写者 = 08-adaptive（经 engine：on_attempt/review_answer）；本模块只做存取，不参与调度决策。
 
+use super::decode_payload;
 use crate::*;
 use ambition_srs::Card;
 
@@ -72,9 +73,7 @@ fn parse_card_payload(payload: Option<&str>) -> Result<Option<Card>, sqlx::Error
     let Some(payload) = payload else {
         return Ok(None);
     };
-    let card: Card = serde_json::from_str(payload).map_err(|err| {
-        sqlx::Error::Decode(format!("srs payload 损坏（载荷截断或版本漂移）: {err}").into())
-    })?;
+    let card: Card = decode_payload(payload, "srs payload 损坏（载荷截断或版本漂移）")?;
     Ok(Some(card))
 }
 

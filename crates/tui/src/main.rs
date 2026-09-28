@@ -4,7 +4,7 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use ambition_core::{Attempt, AttemptMode};
+use ambition_core::{Attempt, AttemptMode, now_unix};
 use ambition_engine::{Engine, Rating};
 use ambition_tui::{
     Cmd, ReviewCard, Screen, apply_error, apply_grade, apply_review_cards, apply_review_rated,
@@ -17,14 +17,6 @@ use crossterm::terminal::{
 use crossterm::{ExecutableCommand, execute};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-
-/// 当前 unix 秒（复习队列 due_list 用）
-fn now_unix() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
 
 /// 默认库路径：AMBI_DB 覆盖 → HOME/.ambition/ambition.db（docs/03 §5.6）
 fn db_path() -> PathBuf {
@@ -139,11 +131,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_now_unix_returns_current_seconds() {
-        assert!(now_unix() > 1_700_000_000, "当前 unix 秒合理");
-    }
 
     #[test]
     fn test_db_path_honors_env_override_then_home() {

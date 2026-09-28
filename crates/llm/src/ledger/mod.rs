@@ -1,10 +1,8 @@
 //! 用量/缓存账本（trait 定义在 05；SQLite 实现经 engine 装配，测试用进程内 MemLedger）
 
+use ambition_core::{UsageSummary, UsageTotal, lock_recover, now_unix};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use ambition_core::{UsageSummary, UsageTotal};
 
 /// 记账行（测试断言用）
 #[derive(Debug, Clone, PartialEq)]
@@ -15,14 +13,6 @@ pub struct UsageRow {
     pub tokens_out: i64,
     /// 记账时刻（unix 秒，区间汇总的过滤维度，M3）
     pub at_unix: i64,
-}
-
-/// 当前 unix 秒（不可得时回退 0 —— 区间汇总旁路语义，不 panic）
-fn now_unix() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
 }
 
 /// 行集按 kind 聚合（[from, to) 过滤；区间外行丢弃）
@@ -74,28 +64,15 @@ impl MemLedger {
 #[async_trait::async_trait]
 impl crate::AiLedger for MemLedger {
     async fn cache_get(&self, cache_key: &str) -> Option<String> {
-        match self.cache.lock() {
-            Ok(guard) => guard.get(cache_key).cloned(),
-            // 中毒：取内层数据并留可见信号（P-8：降级必须可见）
-            Err(poisoned) => {
-                tracing_warn_poison("MemLedger.cache_get");
-                poisoned.into_inner().get(cache_key).cloned()
-            }
-        }
+        // 锁中毒取内层 + 可见信号（P-8；core::lock_recover 收口，不静默）
+        lock_recover(&self.cache, "MemLedger.cache_get")
+            .get(cache_key)
+            .cloned()
     }
 
     async fn cache_put(&self, cache_key: &str, payload: &str) {
-        match self.cache.lock() {
-            Ok(mut guard) => {
-                guard.insert(cache_key.to_string(), payload.to_string());
-            }
-            Err(poisoned) => {
-                tracing_warn_poison("MemLedger.cache_put");
-                poisoned
-                    .into_inner()
-                    .insert(cache_key.to_string(), payload.to_string());
-            }
-        }
+        lock_recover(&self.cache, "MemLedger.cache_put")
+            .insert(cache_key.to_string(), payload.to_string());
     }
 
     async fn record_usage(&self, kind: &str, model: &str, tokens_in: i64, tokens_out: i64) {
@@ -106,30 +83,13 @@ impl crate::AiLedger for MemLedger {
             tokens_out,
             at_unix: now_unix(),
         };
-        match self.usage.lock() {
-            Ok(mut guard) => guard.push(row),
-            Err(poisoned) => {
-                tracing_warn_poison("MemLedger.record_usage");
-                poisoned.into_inner().push(row);
-            }
-        }
+        lock_recover(&self.usage, "MemLedger.record_usage").push(row);
     }
 
     async fn usage_summary(&self, from_unix: i64, to_unix: i64) -> UsageSummary {
-        let rows = match self.usage.lock() {
-            Ok(guard) => guard.clone(),
-            Err(poisoned) => {
-                tracing_warn_poison("MemLedger.usage_summary");
-                poisoned.into_inner().clone()
-            }
-        };
+        let rows = lock_recover(&self.usage, "MemLedger.usage_summary").clone();
         summarize_rows(&rows, from_unix, to_unix)
     }
-}
-
-/// 锁中毒的可见信号（eprintln 保证无 tracing subscriber 时也可观测；P-8）
-fn tracing_warn_poison(where_: &str) {
-    eprintln!("[warn] mutex poisoned at {where_}, recovering inner state");
 }
 
 #[cfg(test)]
@@ -190,17 +150,6 @@ mod tests {
         assert_eq!(rows[0].tokens_in, 10);
         assert_eq!(rows[1].model, "jev-latest");
         assert!(ledger.take_usage().is_empty(), "take 后清空");
-    }
-
-    #[test]
-    fn test_tracing_warn_poison_is_visible() {
-        // 仅验证函数可调用（输出到 stderr 是 P-8 要求的可见信号）
-        tracing_warn_poison("test.point");
-    }
-
-    #[test]
-    fn test_now_unix_returns_non_negative() {
-        assert!(now_unix() >= 0, "unix 秒非负");
     }
 
     #[test]

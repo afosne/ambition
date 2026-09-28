@@ -1,5 +1,6 @@
 //! 待裁定桶：入桶/查桶/裁决/填空回流（docs/02 §3，M3 迁移 v2）
 
+use super::decode_payload;
 use crate::*;
 
 /// 待裁定行（arbitration 桶条目，docs/07 §4）
@@ -76,9 +77,8 @@ pub async fn resolve_arbitration(
         .fetch_optional(pool)
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
-    let mut grade: GradeResult = serde_json::from_str(&payload).map_err(|err| {
-        sqlx::Error::Decode(format!("grade payload 损坏（{attempt_id}）: {err}").into())
-    })?;
+    let mut grade: GradeResult =
+        decode_payload(&payload, &format!("grade payload 损坏（{attempt_id}）"))?;
     grade.verdict = if accept {
         ambition_core::Verdict::Correct
     } else {
@@ -127,9 +127,8 @@ pub async fn add_blank_acceptable(
     let Some(payload) = payload else {
         return Ok(false);
     };
-    let mut content: QuestionContent = serde_json::from_str(&payload).map_err(|err| {
-        sqlx::Error::Decode(format!("question payload 损坏（{qid:?}）: {err}").into())
-    })?;
+    let mut content: QuestionContent =
+        decode_payload(&payload, &format!("question payload 损坏（{qid:?}）"))?;
     let QuestionKind::FillBlank(fill) = &mut content.kind else {
         return Ok(false); // 非填空题无可回流
     };

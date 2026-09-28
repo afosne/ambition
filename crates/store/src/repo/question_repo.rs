@@ -1,5 +1,6 @@
 //! 题库仓储：insert/get/list_question + provenance 解析（docs/02 §1）
 
+use super::decode_payload;
 use crate::*;
 
 /// 写入题目（INSERT OR REPLACE 幂等：同 qid 覆盖；payload = 具名结构 QuestionContent）
@@ -28,9 +29,8 @@ pub async fn get_question(pool: &SqlitePool, qid: &Qid) -> Result<Option<Questio
         .await?;
     let Some(row) = row else { return Ok(None) };
     let payload: String = sqlx::Row::get(&row, "payload");
-    let content: QuestionContent = serde_json::from_str(&payload).map_err(|err| {
-        sqlx::Error::Decode(format!("question payload 损坏（{qid:?}）: {err}").into())
-    })?;
+    let content: QuestionContent =
+        decode_payload(&payload, &format!("question payload 损坏（{qid:?}）"))?;
     let lang: String = sqlx::Row::get(&row, "lang");
     let provenance_raw: String = sqlx::Row::get(&row, "provenance");
     let quality: f32 = sqlx::Row::get(&row, "quality");

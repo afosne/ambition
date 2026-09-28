@@ -6,6 +6,7 @@ mod packs;
 mod pending;
 
 use crate::*;
+use ambition_core::lock_recover;
 
 impl Engine {
     /// 练习取题（按 qid 升序取 limit 道；0 = 不限）
@@ -21,14 +22,8 @@ impl Engine {
     /// 订阅事件旁路（GameProjector 已内建；sync/profile 随后 subscribe）
     pub(crate) fn publish(&self, event: &DomainEvent) {
         self.game.publish(event.clone());
-        // 事件缓冲：sync 投影 / profile 增量消费；锁中毒取内层不吞（P-8）
-        let mut buffer = match self.events.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                eprintln!("[warn] events mutex poisoned, recovering");
-                poisoned.into_inner()
-            }
-        };
+        // 事件缓冲：sync 投影 / profile 增量消费；锁中毒取内层不吞（P-8，core::lock_recover 收口）
+        let mut buffer = lock_recover(&self.events, "Engine.events");
         buffer.push(event.clone());
     }
 
@@ -76,13 +71,7 @@ impl Engine {
 
     /// 取走并清空事件缓冲（sync 投影 / profile 增量消费）
     pub fn drain_events(&self) -> Vec<DomainEvent> {
-        match self.events.lock() {
-            Ok(mut buffer) => std::mem::take(&mut *buffer),
-            Err(poisoned) => {
-                eprintln!("[warn] events mutex poisoned, recovering");
-                std::mem::take(&mut *poisoned.into_inner())
-            }
-        }
+        std::mem::take(&mut *lock_recover(&self.events, "Engine.events"))
     }
 
     /// 当前游戏状态快照（测试 / TUI 展示）

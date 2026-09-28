@@ -20,8 +20,9 @@ pub async fn record_usage(
     Ok(())
 }
 
-/// 区间钳制到 SQLite datetime 可表达范围（[0, 9999-12-31]；i64::MAX 会令 datetime() 返回 NULL → 静默空结果）
-fn clamp_unix_range(from_unix: i64, to_unix: i64) -> (i64, i64) {
+/// 区间钳制到 SQLite datetime 可表达范围（[0, 9999-12-31]；i64::MAX 会令 datetime() 返回 NULL → 静默空结果，P-15）
+/// `pub(crate)`：kv::cache_purge_before 同口径复用（两处喂 datetime() 的入口都必须钉）。
+pub(crate) fn clamp_unix_range(from_unix: i64, to_unix: i64) -> (i64, i64) {
     const SQLITE_MAX_UNIX: i64 = 253_402_300_799; // 9999-12-31 23:59:59
     (
         from_unix.clamp(0, SQLITE_MAX_UNIX),

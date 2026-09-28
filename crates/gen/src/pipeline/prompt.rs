@@ -67,20 +67,12 @@ pub(crate) fn render_prompt(spec: &GenSpec, needed: u32, failures: &[String]) ->
 
 /// prompt 模板选择：按 l2 分版、缺版回退 en（返回「模板原文、模板书写语言」；编译期内嵌不读运行时文件，docs/05 §1）
 pub(crate) fn load_prompt(l2: &ambition_core::LangTag) -> (&'static str, &'static str) {
-    match l2.0.as_str() {
-        "zh" | "zh-Hans" | "zh-Hant" => (
-            include_str!("../../assets/prompts/question_gen/zh.md"),
-            "zh",
-        ),
-        "en" => (
-            include_str!("../../assets/prompts/question_gen/en.md"),
-            "en",
-        ),
-        _ => (
-            include_str!("../../assets/prompts/question_gen/en.md"),
-            "en",
-        ),
-    }
+    // 选版口径收口到 core::pick_edition（zh 谱系→zh 版，其余缺版回退 en，docs/05 §1）
+    ambition_core::pick_edition(
+        &l2.0,
+        include_str!("../../assets/prompts/question_gen/zh.md"),
+        include_str!("../../assets/prompts/question_gen/en.md"),
+    )
 }
 
 /// 草稿 JSON Schema（llm response_format 约束）

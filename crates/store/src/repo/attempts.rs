@@ -1,5 +1,6 @@
 //! 作答落库单事务：attempts+grades+error_tags 原子写入（docs/02 §3）
 
+use super::decode_payload;
 use crate::*;
 
 /// 提交作答 = 单事务（attempts + grades + error_tags + arbitration，docs/02-core-store §事务）
@@ -69,9 +70,7 @@ pub async fn get_attempt(
     let Some(payload) = answer else {
         return Ok(None);
     };
-    let attempt: Attempt = serde_json::from_str(&payload).map_err(|err| {
-        sqlx::Error::Decode(format!("attempt 载荷损坏（{attempt_id}）: {err}").into())
-    })?;
+    let attempt: Attempt = decode_payload(&payload, &format!("attempt 载荷损坏（{attempt_id}）"))?;
     Ok(Some(attempt))
 }
 

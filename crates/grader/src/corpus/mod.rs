@@ -11,25 +11,25 @@ use ambition_jev::{ChoiceQ, JevAnswer, JevAnswers, JevQuestion, JevQuestions};
 /// 代码侧语料版本（与**全部语言文件** `version` 同步——测试逐版断言，改措辞必须同时改这里）
 pub const ERROR_TAGS_VERSION: &str = "1.1.0";
 
-/// zh 谱系语种（选 zh 版语料）
-fn is_zh(lang: &str) -> bool {
-    matches!(lang, "zh" | "zh-Hans" | "zh-Hant")
-}
-
-/// 语料源文件（按 l2 分版，缺版回退 en——include_str 编译期内嵌，不读运行时文件）
+/// 语料源文件（按 l2 分版，缺版回退 en——口径收口到 core::pick_edition；include_str 编译期内嵌，不读运行时文件）
 fn corpus_json(lang: &str) -> &'static str {
-    if is_zh(lang) {
-        include_str!("../../assets/jev/zh.json")
-    } else {
-        include_str!("../../assets/jev/en.json")
-    }
+    ambition_core::pick_edition(
+        lang,
+        include_str!("../../assets/jev/zh.json"),
+        include_str!("../../assets/jev/en.json"),
+    )
+    .0
 }
 
 /// 解析语料文件（每语种一个单例；损坏 → 空对象，criteria 变空表；error_cause_question 兜底可见）
 fn corpus_value(lang: &str) -> &'static serde_json::Value {
     static EN: OnceLock<serde_json::Value> = OnceLock::new();
     static ZH: OnceLock<serde_json::Value> = OnceLock::new();
-    let slot = if is_zh(lang) { &ZH } else { &EN };
+    let slot = if ambition_core::is_zh_lang(lang) {
+        &ZH
+    } else {
+        &EN
+    };
     let json = corpus_json(lang);
     slot.get_or_init(|| serde_json::from_str(json).unwrap_or_else(|_| serde_json::json!({})))
 }
@@ -47,7 +47,11 @@ pub fn corpus_version(lang: &str) -> String {
 pub fn error_criteria(lang: &str) -> &'static BTreeMap<String, String> {
     static EN: OnceLock<BTreeMap<String, String>> = OnceLock::new();
     static ZH: OnceLock<BTreeMap<String, String>> = OnceLock::new();
-    let slot = if is_zh(lang) { &ZH } else { &EN };
+    let slot = if ambition_core::is_zh_lang(lang) {
+        &ZH
+    } else {
+        &EN
+    };
     slot.get_or_init(|| {
         let mut out = BTreeMap::new();
         if let Some(obj) = corpus_value(lang)
@@ -142,15 +146,6 @@ mod tests {
             std::ptr::eq(corpus_json("ja"), corpus_json("en")),
             "未知语种回退 en 版"
         );
-    }
-
-    #[test]
-    fn test_is_zh_matches_zh_family_only() {
-        assert!(is_zh("zh"));
-        assert!(is_zh("zh-Hans"));
-        assert!(is_zh("zh-Hant"));
-        assert!(!is_zh("en"), "en 不归 zh");
-        assert!(!is_zh("ja"), "其它语种不归 zh");
     }
 
     #[test]

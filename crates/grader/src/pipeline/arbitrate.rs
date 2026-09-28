@@ -92,13 +92,12 @@ fn arbitrate_payload(question: &Question, answer: &Answer) -> String {
 
 /// 第三级 prompt：按题目 l2 分版、缺版回退 en（返回「模板原文、模板书写语言」；编译期内嵌，docs/05 §1）
 fn arbitrate_template(lang: &ambition_core::LangTag) -> (&'static str, &'static str) {
-    match lang.0.as_str() {
-        "zh" | "zh-Hans" | "zh-Hant" => {
-            (include_str!("../../assets/prompts/arbitrate/zh.md"), "zh")
-        }
-        "en" => (include_str!("../../assets/prompts/arbitrate/en.md"), "en"),
-        _ => (include_str!("../../assets/prompts/arbitrate/en.md"), "en"),
-    }
+    // 选版口径收口到 core::pick_edition（与 question_gen/语料同口径，docs/05 §1）
+    ambition_core::pick_edition(
+        &lang.0,
+        include_str!("../../assets/prompts/arbitrate/zh.md"),
+        include_str!("../../assets/prompts/arbitrate/en.md"),
+    )
 }
 
 /// 第三级请求（kind=Arbitrate；temperature 0 —— 判断不采样；schema 约束三字段）

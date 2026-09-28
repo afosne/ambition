@@ -3,6 +3,8 @@
 
 use std::sync::Mutex;
 
+use ambition_core::lock_recover;
+
 use crate::{GameEffect, GameState};
 
 /// 游戏投影器：订阅 DomainEvent → 应用效果到状态（engine 统一落库）
@@ -23,20 +25,17 @@ impl GameProjector {
 
     /// 当前状态快照（落库前读取）
     pub fn snapshot(&self) -> GameState {
-        *lock_or_recover(&self.state, "GameProjector.state")
+        *lock_recover(&self.state, "GameProjector.state")
     }
 
     /// 取走并清空待结算效果（engine 返回给调用方）
     pub fn drain_effects(&self) -> Vec<GameEffect> {
-        std::mem::take(&mut *lock_or_recover(
-            &self.pending,
-            "GameProjector.pending",
-        ))
+        std::mem::take(&mut *lock_recover(&self.pending, "GameProjector.pending"))
     }
 
     /// 效果 → 状态（唯一结算点）
     fn apply(&self, effects: &[GameEffect]) {
-        let mut state = lock_or_recover(&self.state, "GameProjector.state");
+        let mut state = lock_recover(&self.state, "GameProjector.state");
         for effect in effects {
             match effect {
                 GameEffect::Xp(n) => state.xp += i64::from(*n),
@@ -47,25 +46,11 @@ impl GameProjector {
     }
 }
 
-/// Mutex 锁定（中毒取内层 + 可见信号，不静默、不 panic）
-pub(crate) fn lock_or_recover<'a, T>(
-    mutex: &'a Mutex<T>,
-    where_: &str,
-) -> std::sync::MutexGuard<'a, T> {
-    match mutex.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            eprintln!("[warn] mutex poisoned at {where_}, recovering inner state");
-            poisoned.into_inner()
-        }
-    }
-}
-
 impl ambition_core::EventBus for GameProjector {
     fn publish(&self, ev: ambition_core::DomainEvent) {
         let effects = crate::on_event(&ev);
         if !effects.is_empty() {
-            lock_or_recover(&self.pending, "GameProjector.pending").extend(effects.clone());
+            lock_recover(&self.pending, "GameProjector.pending").extend(effects.clone());
         }
         self.apply(&effects);
     }
@@ -156,18 +141,5 @@ mod tests {
         first.xp = 999;
         assert_eq!(first.xp, 999, "局部可变副本");
         assert_eq!(projector.snapshot().xp, 50, "快照不影响内部状态");
-    }
-
-    #[test]
-    fn test_lock_or_recover_returns_guard() {
-        let mutex = Mutex::new(5);
-        {
-            let guard = lock_or_recover(&mutex, "test.point");
-            assert_eq!(*guard, 5);
-        }
-        let mut guard = lock_or_recover(&mutex, "test.point");
-        *guard = 6;
-        drop(guard);
-        assert_eq!(*lock_or_recover(&mutex, "test.point"), 6);
     }
 }

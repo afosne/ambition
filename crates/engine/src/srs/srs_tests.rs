@@ -6,7 +6,7 @@ mod tests {
     use crate::*;
     use ambition_core::{
         Answer, Attempt, AttemptMode, BlankItem, CardSource, ChoiceBody, ErrorTag, FillBody,
-        GradeResult, OptionItem, Provenance, Question, QuestionKind, Timing, Verdict,
+        GradeResult, OptionItem, Provenance, Question, QuestionKind, Timing, Verdict, now_unix,
     };
     use ambition_srs::{Card, CardAction, Rating};
 
@@ -44,11 +44,6 @@ mod tests {
             self_confidence: Some(3),
             mode: AttemptMode::Practice,
         }
-    }
-
-    #[test]
-    fn test_now_unix_is_positive() {
-        assert!(now_unix() > 1_700_000_000, "当前 unix 秒合理");
     }
 
     #[test]

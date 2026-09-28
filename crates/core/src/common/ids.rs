@@ -69,7 +69,7 @@ impl LangTag {
     /// 语言名，用 `written_in` 语言书写（prompt 占位 `{{l1}}/{{l2}}` 用，docs/05 §1）。
     /// 收录 en/zh 两种书写语言 × en/zh/ja；未收录组合回退语言标签本身（如 "fr"）。
     pub fn name_in(&self, written_in: &str) -> String {
-        let target = if matches!(self.0.as_str(), "zh" | "zh-Hans" | "zh-Hant") {
+        let target = if is_zh_lang(&self.0) {
             "zh"
         } else {
             self.0.as_str()
@@ -91,6 +91,21 @@ impl Default for LangTag {
     /// 默认 en（非空串：默认值直接可用）
     fn default() -> Self {
         Self::english()
+    }
+}
+
+/// zh 谱系统一判定（语言名与资产选版共用口径——原 core/gen/grader 四处 `zh|zh-Hans|zh-Hant` match 同构收口，docs/05 §1/§3）
+pub fn is_zh_lang(lang: &str) -> bool {
+    matches!(lang, "zh" | "zh-Hans" | "zh-Hant")
+}
+
+/// 按 l2 选资产版本：zh 谱系 → zh 版，其余（含未知语种）→ en 版 = 缺版回退口径（docs/05 §1）。
+/// 返回（该版原文，版书写语言）；资产文本由调用方传入（include_str! 路径属各 crate）。
+pub fn pick_edition<'a>(lang: &str, zh: &'a str, en: &'a str) -> (&'a str, &'static str) {
+    if is_zh_lang(lang) {
+        (zh, "zh")
+    } else {
+        (en, "en")
     }
 }
 
@@ -150,6 +165,25 @@ mod tests {
         assert_eq!(LangTag("ja".into()).name_in("en"), "Japanese");
         assert_eq!(LangTag("fr".into()).name_in("en"), "fr", "未收录回退标签");
         assert_eq!(DEFAULT_L1, "zh-Hans", "l1 默认随 docs/16 §1");
+    }
+
+    #[test]
+    fn test_is_zh_lang_covers_whole_zh_family_only() {
+        assert!(is_zh_lang("zh"));
+        assert!(is_zh_lang("zh-Hans"));
+        assert!(is_zh_lang("zh-Hant"));
+        assert!(!is_zh_lang("en"), "英语非 zh 谱系");
+        assert!(!is_zh_lang("ja"), "未知语种非 zh 谱系");
+    }
+
+    #[test]
+    fn test_pick_edition_returns_zh_or_falls_back_to_en() {
+        let (text, lang) = pick_edition("zh-Hant", "中文版", "english");
+        assert_eq!((text, lang), ("中文版", "zh"), "zh 谱系选 zh 版");
+        let (text, lang) = pick_edition("en", "中文版", "english");
+        assert_eq!((text, lang), ("english", "en"), "en 选 en 版");
+        let (text, lang) = pick_edition("ja", "中文版", "english");
+        assert_eq!((text, lang), ("english", "en"), "未知语种缺版回退 en");
     }
 
     #[test]
