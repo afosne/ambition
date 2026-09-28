@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use ambition_core::{ChoiceBody, OptionItem, Provenance, Question, QuestionKind};
+use ambition_core::{BlankItem, ChoiceBody, OptionItem, Provenance, Question, QuestionKind};
 use ambition_gen::{Manifest, PackItem, QPACK_SCHEMA_VERSION, QPack};
 
 mod grammar;
@@ -66,6 +66,37 @@ pub(crate) fn multi(
         }),
         difficulty,
         tags.iter().map(|t| (*t).to_string()).collect(),
+        Provenance::Seed,
+    )
+}
+
+/// 语篇填空题参数（完形/语法填空共用；docs/01 §1：参数 >5 组 struct）
+pub(crate) struct PassageFill<'a> {
+    pub title: &'a str,
+    pub passage: &'a str,
+    pub acceptable: &'a [&'a str],
+    pub difficulty: u8,
+    pub tags: &'a [&'a str],
+}
+
+/// 语篇填空题（完形/语法填空共用构造：passage + 逐空单答案；Kind 包装与标签由调用方给——
+/// 原两处逐字重复的 `Question::new + blanks map` 收口，2026-09-27 复用合并）
+pub(crate) fn passage_fill(
+    spec: PassageFill<'_>,
+    wrap: impl FnOnce(String, Vec<BlankItem>) -> QuestionKind,
+) -> Question {
+    let blanks = spec
+        .acceptable
+        .iter()
+        .map(|ok| BlankItem {
+            acceptable: vec![(*ok).to_string()],
+        })
+        .collect();
+    Question::new(
+        spec.title.to_string(),
+        wrap(spec.passage.to_string(), blanks),
+        spec.difficulty,
+        spec.tags.iter().map(|t| (*t).to_string()).collect(),
         Provenance::Seed,
     )
 }

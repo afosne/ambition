@@ -1,9 +1,11 @@
 //! 语篇题组：完形 / 语法填空 / 阅读 / 七选五（M4 题型补全，DESIGN §13.4；docs/16 §3 seed）
 
 use ambition_core::{
-    BlankItem, ClozeBody, GrammarFillBody, OptionItem, Provenance, Question, QuestionKind,
-    ReadingBody, ReadingItem, SevenOfFiveBody,
+    ClozeBody, GrammarFillBody, OptionItem, Provenance, Question, QuestionKind, ReadingBody,
+    ReadingItem, SevenOfFiveBody,
 };
+
+use crate::{PassageFill, passage_fill};
 
 /// 完形填空（2 篇，每篇 4 空）
 pub(crate) fn cloze() -> Vec<(Question, String)> {
@@ -27,20 +29,15 @@ pub(crate) fn cloze() -> Vec<(Question, String)> {
             passage.matches("___").count() == acceptable.len(),
             "cloze marker/blank mismatch: {title}"
         );
-        let q = Question::new(
-            title.to_string(),
-            QuestionKind::Cloze(ClozeBody {
-                passage: passage.to_string(),
-                blanks: acceptable
-                    .iter()
-                    .map(|ok| BlankItem {
-                        acceptable: vec![(*ok).to_string()],
-                    })
-                    .collect(),
-            }),
-            3,
-            vec!["cloze".to_string(), "reading".to_string()],
-            Provenance::Seed,
+        let q = passage_fill(
+            PassageFill {
+                title,
+                passage,
+                acceptable: &acceptable,
+                difficulty: 3,
+                tags: &["cloze", "reading"],
+            },
+            |passage, blanks| QuestionKind::Cloze(ClozeBody { passage, blanks }),
         );
         out.push((q, explain.to_string()));
     }
@@ -69,20 +66,15 @@ pub(crate) fn grammar_fill() -> Vec<(Question, String)> {
             passage.matches("___").count() == acceptable.len(),
             "grammar_fill marker/blank mismatch: {title}"
         );
-        let q = Question::new(
-            title.to_string(),
-            QuestionKind::GrammarFill(GrammarFillBody {
-                passage: passage.to_string(),
-                blanks: acceptable
-                    .iter()
-                    .map(|ok| BlankItem {
-                        acceptable: vec![(*ok).to_string()],
-                    })
-                    .collect(),
-            }),
-            3,
-            vec!["grammar".to_string(), "fill".to_string()],
-            Provenance::Seed,
+        let q = passage_fill(
+            PassageFill {
+                title,
+                passage,
+                acceptable: &acceptable,
+                difficulty: 3,
+                tags: &["grammar", "fill"],
+            },
+            |passage, blanks| QuestionKind::GrammarFill(GrammarFillBody { passage, blanks }),
         );
         out.push((q, explain.to_string()));
     }
