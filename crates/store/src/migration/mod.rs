@@ -123,6 +123,7 @@ const MIGRATIONS: &[(i32, &str)] = &[
     (3, MIGRATION_V3),
     (4, MIGRATION_V4),
     (5, MIGRATION_V5),
+    (6, MIGRATION_V6),
 ];
 
 /// v5（M5-W6）：papers/paper_runs（组卷+模考 run——估分数据就绪；predict_score 唯一在 docs/12，M6，docs/02 §2）
@@ -146,8 +147,25 @@ CREATE TABLE IF NOT EXISTS paper_runs (
 CREATE INDEX IF NOT EXISTS idx_paper_runs_finished ON paper_runs (finished_at);
 "#;
 
+/// v6（M5-W7）：translations/tx_favorites（翻译工作台——tx_id 内容哈希与 llm_cache 同源，docs/02 §2）
+const MIGRATION_V6: &str = r#"
+CREATE TABLE IF NOT EXISTS translations (
+    tx_id      TEXT PRIMARY KEY,
+    dir        TEXT NOT NULL,
+    source     TEXT NOT NULL,
+    target     TEXT NOT NULL,
+    payload    TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tx_favorites (
+    tx_id      TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_translations_source ON translations (source);
+"#;
+
 /// 当前目标 schema 版本（清单最大号）
-pub const SCHEMA_VERSION: i32 = 5;
+pub const SCHEMA_VERSION: i32 = 6;
 
 /// 建库 + 迁移（幂等：已到目标版本则跳过；docs/02-core-store §2）
 pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {

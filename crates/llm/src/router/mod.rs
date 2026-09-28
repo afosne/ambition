@@ -17,6 +17,11 @@ pub struct LlmRouter {
 }
 
 impl LlmRouter {
+    /// 主供给方模型标识（记账/prompt 侧展示，M5-W7 Translation.model）
+    pub fn model(&self) -> &str {
+        self.primary.model()
+    }
+
     /// 构造（primary 必需；fallback 可空；ledger 必需——无缓存/记账即无成本面板）
     pub fn new(
         primary: Box<dyn LlmProvider>,
@@ -54,6 +59,16 @@ impl LlmRouter {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_model_reports_primary_provider_identifier() {
+        let router = LlmRouter::new(
+            Box::new(Scripted::new(vec![])),
+            None,
+            Box::new(MemLedger::new()),
+        );
+        assert!(!router.model().is_empty(), "主供给方模型标识可读");
+    }
+
     use super::*;
     use crate::common::*;
     use crate::router::breaker::{BREAKER_FAIL_LIMIT, BREAKER_SKIP_LIMIT};

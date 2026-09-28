@@ -33,6 +33,9 @@ pub struct Attempt { pub attempt_id: AttemptId, pub qid: Qid, pub card_id: Optio
                      pub timing: Option<Timing>, pub self_confidence: Option<u8>, pub mode: AttemptMode, pub created_at }
 pub enum Answer { Choice(Vec<u32>), Fill(Vec<String>), Group(Vec<Answer>) /*复合题子题答案（M4 题型补全：Reading 等）*/, Match(Vec<(u32,u32)>), Text(String), Typing{text, keystrokes} }
 
+// 语域（M5-W7/W8 共用：translate TranslateOpts、writing polish/register_check；serde snake_case）
+pub enum Register { Neutral, Formal, Casual }
+
 pub struct GradeResult { pub attempt_id: AttemptId, pub verdict: Verdict, pub score: f32, pub max: f32,
                          pub confidence: f32, pub graded_by: GradedBy, pub error_tags: Vec<Tagged>, pub detail: GradeDetail }
 pub enum Verdict { Correct, Partial, Wrong, Acceptable /*Jev 模糊通过*/, Pending /*待裁定*/ }
@@ -90,6 +93,7 @@ LexiconReader{senses/relations/lookup/confusables}（**读词库资源文件**�
 - `quality_score REAL NOT NULL DEFAULT 1.0` 随 questions 表（06 质检回路产物；组卷/导入用 θ 过滤）。
 - **迁移 v4（M5-W4 落地）**：写作三表——`templates`（`template_id` PK + `track/genre/source` 列 + `payload` 整模板 JSON，16-config §4 schema）、`essays`（`essay_id` PK + `qid/prompt/genre/body/word_count/scaffold_stage/template_id/created_at`）、`essay_grades`（`essay_id` PK + `payload` 整 GradeResult JSON + `graded_at`）。`EssayRepo{upsert_template/templates}` 随 W4b 落地，`insert/history`（作文批改闭环）随 W5；个人模板同 id 覆盖内置（engine 合并口径 docs/10 §1）。
 - **迁移 v5（M5-W6 落地）**：套卷两表——`papers`（`paper_id` PK + `track/title` 列 + `payload` 整 Paper JSON（spec+qids）+ `created_at`）、`paper_runs`（`run_id` PK + `paper_id` + `started_at/deadline/finished_at` + `score/max`）。`PaperRepo{save_paper/load_paper/start_run/finish_run/load_run/paper_score}`；`paper_score(qids)` = 每 qid **最新一次**作答（attempts.rowid 降序窗口）求和——作答经 Practice 正常流落 attempts/grades，历史 run 即 12-notes-profile::predict_score 的回归样本（估分唯一在 12，M6；M5 只落数据与本次得分）。
+- **迁移 v6（M5-W7 落地）**：翻译工作台两表——`translations`（`tx_id` PK + `dir`（`from>to`，LangTag 拼接）+ `source/target` 查询列 + `payload` 整 Translation JSON + `created_at` + `source` 索引）、`tx_favorites`（`tx_id` PK + `created_at`）。`TranslateRepo{insert_translation/get_translation/search_translations/favorite_tx/favorite_translations}`；`tx_id` = 内容哈希（text+dir+glossary）与 llm_cache key 同源——同文同向不重复调 LLM（docs/11 §4 缓存命中）。
 - **迁移 v3（M4 落地）**：`srs_queue` 复习卡——`card_id` PK（= core CardId，source 内容寻址，幂等入卡）+ `payload`（整张 Card JSON：FSRS 状态/模式/错词计数/假对计数/错因标签）+ **`due_at` 整数 unix 秒索引列**（避开 `datetime()` NULL 静默坑，P-15）+ `wrong_count` 查询列（错词本入口）；单写者 08-adaptive（经 engine：on_attempt/review_answer）。同版新增 `get_attempt(attempt_id)`（读回整条 Attempt——attempts.answer 列存的是完整 Attempt JSON）与 `recent_timings(limit)`（近 N 次 total_ms 滚动样本，假对基线原料）。
 
 ## 3. 验证点

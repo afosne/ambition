@@ -208,6 +208,15 @@ impl ErrorTag {
 }
 
 /// 判定结果（Pending = 待裁定桶，docs/07-grading）
+/// 语域（M5-W7/W8 共用：translate TranslateOpts、writing polish/register_check；docs/02 §1 契约）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Register {
+    Neutral,
+    Formal,
+    Casual,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Verdict {

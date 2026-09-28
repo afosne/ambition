@@ -12,6 +12,7 @@ mod paper;
 mod practice;
 mod scaffold;
 mod srs;
+mod translate;
 // 各模块只承载 impl 块与 crate 内部 fns——impl 自动生效，无项可再导出
 // 模块分层（docs/01 §组织：lib.rs 薄壳 + 细分功能目录 assembly/practice/srs，文件 ≤500 行，pre-commit 门禁强制）
 

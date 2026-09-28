@@ -6,6 +6,7 @@ pub mod event;
 pub mod paper;
 pub mod question;
 pub mod taxonomy;
+pub mod translation;
 pub mod usage;
 // kind 仅承载 QuestionKind 的 impl 辅助（无独立导出项），保持域内私有
 mod kind;
@@ -15,4 +16,5 @@ pub use event::*;
 pub use paper::*;
 pub use question::*;
 pub use taxonomy::*;
+pub use translation::*;
 pub use usage::*;

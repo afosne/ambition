@@ -8,6 +8,7 @@ pub mod essay;
 pub mod kv;
 pub mod paper;
 pub mod question_repo;
+pub mod translation;
 pub mod usage;
 
 pub use arbitration::*;
@@ -17,6 +18,7 @@ pub use essay::*;
 pub use kv::*;
 pub use paper::*;
 pub use question_repo::*;
+pub use translation::*;
 pub use usage::*;
 
 /// 载荷 JSON 解码：坏行 = sqlx `Decode` 错误显式上抛，不静默丢行（P-4 显式兜底口径）。

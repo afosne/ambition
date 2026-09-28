@@ -38,6 +38,7 @@ dependencies = [
  "ambition-llm",
  "ambition-srs",
  "ambition-store",
+ "ambition-translate",
  "ambition-writing",
  "async-trait",
  "serde",
@@ -137,6 +138,15 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+]
+
+[[package]]
+name = "ambition-translate"
+version = "0.1.0"
+dependencies = [
+ "ambition-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

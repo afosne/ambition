@@ -5,6 +5,7 @@ members = [
   "crates/llm",
   "crates/jev",
   "crates/gen",
+  "crates/translate",
   "crates/typing",
   "crates/gamify",
   "crates/grader",

@@ -12,6 +12,7 @@ ambition-jev = { path = "../jev" }
 ambition-llm = { path = "../llm" }
 ambition-store = { path = "../store" }
 ambition-srs = { path = "../srs" }
+ambition-translate = { path = "../translate" }
 ambition-writing = { path = "../writing" }
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }

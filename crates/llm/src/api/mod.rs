@@ -60,6 +60,8 @@ pub enum LlmKind {
     Explain,
     /// 第三级 LLM 复核（判断不打分，docs/07 §4，M3）
     Arbitrate,
+    /// 翻译工作台译文生成（structured 出 target，M5-W7 docs/11 §2）
+    Translate,
 }
 
 impl LlmKind {
@@ -69,6 +71,7 @@ impl LlmKind {
             Self::QuestionGen => "question_gen",
             Self::Explain => "explain",
             Self::Arbitrate => "arbitrate",
+            Self::Translate => "translate",
         }
     }
 }
