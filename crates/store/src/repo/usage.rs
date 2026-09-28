@@ -2,19 +2,14 @@
 
 use crate::*;
 
-/// LLM/Jev 用量记账（成本面板数据源，docs/05 llm_usage）
-pub async fn record_usage(
-    pool: &SqlitePool,
-    kind: &str,
-    model: &str,
-    tokens_in: i64,
-    tokens_out: i64,
-) -> Result<(), sqlx::Error> {
+/// LLM/Jev 用量记账（成本面板数据源，docs/05 llm_usage；载荷单结构 UsageRecord——
+/// 2026-09-27 跨模块收口：原 4 位置参数改单对象，调用方只传 1 参）
+pub async fn record_usage(pool: &SqlitePool, record: &UsageRecord) -> Result<(), sqlx::Error> {
     sqlx::query("INSERT INTO llm_usage (kind, model, tokens_in, tokens_out) VALUES (?, ?, ?, ?)")
-        .bind(kind)
-        .bind(model)
-        .bind(tokens_in)
-        .bind(tokens_out)
+        .bind(&record.kind)
+        .bind(&record.model)
+        .bind(record.tokens_in)
+        .bind(record.tokens_out)
         .execute(pool)
         .await?;
     Ok(())
@@ -101,7 +96,7 @@ mod tests {
             .unwrap()
             .block_on(async {
                 let pool = memory_pool().await;
-                record_usage(&pool, "question_gen", "m1", 11, 7)
+                record_usage(&pool, &UsageRecord::new("question_gen", "m1", 11, 7))
                     .await
                     .expect("记账");
                 let n: i64 = sqlx::query_scalar("SELECT count(*) FROM llm_usage")
@@ -121,13 +116,13 @@ mod tests {
             .block_on(async {
                 let pool = memory_pool().await;
                 assert!(usage_totals(&pool).await.expect("空汇总").is_empty());
-                record_usage(&pool, "llm", "m1", 100, 20)
+                record_usage(&pool, &UsageRecord::new("llm", "m1", 100, 20))
                     .await
                     .expect("记账1");
-                record_usage(&pool, "jev", "jev-latest", 50, 10)
+                record_usage(&pool, &UsageRecord::new("jev", "jev-latest", 50, 10))
                     .await
                     .expect("记账2");
-                record_usage(&pool, "llm", "m1", 30, 5)
+                record_usage(&pool, &UsageRecord::new("llm", "m1", 30, 5))
                     .await
                     .expect("记账3");
                 let totals = usage_totals(&pool).await.expect("汇总");
@@ -157,13 +152,13 @@ mod tests {
             .unwrap()
             .block_on(async {
                 let pool = memory_pool().await;
-                record_usage(&pool, "question_gen", "m1", 100, 20)
+                record_usage(&pool, &UsageRecord::new("question_gen", "m1", 100, 20))
                     .await
                     .expect("记账");
-                record_usage(&pool, "jev", "jev-latest", 50, 10)
+                record_usage(&pool, &UsageRecord::new("jev", "jev-latest", 50, 10))
                     .await
                     .expect("记账");
-                record_usage(&pool, "question_gen", "m1", 30, 5)
+                record_usage(&pool, &UsageRecord::new("question_gen", "m1", 30, 5))
                     .await
                     .expect("记账");
                 let summary = usage_summary(&pool, 0, i64::MAX).await.expect("汇总");

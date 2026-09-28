@@ -79,12 +79,12 @@ impl LlmRouter {
                 Ok(out) => match validate(&out.text) {
                     Some(value) => {
                         self.ledger
-                            .record_usage(
+                            .record_usage(UsageRecord::new(
                                 req.kind.as_str(),
                                 &out.model,
                                 out.tokens_in,
                                 out.tokens_out,
-                            )
+                            ))
                             .await;
                         self.ledger.cache_put(cache_key, &out.text).await;
                         return Ok(value);

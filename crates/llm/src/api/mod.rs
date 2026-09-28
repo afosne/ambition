@@ -2,6 +2,8 @@
 //! 回包只经本层交给 06/07 消费；本 crate 不落业务库（账本走 `AiLedger` trait，SQLite 实现经 engine 装配）。
 //! 细分功能目录（docs/01 §1 组织规范）：api（本文件）/ provider（双协议）/ router（路由与熔断）/ ledger（账本）。
 
+/// 用量记账载荷（docs/05 §1 契约）：再导出供不直接依赖 core 的调用方（如 jev）使用
+pub use ambition_core::UsageRecord;
 use ambition_core::canonical_json_hash;
 
 /// JSON Schema（结构化输出约束；serde_json::Value 即线格式）
@@ -112,8 +114,8 @@ pub trait AiLedger: Send + Sync {
     async fn cache_get(&self, cache_key: &str) -> Option<String>;
     /// 写缓存（同 key 覆盖）
     async fn cache_put(&self, cache_key: &str, payload: &str);
-    /// 记账（kind = LlmKind::as_str 或 "jev"）
-    async fn record_usage(&self, kind: &str, model: &str, tokens_in: i64, tokens_out: i64);
+    /// 记账（载荷单结构 UsageRecord，2026-09-27 跨模块收口：原 4 位置参数；kind = LlmKind::as_str 或 "jev"）
+    async fn record_usage(&self, record: UsageRecord);
     /// 成本台账：区间 [from_unix, to_unix) 按 kind 聚合（unix 秒；docs/05 §1，M3）
     async fn usage_summary(&self, from_unix: i64, to_unix: i64) -> ambition_core::UsageSummary;
 }
@@ -168,9 +170,12 @@ mod tests {
             debug_assert!(!cache_key.is_empty() || payload.is_empty());
         }
 
-        async fn record_usage(&self, kind: &str, model: &str, tokens_in: i64, tokens_out: i64) {
+        async fn record_usage(&self, record: UsageRecord) {
             debug_assert!(
-                tokens_in >= 0 && tokens_out >= 0 && !kind.is_empty() && !model.is_empty()
+                record.tokens_in >= 0
+                    && record.tokens_out >= 0
+                    && !record.kind.is_empty()
+                    && !record.model.is_empty()
             );
         }
 
@@ -277,7 +282,9 @@ mod tests {
     #[tokio::test]
     async fn test_record_usage_stub_ledger_accepts_row() {
         let ledger = StubLedger;
-        ledger.record_usage("question_gen", "m", 1, 2).await;
+        ledger
+            .record_usage(UsageRecord::new("question_gen", "m", 1, 2))
+            .await;
     }
 
     #[test]

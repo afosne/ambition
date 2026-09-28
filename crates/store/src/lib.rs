@@ -10,8 +10,8 @@ pub use migration::*;
 pub use repo::*;
 
 use ambition_core::{
-    Attempt, GradeResult, Provenance, Qid, Question, QuestionContent, QuestionKind, UsageSummary,
-    UsageTotal,
+    Attempt, GradeResult, Provenance, Qid, Question, QuestionContent, QuestionKind, UsageRecord,
+    UsageSummary, UsageTotal,
 };
 use serde_json::Value;
 use sqlx::sqlite::SqlitePool;

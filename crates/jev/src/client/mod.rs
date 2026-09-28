@@ -134,7 +134,12 @@ impl JevClient {
             .and_then(serde_json::Value::as_i64)
             .unwrap_or(0);
         ledger
-            .record_usage("jev", &self.model, tokens_in, tokens_out)
+            .record_usage(ambition_llm::UsageRecord::new(
+                "jev",
+                &self.model,
+                tokens_in,
+                tokens_out,
+            ))
             .await;
     }
 

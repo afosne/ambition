@@ -3,7 +3,7 @@
 
 use sqlx::sqlite::SqlitePool;
 
-use ambition_core::UsageSummary;
+use ambition_core::{UsageRecord, UsageSummary};
 use ambition_llm::AiLedger;
 
 /// 成本台账/缓存的库实现（engine 装配给 LlmRouter 与 JevClient）
@@ -36,10 +36,8 @@ impl AiLedger for StoreLedger {
         }
     }
 
-    async fn record_usage(&self, kind: &str, model: &str, tokens_in: i64, tokens_out: i64) {
-        if let Err(err) =
-            ambition_store::record_usage(&self.pool, kind, model, tokens_in, tokens_out).await
-        {
+    async fn record_usage(&self, record: UsageRecord) {
+        if let Err(err) = ambition_store::record_usage(&self.pool, &record).await {
             tracing::warn!(error = %err, "llm_usage record failed");
         }
     }
@@ -116,8 +114,8 @@ mod tests {
     #[tokio::test]
     async fn test_record_usage_writes_llm_usage_rows() {
         let ledger = ledger().await;
-        AiLedger::record_usage(&ledger, "question_gen", "m1", 40, 12).await;
-        AiLedger::record_usage(&ledger, "jev", "jev-latest", 7, 2).await;
+        AiLedger::record_usage(&ledger, UsageRecord::new("question_gen", "m1", 40, 12)).await;
+        AiLedger::record_usage(&ledger, UsageRecord::new("jev", "jev-latest", 7, 2)).await;
         let n: i64 = sqlx::query_scalar("SELECT count(*) FROM llm_usage")
             .fetch_one(&ledger.pool)
             .await
@@ -128,9 +126,9 @@ mod tests {
     #[tokio::test]
     async fn test_usage_summary_aggregates_over_wide_range() {
         let ledger = ledger().await;
-        AiLedger::record_usage(&ledger, "question_gen", "m1", 100, 20).await;
-        AiLedger::record_usage(&ledger, "question_gen", "m1", 30, 5).await;
-        AiLedger::record_usage(&ledger, "jev", "jev-latest", 50, 10).await;
+        AiLedger::record_usage(&ledger, UsageRecord::new("question_gen", "m1", 100, 20)).await;
+        AiLedger::record_usage(&ledger, UsageRecord::new("question_gen", "m1", 30, 5)).await;
+        AiLedger::record_usage(&ledger, UsageRecord::new("jev", "jev-latest", 50, 10)).await;
         let summary = AiLedger::usage_summary(&ledger, 0, i64::MAX).await;
         assert_eq!(summary.rows.len(), 2, "按 kind 聚合");
         assert_eq!((summary.tokens_in, summary.tokens_out), (180, 35));

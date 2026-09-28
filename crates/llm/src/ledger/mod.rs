@@ -1,6 +1,6 @@
 //! 用量/缓存账本（trait 定义在 05；SQLite 实现经 engine 装配，测试用进程内 MemLedger）
 
-use ambition_core::{UsageSummary, UsageTotal, lock_recover, now_unix};
+use ambition_core::{UsageRecord, UsageSummary, UsageTotal, lock_recover, now_unix};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -75,12 +75,12 @@ impl crate::AiLedger for MemLedger {
             .insert(cache_key.to_string(), payload.to_string());
     }
 
-    async fn record_usage(&self, kind: &str, model: &str, tokens_in: i64, tokens_out: i64) {
+    async fn record_usage(&self, record: UsageRecord) {
         let row = UsageRow {
-            kind: kind.to_string(),
-            model: model.to_string(),
-            tokens_in,
-            tokens_out,
+            kind: record.kind,
+            model: record.model,
+            tokens_in: record.tokens_in,
+            tokens_out: record.tokens_out,
             at_unix: now_unix(),
         };
         lock_recover(&self.usage, "MemLedger.record_usage").push(row);
@@ -142,8 +142,12 @@ mod tests {
     #[tokio::test]
     async fn test_record_usage_appends_rows_and_take_empties() {
         let ledger = MemLedger::new();
-        ledger.record_usage("question_gen", "m1", 10, 5).await;
-        ledger.record_usage("jev", "jev-latest", 7, 2).await;
+        ledger
+            .record_usage(UsageRecord::new("question_gen", "m1", 10, 5))
+            .await;
+        ledger
+            .record_usage(UsageRecord::new("jev", "jev-latest", 7, 2))
+            .await;
         let rows = ledger.take_usage();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].kind, "question_gen");
@@ -198,9 +202,15 @@ mod tests {
     #[tokio::test]
     async fn test_usage_summary_mem_ledger_aggregates_recorded_rows() {
         let ledger = MemLedger::new();
-        ledger.record_usage("question_gen", "m1", 10, 5).await;
-        ledger.record_usage("jev", "jev-latest", 7, 2).await;
-        ledger.record_usage("question_gen", "m1", 30, 5).await;
+        ledger
+            .record_usage(UsageRecord::new("question_gen", "m1", 10, 5))
+            .await;
+        ledger
+            .record_usage(UsageRecord::new("jev", "jev-latest", 7, 2))
+            .await;
+        ledger
+            .record_usage(UsageRecord::new("question_gen", "m1", 30, 5))
+            .await;
         let summary = ledger.usage_summary(0, i64::MAX).await;
         assert_eq!(summary.rows.len(), 2, "两 kind");
         assert_eq!(summary.tokens_in, 47);

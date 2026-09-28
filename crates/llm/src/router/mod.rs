@@ -57,7 +57,7 @@ mod tests {
     use super::*;
     use crate::common::*;
     use crate::router::breaker::{BREAKER_FAIL_LIMIT, BREAKER_SKIP_LIMIT};
-    use crate::{GenRequest, LlmError, LlmOut, MemLedger};
+    use crate::{GenRequest, LlmError, LlmOut, MemLedger, UsageRecord};
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -179,7 +179,9 @@ mod tests {
     #[tokio::test]
     async fn test_usage_summary_delegates_to_ledger_range() {
         let ledger = MemLedger::new();
-        ledger.record_usage("jev", "jev-latest", 40, 4).await;
+        ledger
+            .record_usage(UsageRecord::new("jev", "jev-latest", 40, 4))
+            .await;
         let router = LlmRouter::new(Box::new(Scripted::new(vec![])), None, Box::new(ledger));
         let summary = router.usage_summary(0, i64::MAX).await;
         assert_eq!(summary.rows.len(), 1, "按 kind 聚合");

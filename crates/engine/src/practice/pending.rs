@@ -82,6 +82,7 @@ mod tests {
     use crate::common::*;
     use ambition_core::{
         Attempt, AttemptMode, BlankItem, ChoiceBody, FillBody, OptionItem, QuestionKind,
+        UsageRecord,
     };
 
     fn attempt_for(qid: ambition_core::Qid, selected: Vec<u32>, id: &str) -> Attempt {
@@ -330,10 +331,13 @@ mod tests {
     #[tokio::test]
     async fn test_cost_summary_aggregates_llm_usage_rows() {
         let engine = Engine::open_memory().await.expect("打开");
-        ambition_store::record_usage(&engine.pool, "question_gen", "m1", 100, 20)
-            .await
-            .expect("记账");
-        ambition_store::record_usage(&engine.pool, "jev", "jev-latest", 50, 10)
+        ambition_store::record_usage(
+            &engine.pool,
+            &UsageRecord::new("question_gen", "m1", 100, 20),
+        )
+        .await
+        .expect("记账");
+        ambition_store::record_usage(&engine.pool, &UsageRecord::new("jev", "jev-latest", 50, 10))
             .await
             .expect("记账");
         let summary = engine.cost_summary(0, i64::MAX).await.expect("台账");

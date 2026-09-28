@@ -176,13 +176,13 @@ mod tests {
                     cache_get(&pool, "k1").await.expect("读缓存"),
                     Some("cached-output-v2".to_string())
                 );
-                record_usage(&pool, "llm", "test-model", 100, 20)
+                record_usage(&pool, &UsageRecord::new("llm", "test-model", 100, 20))
                     .await
                     .expect("记账1");
-                record_usage(&pool, "jev", "jev-latest", 50, 10)
+                record_usage(&pool, &UsageRecord::new("jev", "jev-latest", 50, 10))
                     .await
                     .expect("记账2");
-                record_usage(&pool, "llm", "test-model", 30, 5)
+                record_usage(&pool, &UsageRecord::new("llm", "test-model", 30, 5))
                     .await
                     .expect("记账3");
                 let totals = usage_totals(&pool).await.expect("汇总");
