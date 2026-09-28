@@ -104,18 +104,7 @@ fn build_grader(pool: SqlitePool, ai: &AiConfig) -> ambition_grader::Grader {
 mod tests {
     use super::*;
     use crate::common::*;
-    use ambition_core::{Attempt, AttemptMode, ChoiceBody, OptionItem, QuestionKind};
-
-    fn attempt_for(qid: ambition_core::Qid, selected: Vec<u32>, id: &str) -> Attempt {
-        Attempt {
-            attempt_id: id.into(),
-            qid,
-            answer: Answer::Choice(selected),
-            timing: None,
-            self_confidence: None,
-            mode: AttemptMode::Practice,
-        }
-    }
+    use ambition_core::{ChoiceBody, OptionItem, QuestionKind};
 
     fn tmp_db_path(tag: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("ambition-engine-{tag}-{}.db", std::process::id()))

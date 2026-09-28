@@ -1,4 +1,4 @@
-//! repo 跨文件测试夹具（收口前 attempts/arbitration/question_repo 逐字复制，2026-09-27 复用合并）
+//! store 跨文件测试夹具（收口前 7 个文件逐字复制：memory_pool ×7、sample_* ×3；2026-09-27 复用合并）
 
 use ambition_core::{
     Answer, Attempt, AttemptMode, BlankItem, FillBody, GradeResult, GradedBy, Provenance, Qid,
@@ -46,6 +46,17 @@ pub(crate) fn sample_grade(verdict: Verdict) -> GradeResult {
     }
 }
 
+/// 内存库夹具（sqlite::memory: + init_db 建表；全仓 7 个测试文件共用）
+pub(crate) async fn memory_pool() -> sqlx::sqlite::SqlitePool {
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .expect("内存库");
+    crate::init_db(&pool).await.expect("建表");
+    pool
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,5 +85,18 @@ mod tests {
         assert_eq!(grade.verdict, Verdict::Pending, "verdict 透传");
         assert_eq!(grade.graded_by, GradedBy::Rule);
         assert_eq!((grade.score, grade.max), (1.0, 1.0));
+    }
+
+    #[tokio::test]
+    async fn test_memory_pool_fixture_builds_schema_in_memory() {
+        let pool = memory_pool().await;
+        let tables: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("查询表数");
+        assert!(tables >= 5, "init_db 已建核心表（实际 {tables} 张）");
+        pool.close().await;
     }
 }

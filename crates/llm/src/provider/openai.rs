@@ -181,14 +181,9 @@ impl LlmProvider for OpenAiCompat {
 mod tests {
     use super::*;
     use crate::LlmKind;
+    use crate::common::*;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    fn sample_req() -> GenRequest {
-        let mut req = GenRequest::new(LlmKind::QuestionGen, "sys", "usr");
-        req.schema = Some(serde_json::json!({"type": "object"}));
-        req
-    }
 
     fn ok_body() -> serde_json::Value {
         serde_json::json!({

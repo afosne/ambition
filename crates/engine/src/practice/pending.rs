@@ -81,20 +81,8 @@ mod tests {
     use super::*;
     use crate::common::*;
     use ambition_core::{
-        Attempt, AttemptMode, BlankItem, ChoiceBody, FillBody, OptionItem, QuestionKind,
-        UsageRecord,
+        Attempt, BlankItem, ChoiceBody, FillBody, OptionItem, QuestionKind, UsageRecord,
     };
-
-    fn attempt_for(qid: ambition_core::Qid, selected: Vec<u32>, id: &str) -> Attempt {
-        Attempt {
-            attempt_id: id.into(),
-            qid,
-            answer: Answer::Choice(selected),
-            timing: None,
-            self_confidence: None,
-            mode: AttemptMode::Practice,
-        }
-    }
 
     fn multi_pick_two() -> Question {
         Question::new(

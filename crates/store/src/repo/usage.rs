@@ -76,17 +76,7 @@ pub async fn usage_totals(pool: &SqlitePool) -> Result<Vec<(String, i64, i64)>, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::sqlite::SqlitePoolOptions;
-
-    async fn memory_pool() -> SqlitePool {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .expect("内存库");
-        init_db(&pool).await.expect("建表");
-        pool
-    }
+    use crate::common::*;
 
     #[test]
     fn test_record_usage_inserts_row() {

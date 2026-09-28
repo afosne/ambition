@@ -57,51 +57,9 @@ mod tests {
     use super::*;
     use crate::common::*;
     use crate::router::breaker::{BREAKER_FAIL_LIMIT, BREAKER_SKIP_LIMIT};
-    use crate::{GenRequest, LlmError, LlmOut, MemLedger, UsageRecord};
-    use std::sync::Mutex;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use crate::{MemLedger, UsageRecord};
 
     /// 脚本化供给方：按序吐出结果（Err 或 Ok）
-    struct Scripted {
-        script: Mutex<Vec<Result<String, LlmError>>>,
-        calls: AtomicUsize,
-        model: &'static str,
-    }
-
-    impl Scripted {
-        fn new(script: Vec<Result<String, LlmError>>) -> Self {
-            Self {
-                script: Mutex::new(script),
-                calls: AtomicUsize::new(0),
-                model: "scripted",
-            }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl LlmProvider for Scripted {
-        async fn complete(&self, req: &GenRequest) -> Result<LlmOut, LlmError> {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            // 签名由 trait 固定；读一下表明参数被消费（防占位参数钩子）
-            let temperature = req.temperature;
-            debug_assert!(temperature >= 0.0, "temperature 非负");
-            let next = match self.script.lock() {
-                Ok(mut guard) if !guard.is_empty() => guard.remove(0),
-                _ => Err(LlmError::Offline),
-            };
-            next.map(|text| LlmOut {
-                text,
-                model: self.model.to_string(),
-                tokens_in: 3,
-                tokens_out: 4,
-            })
-        }
-
-        fn model(&self) -> &str {
-            self.model
-        }
-    }
-
     #[test]
     fn test_new_stores_primary_fallback_and_ledger() {
         let primary: Box<dyn LlmProvider> = Box::new(Scripted::new(vec![Ok(ok_json())]));

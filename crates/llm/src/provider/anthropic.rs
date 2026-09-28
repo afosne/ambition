@@ -154,14 +154,9 @@ impl LlmProvider for Anthropic {
 mod tests {
     use super::*;
     use crate::LlmKind;
+    use crate::common::*;
     use wiremock::matchers::{body_string_contains, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    fn sample_req() -> GenRequest {
-        let mut req = GenRequest::new(LlmKind::QuestionGen, "sys", "usr");
-        req.schema = Some(serde_json::json!({"type": "object"}));
-        req
-    }
 
     #[test]
     fn test_new_trims_base_url_and_defaults_keyless() {

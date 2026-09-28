@@ -85,18 +85,8 @@ pub async fn cache_put(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::*;
     use serde_json::json;
-    use sqlx::sqlite::SqlitePoolOptions;
-
-    async fn memory_pool() -> SqlitePool {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .expect("内存库");
-        init_db(&pool).await.expect("建表");
-        pool
-    }
 
     #[test]
     fn test_insert_typing_session_persists_payload() {

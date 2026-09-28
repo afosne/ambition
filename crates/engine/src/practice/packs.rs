@@ -78,18 +78,7 @@ impl Engine {
 mod tests {
     use super::*;
     use crate::common::*;
-    use ambition_core::{Attempt, AttemptMode, ChoiceBody, OptionItem, QuestionKind};
-
-    fn attempt_for(qid: ambition_core::Qid, selected: Vec<u32>, id: &str) -> Attempt {
-        Attempt {
-            attempt_id: id.into(),
-            qid,
-            answer: Answer::Choice(selected),
-            timing: None,
-            self_confidence: None,
-            mode: AttemptMode::Practice,
-        }
-    }
+    use ambition_core::{ChoiceBody, OptionItem, QuestionKind};
 
     #[tokio::test]
     async fn test_import_pack_dedupes_and_rejects_low_quality() {

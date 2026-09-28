@@ -3,6 +3,8 @@
 //! 迁移：schema_version 单行表 + MIGRATIONS 清单（只增不改，应用到最大版本）。
 
 // 模块分层（docs/01 §组织：lib.rs 薄壳 + 细分功能目录 repo/migration，文件 ≤500 行，pre-commit 门禁强制）
+#[cfg(test)]
+mod common;
 mod migration;
 mod repo;
 

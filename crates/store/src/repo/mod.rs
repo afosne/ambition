@@ -15,10 +15,7 @@ pub use kv::*;
 pub use question_repo::*;
 pub use usage::*;
 
-#[cfg(test)]
-mod fixtures;
-
-/// 载荷 JSON 解码：坏行 = sqlx `Decode` 错误显式上抛，不静默丢行（P-4 显式兕底口径）。
+/// 载荷 JSON 解码：坏行 = sqlx `Decode` 错误显式上抛，不静默丢行（P-4 显式兜底口径）。
 /// `what` = 上下文（如 "attempt 载荷损坏（a1）"）；错误串 = "{what}: {原错误}"。
 /// 收口前 attempts/arbitration/cards/question_repo 四文件六处 `from_str+map_err` 逐处重写（2026-09-27 复用合并）。
 fn decode_payload<T: serde::de::DeserializeOwned>(

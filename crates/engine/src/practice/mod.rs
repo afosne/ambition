@@ -88,17 +88,6 @@ mod tests {
         Attempt, AttemptMode, BlankItem, ChoiceBody, FillBody, OptionItem, QuestionKind,
     };
 
-    fn attempt_for(qid: ambition_core::Qid, selected: Vec<u32>, id: &str) -> Attempt {
-        Attempt {
-            attempt_id: id.into(),
-            qid,
-            answer: Answer::Choice(selected),
-            timing: None,
-            self_confidence: None,
-            mode: AttemptMode::Practice,
-        }
-    }
-
     #[tokio::test]
     async fn test_submit_answer_grades_and_persists_game_effects() {
         let engine = Engine::open_memory().await.expect("打开");

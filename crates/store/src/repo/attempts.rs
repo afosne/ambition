@@ -111,19 +111,8 @@ pub async fn recent_timings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::fixtures::*;
+    use crate::common::*;
     use ambition_core::{AttemptMode, GradedBy, Verdict};
-    use sqlx::sqlite::SqlitePoolOptions;
-
-    async fn memory_pool() -> SqlitePool {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .expect("内存库");
-        init_db(&pool).await.expect("建表");
-        pool
-    }
 
     #[test]
     fn test_insert_attempt_tx_writes_all_or_nothing() {

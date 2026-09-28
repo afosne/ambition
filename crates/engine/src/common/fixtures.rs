@@ -1,6 +1,8 @@
-//! engine 跨文件测试夹具（收口前 assembly/practice 四份逐字复制，2026-09-27 复用合并）
+//! engine 跨文件测试夹具（收口前 assembly/practice 四份逐字复制：choice_question、attempt_for；2026-09-27 复用合并）
 
-use ambition_core::{ChoiceBody, OptionItem, Provenance, Question, QuestionKind};
+use ambition_core::{
+    Answer, Attempt, AttemptMode, ChoiceBody, OptionItem, Provenance, Qid, Question, QuestionKind,
+};
 
 /// 单选样例题（装配/练习/题包/裁决测试共用：quick/slow、难度1、vocab 标签）
 pub(crate) fn choice_question() -> Question {
@@ -48,6 +50,18 @@ pub(crate) fn choice_question_tagged(tag: &str) -> Question {
     )
 }
 
+/// 样例作答（选择提交、无计时不自评；装配/练习/题包/裁决测试共用）
+pub(crate) fn attempt_for(qid: Qid, selected: Vec<u32>, id: &str) -> Attempt {
+    Attempt {
+        attempt_id: id.into(),
+        qid,
+        answer: Answer::Choice(selected),
+        timing: None,
+        self_confidence: None,
+        mode: AttemptMode::Practice,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,5 +82,14 @@ mod tests {
         let q = choice_question_tagged("grammar");
         assert_eq!(q.tags, vec!["grammar".to_string()], "标签由调用方定");
         assert_eq!(q.difficulty, 2);
+    }
+
+    #[test]
+    fn test_attempt_for_fixture_is_choice_practice_without_timing() {
+        let attempt = attempt_for(Qid("q1".into()), vec![0, 2], "a-1");
+        assert_eq!(attempt.attempt_id, "a-1");
+        assert!(matches!(attempt.answer, Answer::Choice(ids) if ids == vec![0, 2]));
+        assert_eq!(attempt.mode, AttemptMode::Practice);
+        assert!(attempt.timing.is_none(), "无计时（非假对基线样本）");
     }
 }

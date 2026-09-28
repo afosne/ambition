@@ -122,17 +122,7 @@ pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::sqlite::SqlitePoolOptions;
-
-    async fn memory_pool() -> SqlitePool {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .expect("内存库");
-        init_db(&pool).await.expect("建表");
-        pool
-    }
+    use crate::common::*;
 
     #[test]
     fn test_init_db_records_target_version_once() {

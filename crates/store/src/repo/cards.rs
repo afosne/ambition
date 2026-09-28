@@ -91,18 +91,8 @@ fn collect_cards(rows: Vec<(String, String)>) -> Result<Vec<Card>, sqlx::Error> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::*;
     use ambition_core::CardSource;
-    use sqlx::sqlite::SqlitePoolOptions;
-
-    async fn memory_pool() -> SqlitePool {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .expect("内存库");
-        init_db(&pool).await.expect("建表");
-        pool
-    }
 
     fn sample_card(now: i64) -> Card {
         let mut card = Card::new(
