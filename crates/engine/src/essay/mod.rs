@@ -12,6 +12,15 @@ use ambition_writing::{
 use crate::*;
 
 impl Engine {
+    /// 题目判分口径 id（Essay=题面 rubric_id；Translation=内置 translation4；其它题型无 composite 口径 → None）
+    pub fn rubric_id_for(kind: &QuestionKind) -> Option<String> {
+        match kind {
+            QuestionKind::Essay(body) => Some(body.rubric_id.clone()),
+            QuestionKind::Translation(_) => Some(ambition_grader::TRANSLATION_RUBRIC.to_string()),
+            _ => None,
+        }
+    }
+
     /// 自由作文批改（M5-W5：07 composite → 档位；落 essays+essay_grades 两表 + 发 DomainEvent::EssayGraded）
     pub async fn grade_essay(&self, sub: &EssaySubmission) -> Result<GradeResult, EngineError> {
         let word_count = sub.body.split_whitespace().count() as i64;
@@ -133,6 +142,45 @@ mod tests {
             scaffold_stage: "half".to_string(),
             template_id: "cet4_argument_procon".to_string(),
         }
+    }
+
+    #[test]
+    fn test_rubric_id_for_maps_composite_kinds_only() {
+        let essay = QuestionKind::Essay(EssayPrompt {
+            prompt_zh: "题面".into(),
+            genre: "argument".into(),
+            track: "cet4".into(),
+            rubric_id: "gaokao25".into(),
+            word_range: (120, 180),
+            minutes: 30,
+        });
+        assert_eq!(
+            Engine::rubric_id_for(&essay).as_deref(),
+            Some("gaokao25"),
+            "作文取题面口径"
+        );
+        let translation = QuestionKind::Translation(ambition_core::TranslationBody {
+            direction: ambition_core::TranslationDirection {
+                from: ambition_core::LangTag("zh-Hans".into()),
+                to: ambition_core::LangTag("en".into()),
+            },
+            source_text: "s".into(),
+            reference: "r".into(),
+        });
+        assert_eq!(
+            Engine::rubric_id_for(&translation).as_deref(),
+            Some(ambition_grader::TRANSLATION_RUBRIC),
+            "翻译取内置口径"
+        );
+        let choice = QuestionKind::SingleChoice(ambition_core::ChoiceBody {
+            options: vec![],
+            answer: vec![],
+        });
+        assert_eq!(
+            Engine::rubric_id_for(&choice),
+            None,
+            "选择题无 composite 口径"
+        );
     }
 
     #[tokio::test]

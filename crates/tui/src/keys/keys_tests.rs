@@ -86,4 +86,24 @@ mod tests {
             "待裁定提示含确认"
         );
     }
+
+    #[test]
+    fn test_key_to_msg_ctrl_e_annotates_only_in_graded_ctx() {
+        use Msg::*;
+        assert_eq!(
+            key_to_msg(KeyCtx::Graded, K::Char('e'), M::CONTROL),
+            Some(Annotate),
+            "判分屏 Ctrl+E → 批注"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Choice, K::Char('e'), M::CONTROL),
+            None,
+            "非判分屏无操作"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Graded, K::Char('e'), mods()),
+            None,
+            "单字母 e 不批注（禁单字母快捷键）"
+        );
+    }
 }

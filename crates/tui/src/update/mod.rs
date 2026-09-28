@@ -2,12 +2,14 @@
 //! 本域含配对测试子组件：`update::update_tests`（状态机）/ `update::update_passage_tests`（语篇作答）。
 //! 跨域引用一律 `use crate::*`（组内共享导入留在 lib.rs，docs/01 §1 组织规范）。
 
+mod nav;
 mod scaffold;
 #[cfg(test)]
 mod update_passage_tests;
 #[cfg(test)]
 mod update_tests;
 
+use self::nav::{advance_question, reset_question_state};
 use crate::*;
 
 pub use scaffold::{apply_scaffold_check, apply_scaffold_result, apply_scaffold_templates};
@@ -383,6 +385,23 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             }
             Cmd::None
         }
+        // 批注（M5-W5，Ctrl+E）：判分后 + 作文/翻译 + 有提交文本 → Cmd（其余静默防误触）
+        Msg::Annotate => {
+            let text_kind = matches!(
+                state.questions[state.idx].kind,
+                QuestionKind::Essay(_) | QuestionKind::Translation(_)
+            );
+            if state.grade.is_none() || !text_kind {
+                return Cmd::None;
+            }
+            match state.submitted_text.clone() {
+                Some(text) if !text.trim().is_empty() => Cmd::Annotate(text),
+                _ => {
+                    state.error = Some("无可批注文本（先作答提交）".to_string());
+                    Cmd::None
+                }
+            }
+        }
         // 模板屏专属消息在答题流程忽略（顶部分支已拦截；防误触）
         Msg::ScaffoldUp
         | Msg::ScaffoldDown
@@ -394,35 +413,6 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
         // 复习屏/面板专属消息在答题流程忽略（顶部分支已拦截；防误触）
         Msg::Screen(_) | Msg::Flip | Msg::Rate(_) | Msg::TogglePicker | Msg::Jump => Cmd::None,
     }
-}
-
-/// 复位当前题作答状态（Next/Skip/Prev/Jump 共用；含错误行清理）
-fn reset_question_state(state: &mut AppState) {
-    state.grade = None;
-    state.sel = 0;
-    state.revisions = 0;
-    state.self_confidence = None;
-    state.editing = false;
-    state.checked.clear();
-    state.sub_answers.clear();
-    state.srs_hint = None;
-    state.arbitration_sel = 0;
-    state.error = None;
-    state.started_at = Instant::now();
-    // 按当前题重建空位输入（选择题 = 0 位）
-    state.inputs = vec![String::new(); blank_count(&state.questions[state.idx].kind)];
-    state.blank_sel = 0;
-}
-
-/// 前进一题并复位（Next/Skip 共用）；越界 = 完成屏
-fn advance_question(state: &mut AppState) {
-    if state.idx + 1 >= state.questions.len() {
-        state.finished = true;
-        reset_question_state(state);
-        return;
-    }
-    state.idx += 1;
-    reset_question_state(state);
 }
 
 #[cfg(test)]
@@ -453,41 +443,47 @@ mod tests {
     }
 
     #[test]
-    fn test_reset_question_state_clears_every_answer_field() {
+    fn test_annotate_gates_on_grade_kind_and_submitted_text() {
         let mut s = new_state(vec![crate::sample_question()]);
-        s.sel = 1;
-        s.revisions = 5;
-        s.self_confidence = Some(2);
-        s.editing = true;
-        s.checked = vec![1];
-        s.sub_answers = vec![0];
-        s.srs_hint = Some("x".into());
-        s.arbitration_sel = 1;
-        s.error = Some("boom".into());
-        reset_question_state(&mut s);
-        assert_eq!(
-            (
-                s.grade.is_none(),
-                s.sel,
-                s.revisions,
-                s.self_confidence,
-                s.editing,
-                s.checked.is_empty(),
-                s.sub_answers.is_empty(),
-                s.srs_hint.is_none(),
-                s.arbitration_sel,
-                s.error.is_none(),
-            ),
-            (true, 0, 0, None, false, true, true, true, 0, true),
-            "全部复位"
-        );
-    }
+        s.grade = Some(ambition_core::GradeResult {
+            verdict: ambition_core::Verdict::Correct,
+            score: 1.0,
+            max: 1.0,
+            confidence: 1.0,
+            graded_by: ambition_core::GradedBy::Human,
+            detail: ambition_core::GradeDetail::Plain,
+            error_tags: vec![],
+        });
+        s.submitted_text = Some("essay body".to_string());
+        assert_eq!(update(&mut s, Msg::Annotate), Cmd::None, "选择题不批注");
 
-    #[test]
-    fn test_advance_question_reaches_finished_at_tail() {
-        let mut s = new_state(vec![crate::sample_question()]);
-        advance_question(&mut s);
-        assert!(s.finished, "末题前进 = 完成屏");
-        assert_eq!(s.idx, 0, "完成屏不越界");
+        let essay = Question::new(
+            "Write an essay.".into(),
+            QuestionKind::Essay(ambition_core::EssayPrompt {
+                prompt_zh: "题面".into(),
+                genre: "argument".into(),
+                track: "cet4".into(),
+                rubric_id: "gaokao25".into(),
+                word_range: (120, 180),
+                minutes: 30,
+            }),
+            3,
+            vec!["essay".to_string()],
+            ambition_core::Provenance::Seed,
+        );
+        s.questions = vec![essay];
+        s.idx = 0;
+        assert_eq!(
+            update(&mut s, Msg::Annotate),
+            Cmd::Annotate("essay body".into()),
+            "判分后作文题 → 携带文本"
+        );
+
+        s.submitted_text = None;
+        assert_eq!(update(&mut s, Msg::Annotate), Cmd::None, "无文本不发 Cmd");
+        assert!(
+            s.error.as_deref().unwrap_or_default().contains("批注"),
+            "空文本错误行可见"
+        );
     }
 }

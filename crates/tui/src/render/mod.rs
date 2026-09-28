@@ -138,6 +138,44 @@ pub fn render(frame: &mut Frame, state: &AppState) {
                     ));
                 }
             }
+            // 批注区（M5-W5：Ctrl+E 回填；升级/亮点逐句对照展示）
+            if let Some(comments) = &state.comments {
+                text.push_str(&format!(
+                    "
+ 批注（{} 条）:
+",
+                    comments.annotations.len()
+                ));
+                for ann in &comments.annotations {
+                    let icon = match ann.kind {
+                        ambition_writing::CommentKind::Upgrade => "✎ 升级",
+                        ambition_writing::CommentKind::Highlight => "★ 亮点",
+                    };
+                    text.push_str(&format!(
+                        "  {icon} {}
+",
+                        ann.sentence
+                    ));
+                    if let Some(suggested) = &ann.suggested {
+                        text.push_str(&format!(
+                            "      → {suggested}
+"
+                        ));
+                    }
+                    text.push_str(&format!(
+                        "      短评: {}
+",
+                        ann.brief_reason
+                    ));
+                    if let Some(target) = &ann.target {
+                        text.push_str(&format!(
+                            "      入卡目标: {}
+",
+                            target.text
+                        ));
+                    }
+                }
+            }
             if q.kind.is_fill() {
                 let sets = fill_answers(&q.kind);
                 let answers: Vec<&str> = sets
@@ -353,5 +391,48 @@ mod tests {
         let human_buf = render_to(&s);
         assert!(human_buf.contains("人工裁决"), "裁决后可见: {human_buf:?}");
         assert!(!human_buf.contains("待裁定"), "已裁决不显示待裁定行");
+    }
+
+    #[test]
+    fn test_render_shows_annotations_inline() {
+        use ambition_writing::{Annotation, CommentKind, Comments, SrsTarget, WordKind};
+        let q = Question::new(
+            "Write an essay.".into(),
+            QuestionKind::Essay(ambition_core::EssayPrompt {
+                prompt_zh: "以绿色校园为题。".into(),
+                genre: "argument".into(),
+                track: "cet4".into(),
+                rubric_id: "gaokao25".into(),
+                word_range: (120, 180),
+                minutes: 30,
+            }),
+            3,
+            vec!["essay".to_string()],
+            ambition_core::Provenance::Seed,
+        );
+        let mut s = new_state(vec![q]);
+        s.grade = Some(grade(ambition_core::Verdict::Correct));
+        s.comments = Some(Comments {
+            annotations: vec![Annotation {
+                sentence: "Nowadays I think this is good.".to_string(),
+                kind: CommentKind::Upgrade,
+                suggested: Some("This measure is beneficial.".to_string()),
+                brief_reason: "更书面的替换".to_string(),
+                target: Some(SrsTarget {
+                    kind: WordKind::Phrase,
+                    text: "be beneficial to".to_string(),
+                }),
+            }],
+        });
+        let out = crate::common::render_sized(&s, 76, 24);
+        assert!(out.contains("批注（1 条）"), "批注区标题: {out}");
+        assert!(out.contains("✎ 升级"), "升级图标: {out}");
+        assert!(
+            out.contains("Nowadays I think this is good."),
+            "原句: {out}"
+        );
+        assert!(out.contains("This measure is beneficial."), "建议句: {out}");
+        assert!(out.contains("短评"), "短评标签: {out}");
+        assert!(out.contains("入卡目标"), "入卡目标: {out}");
     }
 }

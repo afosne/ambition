@@ -38,6 +38,8 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
             KeyCode::Char('r') => Some(Msg::Screen(Screen::Review)),
             // M5-W4b：模板屏自查（上下文层语义——Ctrl+S 仅 Scaffold 屏有操作，docs/03 §5.3）
             KeyCode::Char('s') if ctx == KeyCtx::Scaffold => Some(Msg::ScaffoldCheck),
+            // M5-W5：判分后批注（上下文层语义——Ctrl+E 仅 Graded 屏有操作，docs/03 §5.3）
+            KeyCode::Char('e') if ctx == KeyCtx::Graded => Some(Msg::Annotate),
             _ => None,
         };
     }
@@ -132,7 +134,9 @@ pub fn hint(ctx: KeyCtx) -> &'static str {
             " 打字恢复编辑（已输入保留）· Enter 提交 · Esc/Ctrl+Q 退出"
         }
         KeyCtx::Pending => " ←/→ 选择判对判错 · Enter 确认裁决 · Esc 跳过 · Ctrl+Q 退出",
-        KeyCtx::Graded => " Enter/→ 下一题 · ← 上一题 · F1 选题 · Ctrl+Q 退出",
+        KeyCtx::Graded => {
+            " Enter/→ 下一题 · ← 上一题 · F1 选题 · Ctrl+E 批注（作文/翻译） · Ctrl+Q 退出"
+        }
         KeyCtx::Finished => " Ctrl+Q 退出",
         KeyCtx::Review => {
             " Space/Enter 翻面 · 1-4 评分（Again/Hard/Good/Easy）· Tab/Esc 返回答题 · Ctrl+Q 退出"

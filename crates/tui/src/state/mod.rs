@@ -6,7 +6,7 @@ pub mod review;
 pub use review::*;
 
 use crate::*;
-use ambition_writing::{ScaffoldCheck, ScaffoldStage, Template};
+use ambition_writing::{Comments, ScaffoldCheck, ScaffoldStage, Template};
 
 /// 屏幕（M4：Practice + Review；完整 Screen 集见 docs/03-engine-ui）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +69,10 @@ pub struct AppState {
     pub scaffold_result: Option<String>,
     /// 最近一次自查结果（Ctrl+S 回填）
     pub scaffold_check: Option<ScaffoldCheck>,
+    /// 判分后批注（Ctrl+E 回填；M5-W5 docs/10 §2，随题清空）
+    pub comments: Option<Comments>,
+    /// 最近一次提交的文本作答（作文/翻译批注输入；随题清空）
+    pub submitted_text: Option<String>,
 }
 
 /// 输入消息
@@ -117,6 +121,8 @@ pub enum Msg {
     ScaffoldRender,
     /// 模板屏：草稿自查（Ctrl+S → Cmd::ScaffoldCheck）
     ScaffoldCheck,
+    /// 批注（Ctrl+E，判分后作文/翻译 → Cmd::Annotate(文本)）
+    Annotate,
 }
 
 /// 状态机输出（Quit/Submit 由 main 执行副作用）
@@ -137,6 +143,8 @@ pub enum Cmd {
     ScaffoldRender,
     /// 草稿自查（main 调 engine.check_scaffold）
     ScaffoldCheck,
+    /// 批注（main 调 engine.annotate；携带提交文本）
+    Annotate(String),
 }
 
 /// 题目空位数（填空类 = blanks 数；其它题型 = 0——inputs 长度据此重建；M4 题型补全含完形/语法填空）
@@ -179,6 +187,8 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         scaffold_slot: 0,
         scaffold_result: None,
         scaffold_check: None,
+        comments: None,
+        submitted_text: None,
     }
 }
 

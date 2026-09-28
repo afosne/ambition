@@ -63,6 +63,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             Cmd::Quit => break,
             Cmd::Submit(answer) => {
                 attempt_seq += 1;
+                // M5-W5：记录文本作答（作文/翻译批注输入；随题由 reset 清空）
+                state.submitted_text = match &answer {
+                    ambition_core::Answer::Text(text) => Some(text.clone()),
+                    _ => None,
+                };
                 let attempt_id = format!("tui-{attempt_seq}");
                 let attempt = Attempt {
                     attempt_id: attempt_id.clone(),
@@ -158,6 +163,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 };
                 match engine.check_scaffold(&t.template_id, &essay).await {
                     Ok(check) => apply_scaffold_check(&mut state, check),
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::Annotate(text) => {
+                // 批注（M5-W5：LlmKind::Explain + writing 资产；缓存走 llm run_loop）
+                let Some(grade) = state.grade.clone() else {
+                    continue;
+                };
+                let Some(rubric_id) = Engine::rubric_id_for(&state.questions[state.idx].kind)
+                else {
+                    continue;
+                };
+                match engine.annotate(&text, &grade, &rubric_id).await {
+                    Ok(comments) => {
+                        state.comments = Some(comments);
+                        state.error = None;
+                    }
                     Err(err) => apply_error(&mut state, err.to_string()),
                 }
             }
