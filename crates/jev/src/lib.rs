@@ -6,18 +6,16 @@
 //!   resp {model, answers:{id:{type, noul|choice|score}}, usage:{input_tokens,output_tokens}}
 //!   错误：401 key 无效 / 422 body 校验 / 429 限流 / 529 过载。
 
-// 模块分层（docs/01 §组织：lib.rs 薄壳，文件 ≤500 行，pre-commit 门禁强制）
+// 模块分层（docs/01 §组织：lib.rs 薄壳 + 细分功能目录 wire/client/route，文件 ≤500 行，pre-commit 门禁强制）
 mod client;
-mod codec;
-mod error;
 mod route;
-mod types;
+mod wire;
 
+pub use client::error::*;
 pub use client::*;
-pub(crate) use codec::*;
-pub use error::*;
 pub use route::*;
-pub use types::*;
+pub(crate) use wire::codec::*;
+pub use wire::*;
 
 use std::collections::BTreeMap;
 use std::time::Duration;

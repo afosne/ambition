@@ -4,27 +4,18 @@
 //! M3：三级判题装配（AiConfig env → Grader）、待裁定桶门面（pending_bucket/resolve_pending）、
 //! 成本台账（StoreLedger + cost_summary）、中式英语改错训练（add_chinglish_drills）。
 
-mod ai;
-
-mod ledger;
-
-// 模块分层（docs/01 §组织：lib.rs 薄壳，文件 ≤500 行，pre-commit 门禁强制）
-mod lexicon;
-mod lifecycle;
-mod packs;
-mod pending;
+mod assembly;
 mod practice;
 mod srs;
-#[cfg(test)]
-mod srs_tests;
 // 各模块只承载 impl 块与 crate 内部 fns——impl 自动生效，无项可再导出
+// 模块分层（docs/01 §组织：lib.rs 薄壳 + 细分功能目录 assembly/practice/srs，文件 ≤500 行，pre-commit 门禁强制）
 
-pub use ai::{AiConfig, LLM_CACHE_TTL_SECS};
 /// SRS 关键类型再导出（两壳经 engine 消费，避免直接依赖 srs crate）
 pub use ambition_srs::{CardAction, Rating};
 pub use ambition_store::ArbitrationRow;
-pub use ledger::StoreLedger;
-pub use lexicon::{ExamplePair, Pattern, Sense};
+pub use assembly::ai::{AiConfig, LLM_CACHE_TTL_SECS};
+pub use assembly::ledger::StoreLedger;
+pub use srs::lexicon::{ExamplePair, Pattern, Sense};
 
 use std::path::Path;
 use std::sync::Mutex;

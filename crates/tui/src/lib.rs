@@ -3,27 +3,14 @@
 //! M3：待裁定 y/n 裁决回路 · 判分浮层错因标签（结构化讲解①）· 1-4 自评把握（改进 #10）
 //! 2026-09-27 键位统一：keys.rs（KeyCtx 唯一路由 + hint 同源）· Space 多选 · Esc 退出编辑保留输入
 
-// 模块分层（docs/01 §组织：lib.rs 薄壳，文件 ≤500 行，pre-commit 门禁强制）
+// 模块分层（docs/01 §组织：lib.rs 薄壳 + 细分功能目录 keys/state/update/render，文件 ≤500 行，pre-commit 门禁强制）
 mod keys;
-mod passage_render;
-mod picker_render;
 mod render;
-#[cfg(test)]
-mod render_passage_tests;
-mod review_render;
-mod review_state;
 mod state;
 mod update;
-#[cfg(test)]
-mod update_passage_tests;
-#[cfg(test)]
-mod update_tests;
 
 pub use keys::*;
-pub use picker_render::*;
 pub use render::*;
-pub use review_render::*;
-pub use review_state::*;
 pub use state::*;
 pub use update::*;
 
