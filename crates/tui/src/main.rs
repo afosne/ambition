@@ -61,7 +61,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
     {
         terminal.draw(|f| render(f, &state))?;
-        let Event::Key(key) = event::read()? else {
+        let event = event::read()?;
+        if matches!(event, Event::Paste(_)) {
+            // 纸笔口径禁粘贴（M5-W8 docs/10 §5：Pasted 违规先行反馈；卷面扫描随手交屏 hand_in）
+            state.error = Some("检测到粘贴：纸笔口径禁用（卷面 Pasted 违规）".to_string());
+            continue;
+        }
+        let Event::Key(key) = event else {
             continue;
         };
         if key.kind != KeyEventKind::Press {

@@ -91,6 +91,8 @@ pub async fn hand_in(&self, sheet) -> Result<EssayGrade>;                  // vi
 pub fn typing_speed(&self, sheet) -> f32;                                  // 04-typing 复用
 ```
 
+> **M5-W8 落地形态（2026-09-29）**：sheet 纯件在 writing（ExamSheet 字段补全 `prompt/body/started_at/deadline/pasted`；`exam_sheet(prompt, body, started_at)`、`sheet_violations(sheet, now)`、`typing_speed(sheet, now)` 均为纯函数——`&self` 委托在 engine 门面）；`hand_in(sheet, now) -> Result<GradeResult, Vec<Violation>>`（**violations 非空 = 拒收不评分**，`GradeResult` 替代未定义的 `EssayGrade`——02 §2 essay_grades payload 同构口径；违规注入 Comments 批注流随手交屏接线随 M6 闭环完善）；字数红线取 `EssayPrompt.word_range`（0=不设限）、超时按 `now ≥ deadline`、Pasted 由 TUI 粘贴事件反馈先行（`main` 收 `Event::Paste` → 错误行）。
+
 ## 6. 验证点
 
 - [ ] 三阶段渲染快照；verify_upgrade 拦语义走样；veto 降档；annotate 缓存；个人模板→SRS 卡；
