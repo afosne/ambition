@@ -24,6 +24,14 @@ pub enum KeyCtx {
     Picker,
     /// 模板作文屏（F2，M5-W4b）：↑↓选模板 · Tab换槽 · Space阶段 · Enter成文 · Ctrl+S自查 · Esc 返回
     Scaffold,
+    /// 翻译工作台主屏（M5-W7：源文输入与译文动作）
+    Tx,
+    /// 对照对齐屏（只读切段）
+    TxAlign,
+    /// 我来翻屏（输入我的译文）
+    TxMyTurn,
+    /// 翻译历史屏（选择/收藏/转练习）
+    TxHistory,
 }
 
 /// 键位 → 消息（唯一键位表；docs/03 §5.3）
@@ -35,6 +43,8 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
             KeyCode::Char('q') | KeyCode::Char('c') => Some(Msg::Quit),
             // 屏幕直达（docs/03 §5.3 直达表落地：Practice=Ctrl+A、Review=Ctrl+R；其余屏随后续阶段）
             KeyCode::Char('a') => Some(Msg::Screen(Screen::Practice)),
+            // M5-W7：翻译工作台直达（W 不在直达表保留字内，docs/03 §5.3）
+            KeyCode::Char('w') => Some(Msg::Screen(Screen::Tx)),
             KeyCode::Char('r') => Some(Msg::Screen(Screen::Review)),
             // M5-W6：开模考（上下文层语义——Ctrl+M 仅答题/完成态可开卷，docs/03 §5.3 直达表）
             KeyCode::Char('m')
@@ -54,6 +64,10 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Review => Some(Msg::Screen(Screen::Practice)), // 复习屏返回答题
                 KeyCtx::Picker => Some(Msg::TogglePicker), // 面板返回答题
                 KeyCtx::Scaffold => Some(Msg::Screen(Screen::Practice)), // 模板屏返回答题
+                KeyCtx::Tx => Some(Msg::Screen(Screen::Practice)), // 工作台返回答题
+                KeyCtx::TxAlign | KeyCtx::TxMyTurn | KeyCtx::TxHistory => {
+                    Some(Msg::Screen(Screen::Tx)) // 子屏回主屏
+                }
                 _ => Some(Msg::Quit),
             };
         }
@@ -65,6 +79,10 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Review => Msg::Flip, // 复习屏 Enter=翻面
                 KeyCtx::Picker => Msg::Jump, // 面板 Enter=跳转到选中题
                 KeyCtx::Scaffold => Msg::ScaffoldRender, // 模板屏 Enter=套槽成文
+                KeyCtx::TxAlign => Msg::TxAlign, // 对齐视图 Enter=重对齐
+                KeyCtx::Tx => Msg::TxTranslate, // 工作台 Enter=翻译
+                KeyCtx::TxMyTurn => Msg::TxMyTurnSubmit, // 我来翻 Enter=对照评分
+                KeyCtx::TxHistory => Msg::TxToPractice, // 历史 Enter=转练习题
             });
         }
         _ => {}
@@ -111,6 +129,17 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
         // 面板内列表导航
         (KeyCtx::Picker, KeyCode::Down) => Some(Msg::MoveDown),
         (KeyCtx::Picker, KeyCode::Up) => Some(Msg::MoveUp),
+        // —— 翻译工作台族（M5-W7，docs/11 §2；Enter/Esc 在②中心分化）——
+        (KeyCtx::Tx, KeyCode::F(5)) => Some(Msg::TxAlign),
+        (KeyCtx::Tx, KeyCode::F(6)) => Some(Msg::TxMyTurnOpen),
+        (KeyCtx::Tx, KeyCode::F(7)) => Some(Msg::TxHistoryOpen),
+        (KeyCtx::Tx, KeyCode::Char(c)) => Some(Msg::Char(c)),
+        (KeyCtx::Tx, KeyCode::Backspace) => Some(Msg::Backspace),
+        (KeyCtx::TxMyTurn, KeyCode::Char(c)) => Some(Msg::Char(c)),
+        (KeyCtx::TxMyTurn, KeyCode::Backspace) => Some(Msg::Backspace),
+        (KeyCtx::TxHistory, KeyCode::Up) => Some(Msg::TxHistoryUp),
+        (KeyCtx::TxHistory, KeyCode::Down) => Some(Msg::TxHistoryDown),
+        (KeyCtx::TxHistory, KeyCode::Char(' ')) => Some(Msg::TxToggleFavorite),
         // 判分后批注（M5-W5，F4——动作键走 F 区；Ctrl+E 保留 Writing 直达，docs/03 §5.3）
         (KeyCtx::Graded, KeyCode::F(4)) => Some(Msg::Annotate),
         // 模板作文屏（M5-W4b，docs/03 §5.3 scaffold 族）
@@ -148,6 +177,14 @@ pub fn hint(ctx: KeyCtx) -> &'static str {
             " Space/Enter 翻面 · 1-4 评分（Again/Hard/Good/Easy）· Tab/Esc 返回答题 · Ctrl+Q 退出"
         }
         KeyCtx::Picker => " ↑/↓ 选择题目 · Enter 跳转 · Esc/F1 返回 · Ctrl+Q 退出",
+        KeyCtx::Tx => {
+            " 打字输入源文 · Enter 翻译 · F5 对齐 · F6 我来翻 · F7 历史 · Esc 返回 · Ctrl+Q 退出"
+        }
+        KeyCtx::TxAlign => {
+            " 对照切段（literal/idiomatic/reordered/omitted）· Esc 返回 · Ctrl+Q 退出"
+        }
+        KeyCtx::TxMyTurn => " 打字输入你的译文 · Enter 对照评分 · Esc 返回 · Ctrl+Q 退出",
+        KeyCtx::TxHistory => " ↑/↓ 选择 · Enter 转练习 · Space 收藏/取消 · Esc 返回 · Ctrl+Q 退出",
         KeyCtx::Scaffold => {
             " ↑/↓ 选模板 · Tab/←→ 换槽 · Space 切阶段 · Enter 成文 · F3 自查 · Esc 返回 · Ctrl+Q 退出"
         }

@@ -10,7 +10,8 @@ use ambition_engine::{Engine, Rating};
 use ambition_tui::{
     Cmd, ReviewCard, Screen, apply_error, apply_grade, apply_mock_finish, apply_mock_start,
     apply_review_cards, apply_review_rated, apply_scaffold_check, apply_scaffold_result,
-    apply_scaffold_templates, apply_srs_hint, key_to_msg, new_state, render, update,
+    apply_scaffold_templates, apply_srs_hint, apply_tx_align, apply_tx_compare, apply_tx_history,
+    apply_tx_practice, apply_tx_result, key_to_msg, new_state, render, tx_opts, update,
 };
 use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::terminal::{
@@ -46,11 +47,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     execute!(stdout, EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
 
-    // finished（答题组完成）后仍可进复习屏/模板屏（Ctrl+R/Tab、F2），直到显式退出
+    // finished 后仍可驻留非答题屏（复习/模板/模考/翻译工作台族，M5-W4..W7），直到显式退出
     while !state.finished
-        || state.screen == Screen::Review
-        || state.screen == Screen::Scaffold
-        || state.screen == Screen::Mock
+        || matches!(
+            state.screen,
+            Screen::Review
+                | Screen::Scaffold
+                | Screen::Mock
+                | Screen::Tx
+                | Screen::TxAlign
+                | Screen::TxMyTurn
+                | Screen::TxHistory
+        )
     {
         terminal.draw(|f| render(f, &state))?;
         let Event::Key(key) = event::read()? else {
@@ -184,6 +192,72 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         state.comments = Some(comments);
                         state.error = None;
                     }
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::TxTranslate => {
+                let opts = tx_opts();
+                match engine.translate(&state.tx_source, &opts).await {
+                    Ok(tx) => apply_tx_result(&mut state, tx),
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::TxAlign => {
+                // 参考译文 = 同句出译（llm 缓存命中即回）→ 段级对齐（docs/11 §2）
+                let opts = tx_opts();
+                let source = state.tx_source.clone();
+                match engine.translate(&source, &opts).await {
+                    Ok(reference) => {
+                        match engine
+                            .translate_align(&source, &reference.target, &opts)
+                            .await
+                        {
+                            Ok(alignment) => apply_tx_align(&mut state, alignment),
+                            Err(err) => apply_error(&mut state, err.to_string()),
+                        }
+                    }
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::TxMyTurn => {
+                let opts = tx_opts();
+                let source = state.tx_source.clone();
+                let mine = state.tx_mine.clone();
+                match engine.translate_my_turn(&source, &mine, &opts).await {
+                    Ok(compare) => apply_tx_compare(&mut state, compare),
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::TxHistory => match engine.translate_history(None, 50).await {
+                Ok(list) => match engine.translate_favorites().await {
+                    Ok(favorites) => apply_tx_history(&mut state, list, favorites),
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                },
+                Err(err) => apply_error(&mut state, err.to_string()),
+            },
+            Cmd::TxFavorite => {
+                let Some(tx) = state.tx_history.get(state.tx_sel).cloned() else {
+                    continue;
+                };
+                let on = !state.tx_favorites.contains(&tx.tx_id);
+                match engine.translate_favorite(&tx.tx_id, on).await {
+                    Ok(()) => {
+                        if on {
+                            state.tx_favorites.push(tx.tx_id);
+                        } else {
+                            state.tx_favorites.retain(|id| *id != tx.tx_id);
+                        }
+                        state.error = None;
+                    }
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::TxToPractice => {
+                let Some(tx) = state.tx_history.get(state.tx_sel).cloned() else {
+                    continue;
+                };
+                match engine.translate_to_practice(&tx.tx_id).await {
+                    Ok(question) => apply_tx_practice(&mut state, question),
                     Err(err) => apply_error(&mut state, err.to_string()),
                 }
             }

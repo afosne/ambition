@@ -129,6 +129,15 @@ impl Engine {
         Ok(())
     }
 
+    /// 收藏 id 列表（历史屏 Space 乐观切换的依据，docs/03 translate_favorites）
+    pub async fn translate_favorites(&self) -> Result<Vec<String>, EngineError> {
+        Ok(ambition_store::favorite_translations(&self.pool)
+            .await?
+            .into_iter()
+            .map(|t| t.tx_id)
+            .collect())
+    }
+
     /// 句转练习（工作台句 → Translation 题；tag from:tx 随卷可溯源，docs/11 §2）
     pub async fn translate_to_practice(&self, tx_id: &str) -> Result<Question, EngineError> {
         let tx = ambition_store::get_translation(&self.pool, tx_id)
@@ -241,6 +250,33 @@ mod tests {
             .await
             .expect("收藏列表");
         assert!(favs.is_empty(), "取消后清空");
+    }
+
+    #[tokio::test]
+    async fn test_translate_favorites_returns_only_favorited_ids() {
+        let engine = Engine::open_memory().await.expect("打开内存库");
+        let tx = ambition_core::Translation {
+            tx_id: "tx-fav".to_string(),
+            source: "我喜欢春天。".to_string(),
+            target: "I like spring.".to_string(),
+            dir: ambition_core::TranslationDirection {
+                from: ambition_core::LangTag("zh-Hans".to_string()),
+                to: ambition_core::LangTag::english(),
+            },
+            model: "stub".to_string(),
+            glossary_hits: 0,
+        };
+        ambition_store::insert_translation(&engine.pool, &tx)
+            .await
+            .expect("落译文");
+        ambition_store::favorite_tx(&engine.pool, "tx-fav", true)
+            .await
+            .expect("收藏");
+        assert_eq!(
+            engine.translate_favorites().await.expect("收藏列表"),
+            vec!["tx-fav".to_string()],
+            "仅收藏 id"
+        );
     }
 
     #[tokio::test]

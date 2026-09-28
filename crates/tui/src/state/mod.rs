@@ -7,6 +7,8 @@ pub mod review;
 pub use review::*;
 
 use crate::*;
+use ambition_core::Translation;
+use ambition_translate::{Alignment, CompareResult};
 use ambition_writing::{Comments, ScaffoldCheck, ScaffoldStage, Template};
 
 /// 屏幕（M4：Practice + Review；完整 Screen 集见 docs/03-engine-ui）
@@ -19,6 +21,14 @@ pub enum Screen {
     Scaffold,
     /// 模考屏（M5-W6，docs/03 §5.3 Ctrl+M 直达；Practice 同流作答 + 屏顶倒计时）
     Mock,
+    /// 翻译工作台主屏（M5-W7，docs/11；Ctrl+W 直达）
+    Tx,
+    /// 对照对齐屏（source↔reference 切段视图）
+    TxAlign,
+    /// 我来翻屏（输入我的译文 → 差异+评分）
+    TxMyTurn,
+    /// 翻译历史屏（检索 + 收藏 + 转练习）
+    TxHistory,
 }
 
 /// 模考 run 元数据（M5-W6：屏顶倒计时/收卷后得分展示；行数据在 store::paper_runs）
@@ -84,89 +94,32 @@ pub struct AppState {
     pub mock: Option<MockRun>,
     /// 模考得分（engine::mock_finish 回填：(实得, 满分)）
     pub mock_result: Option<(f32, f32)>,
+    // —— 翻译工作台（M5-W7，docs/11）——
+    /// 主屏源文输入（Enter 发 translate）
+    pub tx_source: String,
+    /// 我来翻的输入译文
+    pub tx_mine: String,
+    /// 当前译文（translate 结果；align/my_turn 的参考）
+    pub tx_result: Option<Translation>,
+    /// 对齐切段视图（TxAlign 展示）
+    pub tx_align: Option<Alignment>,
+    /// 我来翻对照（参考 + 差异 + 评分）
+    pub tx_compare: Option<CompareResult>,
+    /// 历史列表（TxHistory；limit 倒序）
+    pub tx_history: Vec<Translation>,
+    /// 收藏 id 集（history 载入时一并回填，Space 切换乐观更新）
+    pub tx_favorites: Vec<String>,
+    /// 历史选中下标
+    pub tx_sel: usize,
     /// 判分后批注（Ctrl+E 回填；M5-W5 docs/10 §2，随题清空）
     pub comments: Option<Comments>,
     /// 最近一次提交的文本作答（作文/翻译批注输入；随题清空）
     pub submitted_text: Option<String>,
 }
 
-/// 输入消息
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Msg {
-    MoveDown,
-    MoveUp,
-    Submit,
-    Next,
-    Quit,
-    /// 填空输入行追加字符
-    Char(char),
-    /// 填空输入行退格
-    Backspace,
-    /// 人工裁决：确认当前高亮的待裁定裁决（arbitration_sel 0=判对 / 1=判错 → Cmd::Arbitrate）
-    ConfirmArbitrate,
-    /// 自评把握 1-4
-    Confidence(u8),
-    /// Space 选中/取消（选择题；单选无意义，多选=切换）
-    Select,
-    /// Esc 退出编辑（保留已输入；打字直接恢复编辑）
-    StopEdit,
-    /// 切屏（Ctrl+A/Ctrl+R 直达、Tab 进出复习屏，docs/03 §5.3）
-    Screen(Screen),
-    /// 复习屏翻面（Space/Enter）
-    Flip,
-    /// 复习屏评分（1-4 = Again/Hard/Good/Easy）
-    Rate(u8),
-    /// 跳过/下一题（→，不判分；docs/03 §5.3 2026-09-27 修订）
-    Skip,
-    /// 上一题（←，状态复位已作答不保留）
-    Prev,
-    /// F1 选题面板开/关
-    TogglePicker,
-    /// 面板内跳转（Enter）
-    Jump,
-    /// 模板屏：上/下一个模板（↑/↓）
-    ScaffoldUp,
-    ScaffoldDown,
-    /// 模板屏：三阶段循环（Space）
-    ScaffoldStage,
-    /// 模板屏：槽位前/后移（Tab/Shift+Tab、←/→）
-    ScaffoldSlotNext,
-    ScaffoldSlotPrev,
-    /// 模板屏：套槽成文（Enter → Cmd::ScaffoldRender）
-    ScaffoldRender,
-    /// 模板屏：草稿自查（Ctrl+S → Cmd::ScaffoldCheck）
-    ScaffoldCheck,
-    /// 批注（Ctrl+E，判分后作文/翻译 → Cmd::Annotate(文本)）
-    Annotate,
-    /// 开模考（Ctrl+M；M5-W6，docs/03 §5.3）
-    MockStart,
-}
+mod msg;
 
-/// 状态机输出（Quit/Submit 由 main 执行副作用）
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Cmd {
-    None,
-    Quit,
-    Submit(Answer),
-    /// 人工裁决（main 调 engine.resolve_pending）
-    Arbitrate(bool),
-    /// 加载复习队列（main 调 engine.due_list）
-    ReviewLoad,
-    /// 复习评分（main 调 engine.review_answer；u8 = 1-4 档）
-    ReviewRate(u8),
-    /// 装载模板列表（main 调 engine.templates）
-    ScaffoldLoad,
-    /// 套槽成文（main 调 engine.render_template）
-    ScaffoldRender,
-    /// 草稿自查（main 调 engine.check_scaffold）
-    ScaffoldCheck,
-    /// 批注（main 调 engine.annotate；携带提交文本）
-    Annotate(String),
-    /// 开卷（main → engine::mock_start；回填 apply_mock_start）
-    MockStart,
-    /// 交卷（末题 Next 触发；main → engine::mock_finish → apply_mock_finish）
-    MockFinish,
-}
+pub use msg::{Cmd, Msg};
 
 /// 题目空位数（填空类 = blanks 数；其它题型 = 0——inputs 长度据此重建；M4 题型补全含完形/语法填空）
 pub(crate) fn blank_count(kind: &QuestionKind) -> usize {
@@ -210,6 +163,14 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         scaffold_check: None,
         mock: None,
         mock_result: None,
+        tx_source: String::new(),
+        tx_mine: String::new(),
+        tx_result: None,
+        tx_align: None,
+        tx_compare: None,
+        tx_history: Vec::new(),
+        tx_favorites: Vec::new(),
+        tx_sel: 0,
         comments: None,
         submitted_text: None,
     }

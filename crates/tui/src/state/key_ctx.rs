@@ -4,6 +4,17 @@ use crate::*;
 impl AppState {
     /// 键位上下文（keys.rs 唯一路由入参；键位表只此一份）
     pub fn key_ctx(&self) -> KeyCtx {
+        if matches!(
+            self.screen,
+            Screen::Tx | Screen::TxAlign | Screen::TxMyTurn | Screen::TxHistory
+        ) {
+            return match self.screen {
+                Screen::TxAlign => KeyCtx::TxAlign,
+                Screen::TxMyTurn => KeyCtx::TxMyTurn,
+                Screen::TxHistory => KeyCtx::TxHistory,
+                _ => KeyCtx::Tx,
+            };
+        }
         if self.screen == Screen::Scaffold {
             return KeyCtx::Scaffold;
         }

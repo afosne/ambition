@@ -9,6 +9,7 @@ pub mod picker_render;
 mod render_passage_tests;
 pub mod review_render;
 pub mod scaffold_render;
+pub mod tx_render;
 
 pub use picker_render::*;
 pub use review_render::*;
@@ -28,6 +29,14 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     }
     if state.screen == Screen::Scaffold {
         scaffold_render::render_scaffold(frame, state);
+        return;
+    }
+    // 翻译工作台族（M5-W7：Tx/TxAlign/TxMyTurn/TxHistory 共用入口）
+    if matches!(
+        state.screen,
+        Screen::Tx | Screen::TxAlign | Screen::TxMyTurn | Screen::TxHistory
+    ) {
+        tx_render::render_tx_frame(frame, state);
         return;
     }
     let mut text = String::from("Ambition · 拾英 —— 单机模式（本地题库）\n\n");

@@ -2,6 +2,62 @@
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_key_to_msg_translates_workbench_family() {
+        use crate::Screen;
+        use Msg::*;
+        assert_eq!(
+            key_to_msg(KeyCtx::Choice, K::Char('w'), M::CONTROL),
+            Some(Screen(Screen::Tx)),
+            "Ctrl+W 屏幕直达（直达表 W 保留给工作台）"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Tx, K::F(5), mods()),
+            Some(TxAlign),
+            "F5 对齐"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Tx, K::F(6), mods()),
+            Some(TxMyTurnOpen),
+            "F6 我来翻"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Tx, K::F(7), mods()),
+            Some(TxHistoryOpen),
+            "F7 历史"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Tx, K::Char('a'), mods()),
+            Some(Char('a')),
+            "字符直入源文"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Tx, K::Backspace, mods()),
+            Some(Backspace),
+            "退格"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::TxHistory, K::Up, mods()),
+            Some(TxHistoryUp),
+            "历史↑"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::TxHistory, K::Down, mods()),
+            Some(TxHistoryDown),
+            "历史↓"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::TxHistory, K::Char(' '), mods()),
+            Some(TxToggleFavorite),
+            "历史 Space=收藏"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::TxMyTurn, K::Char('x'), mods()),
+            Some(Char('x')),
+            "我来翻字符入译文"
+        );
+    }
+
     use super::super::*;
     use crossterm::event::{KeyCode as K, KeyModifiers as M};
 

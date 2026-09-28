@@ -5,6 +5,7 @@
 mod mock;
 mod nav;
 mod scaffold;
+mod tx;
 #[cfg(test)]
 mod update_passage_tests;
 #[cfg(test)]
@@ -15,6 +16,9 @@ use crate::*;
 
 pub use mock::{apply_mock_finish, apply_mock_start};
 pub use scaffold::{apply_scaffold_check, apply_scaffold_result, apply_scaffold_templates};
+pub use tx::{
+    apply_tx_align, apply_tx_compare, apply_tx_history, apply_tx_practice, apply_tx_result, tx_opts,
+};
 
 /// 纯状态机：键位语义见 keys.rs（唯一键位表），本层只做状态转移与防误触双保险
 pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
@@ -30,6 +34,10 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             // 进模板屏即装载模板列表（M5-W4b，异步回填经 apply_scaffold_templates）
             Cmd::ScaffoldLoad
         } else {
+            if target == Screen::Tx {
+                // 进工作台复位上下文（M5-W7；历史按 F7 懒加载）
+                tx::reset_tx(state);
+            }
             Cmd::None
         };
     }
@@ -91,6 +99,14 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
     // 模板作文屏独立状态机（M5-W4b，docs/03 §5.3 scaffold 族；须在 finished 守卫之前——完成态也可练模板）
     if state.screen == Screen::Scaffold {
         return scaffold::scaffold_update(state, msg);
+    }
+
+    // 翻译工作台族独立状态机（M5-W7；与 scaffold 同位：先于 finished 守卫——收卷后仍可进工作台）
+    if matches!(
+        state.screen,
+        Screen::Tx | Screen::TxAlign | Screen::TxMyTurn | Screen::TxHistory
+    ) {
+        return tx::tx_update(state, msg);
     }
     if state.finished {
         if matches!(msg, Msg::MockStart) {
@@ -423,6 +439,16 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                 }
             }
         }
+        // 工作台族消息在答题流程忽略（Tx* 屏前置状态机已拦截；防误触）
+        Msg::TxTranslate
+        | Msg::TxAlign
+        | Msg::TxMyTurnOpen
+        | Msg::TxMyTurnSubmit
+        | Msg::TxHistoryOpen
+        | Msg::TxHistoryUp
+        | Msg::TxHistoryDown
+        | Msg::TxToggleFavorite
+        | Msg::TxToPractice => Cmd::None,
         // 模板屏专属消息在答题流程忽略（顶部分支已拦截；防误触）
         Msg::ScaffoldUp
         | Msg::ScaffoldDown
