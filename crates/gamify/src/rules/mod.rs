@@ -17,6 +17,8 @@ pub fn on_event(event: &DomainEvent) -> Vec<GameEffect> {
         DomainEvent::ReviewDone { .. } => vec![GameEffect::Xp(1)],
         // M5：作文批改完成 → 大额经验、不进连击（docs/13：写作质量不受游戏影响）
         DomainEvent::EssayGraded { .. } => vec![GameEffect::Xp(5)],
+        // M5：模考交卷 → 更大额经验、不进连击（docs/13）
+        DomainEvent::PaperFinished { .. } => vec![GameEffect::Xp(10)],
     }
 }
 
@@ -113,6 +115,21 @@ mod tests {
             effects,
             vec![GameEffect::Xp(5)],
             "只经验不连击（docs/13 M5）"
+        );
+    }
+
+    #[test]
+    fn test_on_event_paper_finished_gives_big_xp_without_combo() {
+        let effects = on_event(&DomainEvent::PaperFinished {
+            run_id: "run-1".into(),
+            paper_id: "p-1".into(),
+            score: 30.0,
+            max: 40.0,
+        });
+        assert_eq!(
+            effects,
+            vec![GameEffect::Xp(10)],
+            "模考大额经验、不进连击（docs/13 M5）"
         );
     }
 

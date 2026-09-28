@@ -332,4 +332,96 @@ mod tests {
             Cmd::Submit(Answer::Text("Nowadays more students...".into()))
         );
     }
+
+    #[test]
+    fn test_annotate_gates_on_grade_kind_and_submitted_text() {
+        let mut s = new_state(vec![crate::sample_question()]);
+        s.grade = Some(ambition_core::GradeResult {
+            verdict: ambition_core::Verdict::Correct,
+            score: 1.0,
+            max: 1.0,
+            confidence: 1.0,
+            graded_by: ambition_core::GradedBy::Human,
+            detail: ambition_core::GradeDetail::Plain,
+            error_tags: vec![],
+        });
+        s.submitted_text = Some("essay body".to_string());
+        assert_eq!(update(&mut s, Msg::Annotate), Cmd::None, "选择题不批注");
+
+        let essay = Question::new(
+            "Write an essay.".into(),
+            QuestionKind::Essay(ambition_core::EssayPrompt {
+                prompt_zh: "题面".into(),
+                genre: "argument".into(),
+                track: "cet4".into(),
+                rubric_id: "gaokao25".into(),
+                word_range: (120, 180),
+                minutes: 30,
+            }),
+            3,
+            vec!["essay".to_string()],
+            ambition_core::Provenance::Seed,
+        );
+        s.questions = vec![essay];
+        s.idx = 0;
+        assert_eq!(
+            update(&mut s, Msg::Annotate),
+            Cmd::Annotate("essay body".into()),
+            "判分后作文题 → 携带文本"
+        );
+
+        s.submitted_text = None;
+        assert_eq!(update(&mut s, Msg::Annotate), Cmd::None, "无文本不发 Cmd");
+        assert!(
+            s.error.as_deref().unwrap_or_default().contains("批注"),
+            "空文本错误行可见"
+        );
+    }
+
+    #[test]
+    fn test_mock_start_gates_mid_exam_and_allows_restart() {
+        let mut s = new_state(vec![crate::sample_question()]);
+        s.screen = Screen::Mock;
+        s.mock = Some(MockRun {
+            run_id: "r1".into(),
+            title: "t".into(),
+            deadline: 0,
+        });
+        assert_eq!(update(&mut s, Msg::MockStart), Cmd::None, "卷中同屏防重开");
+        s.finished = true;
+        assert_eq!(
+            update(&mut s, Msg::MockStart),
+            Cmd::MockStart,
+            "收卷后可直开新卷"
+        );
+        s.screen = Screen::Practice;
+        s.mock = None;
+        assert_eq!(update(&mut s, Msg::MockStart), Cmd::MockStart, "练习屏开卷");
+    }
+
+    #[test]
+    fn test_next_on_mock_last_answer_emits_mock_finish() {
+        let mut s = new_state(vec![crate::sample_question()]);
+        s.screen = Screen::Mock;
+        s.mock = Some(MockRun {
+            run_id: "r1".into(),
+            title: "t".into(),
+            deadline: 0,
+        });
+        s.grade = Some(ambition_core::GradeResult {
+            verdict: ambition_core::Verdict::Correct,
+            score: 1.0,
+            max: 1.0,
+            confidence: 1.0,
+            graded_by: ambition_core::GradedBy::Rule,
+            detail: ambition_core::GradeDetail::Plain,
+            error_tags: vec![],
+        });
+        assert_eq!(
+            update(&mut s, Msg::Next),
+            Cmd::MockFinish,
+            "末题 Next 即交卷"
+        );
+        assert!(s.finished, "已推进到完成态");
+    }
 }

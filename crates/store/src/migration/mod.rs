@@ -122,10 +122,32 @@ const MIGRATIONS: &[(i32, &str)] = &[
     (2, MIGRATION_V2),
     (3, MIGRATION_V3),
     (4, MIGRATION_V4),
+    (5, MIGRATION_V5),
 ];
 
+/// v5（M5-W6）：papers/paper_runs（组卷+模考 run——估分数据就绪；predict_score 唯一在 docs/12，M6，docs/02 §2）
+const MIGRATION_V5: &str = r#"
+CREATE TABLE IF NOT EXISTS papers (
+    paper_id   TEXT PRIMARY KEY,
+    track      TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    payload    TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS paper_runs (
+    run_id      TEXT PRIMARY KEY,
+    paper_id    TEXT NOT NULL,
+    started_at  INTEGER NOT NULL,
+    deadline    INTEGER NOT NULL,
+    finished_at INTEGER,
+    score       REAL NOT NULL DEFAULT 0,
+    max         REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_paper_runs_finished ON paper_runs (finished_at);
+"#;
+
 /// 当前目标 schema 版本（清单最大号）
-pub const SCHEMA_VERSION: i32 = 4;
+pub const SCHEMA_VERSION: i32 = 5;
 
 /// 建库 + 迁移（幂等：已到目标版本则跳过；docs/02-core-store §2）
 pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {

@@ -10,6 +10,7 @@ pub enum GameEffect { Xp(i32), Coins(i32), ComboUp, ComboBreak, StreakAdvanced, 
 pub fn on_event(&self, ev: &DomainEvent) -> Vec<GameEffect>;   // 事件→效果映射表；apply 幂等（event_id 去重）
 // M4：ReviewDone → Xp(1)（复习即反馈、只给小额经验，不进连击——排程不受游戏影响，§原则）
 // M5：EssayGraded → Xp(5)（完成大作文/批改闭环强反馈；只经验不连击——写作质量不受游戏影响，同 §原则）
+// M5：PaperFinished → Xp(10)（模考交卷大事件；只经验不连击——应试状态不受游戏影响，同 §原则；徽章「模考上岸」随后续阶段）
 pub fn round_settle(&self, r: &RoundResult) -> Vec<GameEffect>;   // 所有游戏/对战统一结算口
 // 进度：level_of(xp) / streak_update(Advance|FreezeUsed|Reset 从轻) / check_badges（词汇里程碑/错题清零/模考上岸/盲打通关/写作连优）
 // 学习地图：node_status（知识点=关卡，错题变式=复仇战，模考=Boss）/ boss_round(paper)

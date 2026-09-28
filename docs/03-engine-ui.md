@@ -50,6 +50,7 @@ pub async fn open(cfg: Config) -> Result<Engine>;   // 开库/迁移/静态数�
 // 要点：unicode-width CJK 折行；答题组件（题干/选项/填空光标/判分视图）；打字组件复用 04-typing；游戏全 TUI 可玩
 // M2：判题失败 → 独立错误行（≠ Pending 态，P-8）；填空题输入行（采集→ Answer::Fill）；提交计时 → timing（假对检测输入，#5 半步）
 // M4：Tab 切 Practice↔Review 复习屏（Space/Enter 翻面 · 1-4 = Again/Hard/Good/Easy · Esc/Tab 返回；无 Home 屏故 `3` 直达键随 M6）——已落地：Screen::Review + KeyCtx::Review + Cmd::ReviewLoad/ReviewRate（due_list limit 20/轮，评分失败独立错误行）；
+// M5-W6：`Ctrl+M` 开模考卷（engine.mock_start 组卷+起 run+倒计时）· 答题键与练习屏同流（attempts/grades 正常落库=回归样本）· **末题 Enter/→ 即交卷**（Cmd::MockFinish：paper_score 每 qid 最新一答求和 → finish_run + PaperFinished）· 完成屏显示本次得分（估分唯一随 M6 = 12::predict_score）· 中途退出 run 留 started（MVP 口径）；
 //   判分后 SRS 提示行（错词本入册/假对进卡/FSRS 已安排，apply_srs_hint）——已落地
 // Web（React+TS，OpenAPI 生成客户端）：页面↔Screen 一一对应；TanStack Query
 ```

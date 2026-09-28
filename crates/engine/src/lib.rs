@@ -8,6 +8,7 @@ mod assembly;
 #[cfg(test)]
 mod common;
 mod essay;
+mod paper;
 mod practice;
 mod scaffold;
 mod srs;
@@ -19,12 +20,16 @@ pub use ambition_srs::{CardAction, Rating};
 pub use ambition_store::ArbitrationRow;
 pub use assembly::ai::{AiConfig, LLM_CACHE_TTL_SECS};
 pub use assembly::ledger::StoreLedger;
+pub use paper::MockSession;
 pub use srs::lexicon::{ExamplePair, Pattern, Sense};
 
 use std::path::Path;
 use std::sync::Mutex;
 
-use ambition_core::{Answer, Attempt, DomainEvent, EventBus, GradeResult, Question, Verdict};
+use ambition_core::{
+    Answer, Attempt, DomainEvent, EventBus, GradeResult, Paper, PaperSection, PaperSpec, Question,
+    Verdict,
+};
 use ambition_gamify::GameProjector;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::str::FromStr;
@@ -50,6 +55,9 @@ pub enum EngineError {
     Jev(#[from] ambition_jev::JevError),
     #[error("llm: {0}")]
     Llm(#[from] ambition_llm::LlmError),
+    /// 套卷（组卷不足/规格错——M5-W6）
+    #[error("paper: {0}")]
+    Paper(String),
 }
 
 /// Jev 错误跨层映射（离线 → 配置提示口径；其余带源可见，P-8 不伪造，scaffold/essay 共用）

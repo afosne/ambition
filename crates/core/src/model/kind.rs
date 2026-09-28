@@ -113,6 +113,21 @@ impl QuestionKind {
         }
     }
 
+    /// kind 键（与 seed/qpack 的 kind 名一致：single_choice…essay——组卷按 kind 过滤的唯一口径，docs/06 §6）
+    pub fn kind_key(&self) -> &'static str {
+        match self {
+            Self::SingleChoice(_) => "single_choice",
+            Self::MultiChoice(_) => "multi_choice",
+            Self::FillBlank(_) => "fill_blank",
+            Self::Cloze(_) => "cloze",
+            Self::Reading(_) => "reading",
+            Self::SevenOfFive(_) => "seven_of_five",
+            Self::GrammarFill(_) => "grammar_fill",
+            Self::Translation(_) => "translation",
+            Self::Essay(_) => "essay",
+        }
+    }
+
     /// 空位数（填空类 + 完形/语法填空；选择类 0——TUI inputs 长度据此重建）
     pub fn blank_count(&self) -> usize {
         match self {
@@ -177,6 +192,42 @@ mod tests {
             })
             .is_text_input(),
             "选择类不是文本输入"
+        );
+    }
+
+    #[test]
+    fn test_kind_key_matches_seed_kind_names() {
+        assert_eq!(
+            QuestionKind::FillBlank(crate::FillBody {
+                sentence: String::new(),
+                blanks: vec![BlankItem { acceptable: vec![] }],
+            })
+            .kind_key(),
+            "fill_blank"
+        );
+        assert_eq!(
+            QuestionKind::Translation(crate::TranslationBody {
+                direction: crate::TranslationDirection {
+                    from: crate::LangTag("zh".into()),
+                    to: crate::LangTag("en".into()),
+                },
+                source_text: String::new(),
+                reference: String::new(),
+            })
+            .kind_key(),
+            "translation"
+        );
+        assert_eq!(
+            QuestionKind::Essay(crate::EssayPrompt {
+                prompt_zh: String::new(),
+                genre: "argument".into(),
+                track: "cet4".into(),
+                rubric_id: "gaokao25".into(),
+                word_range: (80, 120),
+                minutes: 30,
+            })
+            .kind_key(),
+            "essay"
         );
     }
 

@@ -8,9 +8,9 @@ use std::path::PathBuf;
 use ambition_core::{Attempt, AttemptMode, now_unix};
 use ambition_engine::{Engine, Rating};
 use ambition_tui::{
-    Cmd, ReviewCard, Screen, apply_error, apply_grade, apply_review_cards, apply_review_rated,
-    apply_scaffold_check, apply_scaffold_result, apply_scaffold_templates, apply_srs_hint,
-    key_to_msg, new_state, render, update,
+    Cmd, ReviewCard, Screen, apply_error, apply_grade, apply_mock_finish, apply_mock_start,
+    apply_review_cards, apply_review_rated, apply_scaffold_check, apply_scaffold_result,
+    apply_scaffold_templates, apply_srs_hint, key_to_msg, new_state, render, update,
 };
 use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::terminal::{
@@ -47,7 +47,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
 
     // finished（答题组完成）后仍可进复习屏/模板屏（Ctrl+R/Tab、F2），直到显式退出
-    while !state.finished || state.screen == Screen::Review || state.screen == Screen::Scaffold {
+    while !state.finished
+        || state.screen == Screen::Review
+        || state.screen == Screen::Scaffold
+        || state.screen == Screen::Mock
+    {
         terminal.draw(|f| render(f, &state))?;
         let Event::Key(key) = event::read()? else {
             continue;
@@ -180,6 +184,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         state.comments = Some(comments);
                         state.error = None;
                     }
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::MockStart => match engine.mock_start().await {
+                Ok(session) => apply_mock_start(&mut state, session),
+                Err(err) => apply_error(&mut state, err.to_string()),
+            },
+            Cmd::MockFinish => {
+                // 交卷（run 元数据来自开卷回填；store 最新一答口径计分，M5-W6）
+                let Some(run) = state.mock.clone() else {
+                    continue;
+                };
+                match engine.mock_finish(&run.run_id).await {
+                    Ok((score, max)) => apply_mock_finish(&mut state, score, max),
                     Err(err) => apply_error(&mut state, err.to_string()),
                 }
             }

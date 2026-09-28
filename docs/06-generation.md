@@ -66,6 +66,12 @@ pub fn parse_qpack(bytes: &[u8]) -> Result<QPack>;                          // s
 pub async fn import_qpack(&self, pack: &QPack) -> Result<ImportReport>;    // 去重/低质拒绝（quality_score < θ 丢弃）
 pub async fn export_qpack(&self, tags: &[String]) -> Result<QPack>;        // 从题库按标签导出（空标签=全量）
 pub async fn assemble_paper(&self, spec: &PaperSpec) -> Result<Paper>;     // 只取 quality_score ≥ θ（M5 套卷）
+// —— M5-W6 落地契约（2026-09-28，类型在 gen::content::paper、门面在 engine::paper）——
+pub struct PaperSection { pub title: String, pub kinds: Vec<String>, pub count: u16, pub points_each: f32 }  // kinds = kind_key（single_choice…essay）
+pub struct PaperSpec { pub track: String, pub title: String, pub sections: Vec<PaperSection>, pub minutes: u16 }
+pub struct Paper { pub paper_id: String, pub spec: PaperSpec, pub qids: Vec<String> }
+// 组卷口径：θ = IMPORT_QUALITY_FLOOR（0.6，与 qpack 导入同源）；逐 section 按 kinds 过滤、qid 序稳定取用（可复现）；
+// 题量不足 → EngineError::Paper；paper_id = canonical_json_hash(spec)（同规格同卷，upsert 幂等）
 // seed：data/seed/<lang>/<track>/*.qpack.json（内置离线内容包，16-config §3）；open() 时幂等导入
 ```
 

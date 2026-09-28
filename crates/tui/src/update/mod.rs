@@ -2,6 +2,7 @@
 //! 本域含配对测试子组件：`update::update_tests`（状态机）/ `update::update_passage_tests`（语篇作答）。
 //! 跨域引用一律 `use crate::*`（组内共享导入留在 lib.rs，docs/01 §1 组织规范）。
 
+mod mock;
 mod nav;
 mod scaffold;
 #[cfg(test)]
@@ -12,6 +13,7 @@ mod update_tests;
 use self::nav::{advance_question, reset_question_state};
 use crate::*;
 
+pub use mock::{apply_mock_finish, apply_mock_start};
 pub use scaffold::{apply_scaffold_check, apply_scaffold_result, apply_scaffold_templates};
 
 /// 纯状态机：键位语义见 keys.rs（唯一键位表），本层只做状态转移与防误触双保险
@@ -91,11 +93,15 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
         return scaffold::scaffold_update(state, msg);
     }
     if state.finished {
-        return if matches!(msg, Msg::Quit) {
-            Cmd::Quit
+        if matches!(msg, Msg::MockStart) {
+            // 收卷完成态仍可开新卷（Ctrl+M；M5-W6）——落到主状态机
         } else {
-            Cmd::None
-        };
+            return if matches!(msg, Msg::Quit) {
+                Cmd::Quit
+            } else {
+                Cmd::None
+            };
+        }
     }
     match msg {
         Msg::Quit => Cmd::Quit,
@@ -370,11 +376,19 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                 return Cmd::None;
             }
             advance_question(state);
+            // 模考：末题 Next 即交卷（store 最新一答口径计分，M5-W6）
+            if state.finished && state.mock.is_some() {
+                return Cmd::MockFinish;
+            }
             Cmd::None
         }
         // → 跳过/下一题（不判分，docs/03 §5.3 2026-09-27）
         Msg::Skip => {
             advance_question(state);
+            // 模考：走完即交卷（未作答不计分，M5-W6）
+            if state.finished && state.mock.is_some() {
+                return Cmd::MockFinish;
+            }
             Cmd::None
         }
         // ← 上一题（首题原地；状态复位，已作答不保留——docs/03 §5.3 2026-09-27）
@@ -384,6 +398,13 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                 reset_question_state(state);
             }
             Cmd::None
+        }
+        // 开模考（Ctrl+M；卷中同屏防重开，收卷/练习屏可开新卷——M5-W6）
+        Msg::MockStart => {
+            if state.screen == Screen::Mock && !state.finished {
+                return Cmd::None;
+            }
+            Cmd::MockStart
         }
         // 批注（M5-W5，Ctrl+E）：判分后 + 作文/翻译 + 有提交文本 → Cmd（其余静默防误触）
         Msg::Annotate => {
@@ -419,7 +440,6 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
 mod tests {
     use super::*;
     use ambition_core::Verdict;
-
     // 配对桩（同文件强制配对；完整场景测试在 update_tests.rs）
 
     #[test]
@@ -440,50 +460,5 @@ mod tests {
             error_tags: vec![],
         });
         assert_eq!(update(&mut s, Msg::Submit), Cmd::None, "已判分忽略提交");
-    }
-
-    #[test]
-    fn test_annotate_gates_on_grade_kind_and_submitted_text() {
-        let mut s = new_state(vec![crate::sample_question()]);
-        s.grade = Some(ambition_core::GradeResult {
-            verdict: ambition_core::Verdict::Correct,
-            score: 1.0,
-            max: 1.0,
-            confidence: 1.0,
-            graded_by: ambition_core::GradedBy::Human,
-            detail: ambition_core::GradeDetail::Plain,
-            error_tags: vec![],
-        });
-        s.submitted_text = Some("essay body".to_string());
-        assert_eq!(update(&mut s, Msg::Annotate), Cmd::None, "选择题不批注");
-
-        let essay = Question::new(
-            "Write an essay.".into(),
-            QuestionKind::Essay(ambition_core::EssayPrompt {
-                prompt_zh: "题面".into(),
-                genre: "argument".into(),
-                track: "cet4".into(),
-                rubric_id: "gaokao25".into(),
-                word_range: (120, 180),
-                minutes: 30,
-            }),
-            3,
-            vec!["essay".to_string()],
-            ambition_core::Provenance::Seed,
-        );
-        s.questions = vec![essay];
-        s.idx = 0;
-        assert_eq!(
-            update(&mut s, Msg::Annotate),
-            Cmd::Annotate("essay body".into()),
-            "判分后作文题 → 携带文本"
-        );
-
-        s.submitted_text = None;
-        assert_eq!(update(&mut s, Msg::Annotate), Cmd::None, "无文本不发 Cmd");
-        assert!(
-            s.error.as_deref().unwrap_or_default().contains("批注"),
-            "空文本错误行可见"
-        );
     }
 }

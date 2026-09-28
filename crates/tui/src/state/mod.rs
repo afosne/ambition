@@ -2,6 +2,7 @@
 //! 本域含子组件：`state::review`（复习屏状态，M4）。
 //! 跨域引用一律 `use crate::*`（组内共享导入留在 lib.rs，docs/01 §1 组织规范）。
 
+mod key_ctx;
 pub mod review;
 pub use review::*;
 
@@ -16,6 +17,16 @@ pub enum Screen {
     Review,
     /// 模板作文屏（M5-W4b，docs/03 §5.3 scaffold 族）
     Scaffold,
+    /// 模考屏（M5-W6，docs/03 §5.3 Ctrl+M 直达；Practice 同流作答 + 屏顶倒计时）
+    Mock,
+}
+
+/// 模考 run 元数据（M5-W6：屏顶倒计时/收卷后得分展示；行数据在 store::paper_runs）
+#[derive(Debug, Clone, PartialEq)]
+pub struct MockRun {
+    pub run_id: String,
+    pub title: String,
+    pub deadline: i64,
 }
 
 /// 应用状态
@@ -69,6 +80,10 @@ pub struct AppState {
     pub scaffold_result: Option<String>,
     /// 最近一次自查结果（Ctrl+S 回填）
     pub scaffold_check: Option<ScaffoldCheck>,
+    /// 模考元数据（开卷写入；收卷后保留供完成页展示，M5-W6）
+    pub mock: Option<MockRun>,
+    /// 模考得分（engine::mock_finish 回填：(实得, 满分)）
+    pub mock_result: Option<(f32, f32)>,
     /// 判分后批注（Ctrl+E 回填；M5-W5 docs/10 §2，随题清空）
     pub comments: Option<Comments>,
     /// 最近一次提交的文本作答（作文/翻译批注输入；随题清空）
@@ -123,6 +138,8 @@ pub enum Msg {
     ScaffoldCheck,
     /// 批注（Ctrl+E，判分后作文/翻译 → Cmd::Annotate(文本)）
     Annotate,
+    /// 开模考（Ctrl+M；M5-W6，docs/03 §5.3）
+    MockStart,
 }
 
 /// 状态机输出（Quit/Submit 由 main 执行副作用）
@@ -145,6 +162,10 @@ pub enum Cmd {
     ScaffoldCheck,
     /// 批注（main 调 engine.annotate；携带提交文本）
     Annotate(String),
+    /// 开卷（main → engine::mock_start；回填 apply_mock_start）
+    MockStart,
+    /// 交卷（末题 Next 触发；main → engine::mock_finish → apply_mock_finish）
+    MockFinish,
 }
 
 /// 题目空位数（填空类 = blanks 数；其它题型 = 0——inputs 长度据此重建；M4 题型补全含完形/语法填空）
@@ -187,6 +208,8 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         scaffold_slot: 0,
         scaffold_result: None,
         scaffold_check: None,
+        mock: None,
+        mock_result: None,
         comments: None,
         submitted_text: None,
     }
@@ -196,32 +219,6 @@ impl AppState {
     /// 当前题是否等待填空作答（有题、未判分、题型为填空）
     pub fn is_fill_pending(&self) -> bool {
         !self.finished && self.grade.is_none() && self.questions[self.idx].kind.is_text_input()
-    }
-
-    /// 键位上下文（keys.rs 唯一路由入参；键位表只此一份）
-    pub fn key_ctx(&self) -> KeyCtx {
-        if self.screen == Screen::Scaffold {
-            return KeyCtx::Scaffold;
-        }
-        if self.screen == Screen::Review {
-            return KeyCtx::Review;
-        }
-        if self.picker_open {
-            return KeyCtx::Picker;
-        }
-        if self.finished {
-            return KeyCtx::Finished;
-        }
-        match &self.grade {
-            Some(g) if g.verdict == ambition_core::Verdict::Pending => KeyCtx::Pending,
-            Some(_) => KeyCtx::Graded,
-            None if matches!(self.questions[self.idx].kind, QuestionKind::FillBlank(_)) => {
-                KeyCtx::Fill {
-                    editing: self.editing,
-                }
-            }
-            None => KeyCtx::Choice,
-        }
     }
 
     /// 采集本题计时（提交时调用；毫秒）
@@ -349,27 +346,6 @@ mod tests {
         fill.finished = true;
         assert!(!fill.is_fill_pending(), "结束后非待答");
     }
-
-    #[test]
-    fn test_key_ctx_routes_states() {
-        let choice = new_state(vec![sample_question()]);
-        assert_eq!(choice.key_ctx(), KeyCtx::Choice);
-        let mut fill = new_state(vec![fill_question(1)]);
-        assert_eq!(
-            fill.key_ctx(),
-            KeyCtx::Fill { editing: false },
-            "打字前未编辑（首键直接进编辑）"
-        );
-        fill.editing = true;
-        assert_eq!(fill.key_ctx(), KeyCtx::Fill { editing: true });
-        apply_grade(&mut fill, grade(Verdict::Pending));
-        assert_eq!(fill.key_ctx(), KeyCtx::Pending, "待裁定单独上下文");
-        apply_grade(&mut fill, grade(Verdict::Correct));
-        assert_eq!(fill.key_ctx(), KeyCtx::Graded);
-        fill.finished = true;
-        assert_eq!(fill.key_ctx(), KeyCtx::Finished);
-    }
-
     #[test]
     fn test_apply_error_keeps_grade_none_and_is_overwritten() {
         let mut s = new_state(vec![sample_question()]);

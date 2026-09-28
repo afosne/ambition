@@ -106,4 +106,24 @@ mod tests {
             "单字母 e 不批注（禁单字母快捷键）"
         );
     }
+
+    #[test]
+    fn test_key_to_msg_ctrl_m_opens_mock_from_practice_ctxs() {
+        use Msg::*;
+        assert_eq!(
+            key_to_msg(KeyCtx::Choice, K::Char('m'), M::CONTROL),
+            Some(MockStart),
+            "答题态开卷"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Graded, K::Char('m'), M::CONTROL),
+            Some(MockStart),
+            "判分态开卷"
+        );
+        assert_eq!(
+            key_to_msg(KeyCtx::Review, K::Char('m'), M::CONTROL),
+            None,
+            "非答题态不开卷"
+        );
+    }
 }

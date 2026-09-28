@@ -31,8 +31,31 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         return;
     }
     let mut text = String::from("Ambition · 拾英 —— 单机模式（本地题库）\n\n");
+    // 模考横幅（M5-W6：屏顶标题 + 倒计时——deadline 来自 run 行，docs/03 §5.3）
+    if state.screen == Screen::Mock
+        && let Some(mock) = &state.mock
+    {
+        let left = (mock.deadline - ambition_core::now_unix()).max(0);
+        text.push_str(&format!(
+            " 模拟考试 · {} · ⏱ 剩 {:02}:{:02}\n\n",
+            mock.title,
+            left / 60,
+            left % 60
+        ));
+    }
     if state.finished {
-        text.push_str("本组完成！按 Ctrl+Q 退出。\n");
+        if state.screen == Screen::Mock {
+            text.push_str("模考完成！Ctrl+Q 退出 · Ctrl+A 练习屏 · Ctrl+M 重开一卷。\n");
+            if let Some((score, max)) = state.mock_result {
+                text.push_str(&format!(
+                    " 模考得分：{score:.1} / {max}\n",
+                    score = score,
+                    max = max
+                ));
+            }
+        } else {
+            text.push_str("本组完成！按 Ctrl+Q 退出。\n");
+        }
     } else {
         let q = &state.questions[state.idx];
         text.push_str(&format!(
@@ -250,6 +273,23 @@ mod tests {
     use super::*;
     use crate::common::*;
     use ambition_core::Verdict;
+
+    #[test]
+    fn test_render_mock_shows_banner_countdown_and_score() {
+        let mut s = new_state(vec![crate::sample_question()]);
+        s.screen = Screen::Mock;
+        s.mock = Some(crate::MockRun {
+            run_id: "r1".into(),
+            title: "CET4 全真模考（MVP 卷）".into(),
+            deadline: ambition_core::now_unix() + 1800,
+        });
+        s.finished = true;
+        s.mock_result = Some((34.0, 40.0));
+        let out = crate::common::render_sized(&s, 76, 24);
+        assert!(out.contains("模拟考试"), "模考横幅: {out}");
+        assert!(out.contains('⏱'), "倒计时可见: {out}");
+        assert!(out.contains("34.0 / 40"), "得分行: {out}");
+    }
 
     #[test]
     fn test_render_essay_shows_prompt_and_red_lines() {

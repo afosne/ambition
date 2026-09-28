@@ -40,6 +40,12 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
             KeyCode::Char('s') if ctx == KeyCtx::Scaffold => Some(Msg::ScaffoldCheck),
             // M5-W5：判分后批注（上下文层语义——Ctrl+E 仅 Graded 屏有操作，docs/03 §5.3）
             KeyCode::Char('e') if ctx == KeyCtx::Graded => Some(Msg::Annotate),
+            // M5-W6：开模考（上下文层语义——Ctrl+M 仅答题/完成态可开卷，docs/03 §5.3 直达表）
+            KeyCode::Char('m')
+                if matches!(ctx, KeyCtx::Choice | KeyCtx::Graded | KeyCtx::Finished) =>
+            {
+                Some(Msg::MockStart)
+            }
             _ => None,
         };
     }
@@ -125,7 +131,7 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
 pub fn hint(ctx: KeyCtx) -> &'static str {
     match ctx {
         KeyCtx::Choice => {
-            " ↑/↓ 移动 · Space 勾选 · Enter 提交 · → 跳过 · F1 选题 · 1-4 自评把握 · Ctrl+Q 退出"
+            " ↑/↓ 移动 · Space 勾选 · Enter 提交 · → 跳过 · F1 选题 · 1-4 自评把握 · Ctrl+M 模考 · Ctrl+Q 退出"
         }
         KeyCtx::Fill { editing: true } => {
             " 打字作答 · Enter 提交 · Tab/→ 下一空（Shift+Tab/← 上一空）· Esc 退出编辑（保留输入）· Ctrl+Q 退出"
@@ -135,7 +141,7 @@ pub fn hint(ctx: KeyCtx) -> &'static str {
         }
         KeyCtx::Pending => " ←/→ 选择判对判错 · Enter 确认裁决 · Esc 跳过 · Ctrl+Q 退出",
         KeyCtx::Graded => {
-            " Enter/→ 下一题 · ← 上一题 · F1 选题 · Ctrl+E 批注（作文/翻译） · Ctrl+Q 退出"
+            " Enter/→ 下一题 · ← 上一题 · F1 选题 · Ctrl+E 批注（作文/翻译）· Ctrl+M 模考 · Ctrl+Q 退出"
         }
         KeyCtx::Finished => " Ctrl+Q 退出",
         KeyCtx::Review => {
