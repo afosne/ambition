@@ -115,6 +115,31 @@ pub async fn load_run(pool: &SqlitePool, run_id: &str) -> Result<Option<PaperRun
     ))
 }
 
+/// 最近已完成模考（估分/周报数据源）。
+pub async fn finished_runs(pool: &SqlitePool, limit: i64) -> Result<Vec<PaperRun>, sqlx::Error> {
+    let rows: Vec<PaperRunRow> = sqlx::query_as(
+        "SELECT run_id, paper_id, started_at, deadline, finished_at, score, max
+         FROM paper_runs WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT ?",
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(run_id, paper_id, started_at, deadline, finished_at, score, max)| PaperRun {
+                run_id,
+                paper_id,
+                started_at,
+                deadline,
+                finished_at,
+                score,
+                max,
+            },
+        )
+        .collect())
+}
+
 /// 卷内得分：每 qid 只取最新一答（attempts.rowid 序）求和——未作答题自然不计（max 均为1，docs/07 §1）
 pub async fn paper_score(pool: &SqlitePool, qids: &[String]) -> Result<(f32, f32), sqlx::Error> {
     if qids.is_empty() {
@@ -201,6 +226,17 @@ mod tests {
         assert_eq!(run.paper_id, "p-mvp");
         assert_eq!(run.deadline, 100 + 30 * 60);
         assert!(run.finished_at.is_none(), "开卷未收（估分数据未完成）");
+    }
+
+    #[tokio::test]
+    async fn test_finished_runs_returns_only_completed_runs() {
+        let pool = memory_pool().await;
+        save_paper(&pool, &paper_of(&["qa"])).await.expect("卷");
+        start_run(&pool, "open", "p-mvp", 100, 200)
+            .await
+            .expect("开卷");
+        let rows = finished_runs(&pool, 10).await.expect("已完成卷");
+        assert!(rows.is_empty());
     }
 
     #[tokio::test]

@@ -3,6 +3,7 @@
 //! `render::review_render`（复习屏）/ `render::render_passage_tests`（配对测试）。
 //! 跨域引用一律 `use crate::*`（组内共享导入留在 lib.rs，docs/01 §1 组织规范）。
 
+mod m6_screens;
 pub mod passage_render;
 pub mod picker_render;
 #[cfg(test)]
@@ -19,6 +20,9 @@ use crate::*;
 
 /// 渲染当前状态（含判分浮层 + 错误行 + 填空输入行）
 pub fn render(frame: &mut Frame, state: &AppState) {
+    if m6_screens::render_workspace(frame, state) {
+        return;
+    }
     if state.picker_open {
         render_picker(frame, state);
         return;

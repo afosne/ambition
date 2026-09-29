@@ -25,6 +25,10 @@ pub enum DomainEvent {
         score: f32,
         max: f32,
     },
+    /// 日记批改完成（M6-W1：diary_review 成功后发布，gamify → Xp(2)、不进连击——docs/13）
+    DiaryReviewed { entry_id: String, date: String },
+    /// 待办完成（M6-W1：todo_complete 发布，gamify → Xp(1)、不进连击——docs/13）
+    TodoCompleted { todo_id: String, title: String },
     /// 作文批改完成（M5-W5：grade_essay 落两表后发布，gamify → Xp(5)、不进连击——docs/13）
     EssayGraded {
         essay_id: String,

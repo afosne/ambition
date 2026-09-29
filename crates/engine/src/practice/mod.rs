@@ -57,14 +57,40 @@ impl Engine {
 
     /// 旁路结算：事件广播 → 游戏效果取走 → 游戏状态落库（提交与人工裁决共用）
     pub(crate) async fn settle(&self, event: DomainEvent) -> Vec<ambition_gamify::GameEffect> {
+        let event_payload = serde_json::to_string(&event).unwrap_or_else(|_| "null".into());
         self.publish(&event);
         let effects = self.game.drain_effects();
         let snapshot = self.game.snapshot();
-        if let Err(err) =
-            ambition_store::save_game_state(&self.pool, "local", snapshot.xp, snapshot.streak).await
+        if snapshot.enabled
+            && let Err(err) =
+                ambition_store::save_game_state(&self.pool, "local", snapshot.xp, snapshot.streak)
+                    .await
         {
             eprintln!("[warn] game_state persist failed (旁路可补偿): {err}");
             tracing::warn!(error = %err, "game_state persist failed");
+        }
+        let serialized = serde_json::to_string(&snapshot).unwrap_or_else(|_| "{}".into());
+        if snapshot.enabled
+            && let Err(err) = ambition_store::save_game_profile(
+                &self.pool,
+                "local",
+                &serialized,
+                ambition_core::now_unix(),
+            )
+            .await
+        {
+            tracing::warn!(error = %err, "game profile persist failed");
+        }
+        if snapshot.enabled
+            && let Err(err) = ambition_store::append_game_event(
+                &self.pool,
+                &ambition_core::TodoId::new_v7().0,
+                &event_payload,
+                ambition_core::now_unix(),
+            )
+            .await
+        {
+            tracing::warn!(error = %err, "game event append failed");
         }
         effects
     }
@@ -78,6 +104,53 @@ impl Engine {
     pub fn game_state(&self) -> ambition_gamify::GameState {
         self.game.snapshot()
     }
+
+    pub async fn game_set_enabled(&self, enabled: bool) -> Result<(), EngineError> {
+        self.game.set_enabled(enabled);
+        self.persist_game_state().await
+    }
+
+    pub async fn game_grant_item(
+        &self,
+        item: ambition_gamify::GameItem,
+        count: u32,
+    ) -> Result<(), EngineError> {
+        self.game.grant_item(item.as_str(), count);
+        self.persist_game_state().await
+    }
+
+    pub async fn game_purchase_item(
+        &self,
+        item: ambition_gamify::GameItem,
+        count: u32,
+    ) -> Result<(), EngineError> {
+        self.game
+            .purchase_item(item, count)
+            .map_err(|e| EngineError::NotFound(e.to_string()))?;
+        self.persist_game_state().await
+    }
+
+    pub async fn game_use_item(
+        &self,
+        item: ambition_gamify::GameItem,
+    ) -> Result<Vec<ambition_gamify::GameEffect>, EngineError> {
+        let effects = self
+            .game
+            .use_item(item)
+            .map_err(|e| EngineError::NotFound(e.to_string()))?;
+        self.persist_game_state().await?;
+        Ok(effects)
+    }
+
+    async fn persist_game_state(&self) -> Result<(), EngineError> {
+        let state = self.game.snapshot();
+        ambition_store::save_game_state(&self.pool, "local", state.xp, state.streak).await?;
+        let payload =
+            serde_json::to_string(&state).map_err(|e| EngineError::Seed(e.to_string()))?;
+        ambition_store::save_game_profile(&self.pool, "local", &payload, ambition_core::now_unix())
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -87,6 +160,60 @@ mod tests {
     use ambition_core::{
         Attempt, AttemptMode, BlankItem, ChoiceBody, FillBody, OptionItem, QuestionKind,
     };
+
+    #[tokio::test]
+    async fn test_game_set_enabled_persists_toggle() {
+        let engine = Engine::open_memory().await.expect("open");
+        engine.game_set_enabled(false).await.expect("关闭游戏");
+        assert!(!engine.game_state().enabled);
+    }
+
+    #[tokio::test]
+    async fn test_game_grant_item_persists_inventory() {
+        let engine = Engine::open_memory().await.expect("open");
+        engine
+            .game_grant_item(ambition_gamify::GameItem::Hint, 1)
+            .await
+            .expect("发放");
+        assert_eq!(engine.game_state().inventory["hint"], 1);
+    }
+
+    #[tokio::test]
+    async fn test_game_purchase_item_rejects_insufficient_coins() {
+        let engine = Engine::open_memory().await.expect("open");
+        assert!(
+            engine
+                .game_purchase_item(ambition_gamify::GameItem::Hint, 1)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_game_use_item_consumes_granted_inventory() {
+        let engine = Engine::open_memory().await.expect("open");
+        engine
+            .game_grant_item(ambition_gamify::GameItem::DoubleXp, 1)
+            .await
+            .expect("发放");
+        engine
+            .game_use_item(ambition_gamify::GameItem::DoubleXp)
+            .await
+            .expect("使用");
+        assert!(engine.game_state().double_xp);
+    }
+
+    #[tokio::test]
+    async fn test_persist_game_state_writes_profile_snapshot() {
+        let engine = Engine::open_memory().await.expect("open");
+        engine.persist_game_state().await.expect("落库");
+        assert!(
+            ambition_store::load_game_profile(&engine.pool, "local")
+                .await
+                .unwrap()
+                .is_some()
+        );
+    }
 
     #[tokio::test]
     async fn test_submit_answer_grades_and_persists_game_effects() {
@@ -103,7 +230,9 @@ mod tests {
             ok.effects,
             vec![
                 ambition_gamify::GameEffect::Xp(2),
-                ambition_gamify::GameEffect::ComboUp
+                ambition_gamify::GameEffect::Coins(1),
+                ambition_gamify::GameEffect::ComboUp,
+                ambition_gamify::GameEffect::MapProgress(q.qid.0.clone()),
             ]
         );
         // 改进 #1：效果已落库
@@ -231,8 +360,8 @@ mod tests {
     async fn test_game_state_reflects_persisted_progress() {
         let engine = Engine::open_memory().await.expect("打开");
         assert_eq!(
-            engine.game_state(),
-            ambition_gamify::GameState { xp: 0, streak: 0 },
+            (engine.game_state().xp, engine.game_state().streak),
+            (0, 0),
             "内存库零值"
         );
         let q = choice_question();
@@ -242,8 +371,12 @@ mod tests {
             .await
             .expect("提交");
         assert_eq!(
-            engine.game_state(),
-            ambition_gamify::GameState { xp: 2, streak: 1 },
+            (
+                engine.game_state().xp,
+                engine.game_state().streak,
+                engine.game_state().coins
+            ),
+            (2, 1, 1),
             "提交后投影器状态"
         );
     }

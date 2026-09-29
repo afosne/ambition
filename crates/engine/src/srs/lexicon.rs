@@ -156,7 +156,11 @@ impl Engine {
     }
 
     /// 单卡幂等入卡（已存在含调度进度 → 跳过；不存在 → 新卡 due_at=now 立即进队列）
-    async fn enroll_card(&self, source: CardSource, now: i64) -> Result<(), sqlx::Error> {
+    pub(crate) async fn enroll_card(
+        &self,
+        source: CardSource,
+        now: i64,
+    ) -> Result<(), sqlx::Error> {
         let card_id = ambition_core::CardId::from_source(&source);
         match ambition_store::get_card(&self.pool, &card_id.0).await {
             Ok(Some(_)) => Ok(()),

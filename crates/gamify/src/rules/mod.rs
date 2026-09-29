@@ -7,8 +7,15 @@ use crate::GameEffect;
 /// 事件 → 效果映射（唯一结算入口 round_settle 的事件版）
 pub fn on_event(event: &DomainEvent) -> Vec<GameEffect> {
     match event {
-        DomainEvent::AttemptGraded { verdict, .. } => match verdict {
-            Verdict::Correct | Verdict::Acceptable => vec![GameEffect::Xp(2), GameEffect::ComboUp],
+        DomainEvent::AttemptGraded { verdict, qid, .. } => match verdict {
+            Verdict::Correct | Verdict::Acceptable => {
+                vec![
+                    GameEffect::Xp(2),
+                    GameEffect::Coins(1),
+                    GameEffect::ComboUp,
+                    GameEffect::MapProgress(qid.0.clone()),
+                ]
+            }
             Verdict::Partial => vec![GameEffect::Xp(1), GameEffect::ComboUp],
             Verdict::Wrong => vec![GameEffect::Xp(1), GameEffect::ComboBreak],
             Verdict::Pending => vec![],
@@ -18,7 +25,19 @@ pub fn on_event(event: &DomainEvent) -> Vec<GameEffect> {
         // M5：作文批改完成 → 大额经验、不进连击（docs/13：写作质量不受游戏影响）
         DomainEvent::EssayGraded { .. } => vec![GameEffect::Xp(5)],
         // M5：模考交卷 → 更大额经验、不进连击（docs/13）
-        DomainEvent::PaperFinished { .. } => vec![GameEffect::Xp(10)],
+        DomainEvent::PaperFinished { .. } => vec![
+            GameEffect::Xp(10),
+            GameEffect::UnlockBadge("mock_finisher".into()),
+        ],
+        // M6：日记批改（鼓励式，docs/13 §1）——Xp(2)、不进连击
+        DomainEvent::DiaryReviewed { .. } => {
+            vec![GameEffect::Xp(2), GameEffect::MapProgress("diary".into())]
+        }
+        // M6：完成待办（轻反馈，docs/13 §1）——Xp(1)、不进连击
+        DomainEvent::TodoCompleted { .. } => vec![
+            GameEffect::Xp(1),
+            GameEffect::MapProgress("daily_habits".into()),
+        ],
     }
 }
 
@@ -50,6 +69,16 @@ pub fn round_settle(correct: usize, total: usize) -> Vec<GameEffect> {
     }
 }
 
+pub fn item_price(item: crate::GameItem) -> i64 {
+    match item {
+        crate::GameItem::Hint => 2,
+        crate::GameItem::Eliminate => 4,
+        crate::GameItem::DoubleXp => 8,
+        crate::GameItem::StreakFreeze => 10,
+        crate::GameItem::Makeup => 12,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,11 +97,21 @@ mod tests {
     fn test_on_event_maps_all_verdicts() {
         assert_eq!(
             on_event(&graded(Verdict::Correct)),
-            vec![GameEffect::Xp(2), GameEffect::ComboUp]
+            vec![
+                GameEffect::Xp(2),
+                GameEffect::Coins(1),
+                GameEffect::ComboUp,
+                GameEffect::MapProgress("q1".into())
+            ]
         );
         assert_eq!(
             on_event(&graded(Verdict::Acceptable)),
-            vec![GameEffect::Xp(2), GameEffect::ComboUp]
+            vec![
+                GameEffect::Xp(2),
+                GameEffect::Coins(1),
+                GameEffect::ComboUp,
+                GameEffect::MapProgress("q1".into())
+            ]
         );
         assert_eq!(
             on_event(&graded(Verdict::Partial)),
@@ -128,7 +167,10 @@ mod tests {
         });
         assert_eq!(
             effects,
-            vec![GameEffect::Xp(10)],
+            vec![
+                GameEffect::Xp(10),
+                GameEffect::UnlockBadge("mock_finisher".into())
+            ],
             "模考大额经验、不进连击（docs/13 M5）"
         );
     }
@@ -145,5 +187,15 @@ mod tests {
         );
         assert_eq!(round_settle(3, 5), vec![GameEffect::Xp(6)]);
         assert!(round_settle(0, 0).is_empty());
+    }
+
+    #[test]
+    fn test_item_price_is_defined_for_all_items() {
+        use crate::GameItem::*;
+        assert!(item_price(Hint) > 0);
+        assert!(item_price(Eliminate) > 0);
+        assert!(item_price(DoubleXp) > 0);
+        assert!(item_price(StreakFreeze) > 0);
+        assert!(item_price(Makeup) > 0);
     }
 }

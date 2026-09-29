@@ -70,6 +70,11 @@ pub enum Msg {
     TxToPractice,
     /// 开模考（Ctrl+M；M5-W6，docs/03 §5.3）
     MockStart,
+    /// M6-W1 保存当前笔记/日记/TODO 草稿
+    WorkspaceSave,
+    GameAction(u8),
+    VocabLookup,
+    VocabEnroll,
 }
 
 /// 状态机输出（Quit/Submit 由 main 执行副作用）
@@ -108,4 +113,14 @@ pub enum Cmd {
     MockStart,
     /// 交卷（末题 Next 触发；main → engine::mock_finish → apply_mock_finish）
     MockFinish,
+    /// 读取当前笔记/日记/TODO 列表
+    WorkspaceLoad,
+    /// 保存当前笔记/日记/TODO 草稿
+    WorkspaceSave(String),
+    ProfileLoad,
+    GameLoad,
+    GameAction(u8),
+    VocabLoad,
+    VocabLookup(String),
+    VocabEnroll(String),
 }

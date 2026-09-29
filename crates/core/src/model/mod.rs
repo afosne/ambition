@@ -3,7 +3,9 @@
 
 pub mod attempt;
 pub mod event;
+pub mod notes;
 pub mod paper;
+pub mod profile;
 pub mod question;
 pub mod taxonomy;
 pub mod translation;
@@ -13,7 +15,9 @@ mod kind;
 
 pub use attempt::*;
 pub use event::*;
+pub use notes::*;
 pub use paper::*;
+pub use profile::*;
 pub use question::*;
 pub use taxonomy::*;
 pub use translation::*;

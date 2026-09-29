@@ -124,6 +124,9 @@ const MIGRATIONS: &[(i32, &str)] = &[
     (4, MIGRATION_V4),
     (5, MIGRATION_V5),
     (6, MIGRATION_V6),
+    (7, MIGRATION_V7),
+    (8, MIGRATION_V8),
+    (9, MIGRATION_V9),
 ];
 
 /// v5（M5-W6）：papers/paper_runs（组卷+模考 run——估分数据就绪；predict_score 唯一在 docs/12，M6，docs/02 §2）
@@ -164,8 +167,73 @@ CREATE TABLE IF NOT EXISTS tx_favorites (
 CREATE INDEX IF NOT EXISTS idx_translations_source ON translations (source);
 "#;
 
+/// v7：笔记/日记/TODO（M6-W1，docs/02 §2）——FTS5 检索 + 双链反查 + 一日一篇 + 待办状态
+const MIGRATION_V7: &str = r#"
+CREATE TABLE IF NOT EXISTS notes (
+    note_id    TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    body_md    TEXT NOT NULL,
+    payload    TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(title, body_md, tokenize = 'unicode61');
+CREATE TABLE IF NOT EXISTS note_links (
+    note_id    TEXT NOT NULL,
+    ref_kind   TEXT NOT NULL,
+    ref_value  TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE (note_id, ref_kind, ref_value)
+);
+CREATE INDEX IF NOT EXISTS idx_note_links_ref ON note_links (ref_kind, ref_value);
+CREATE TABLE IF NOT EXISTS diary_entries (
+    entry_id TEXT PRIMARY KEY,
+    date     TEXT NOT NULL UNIQUE,
+    body     TEXT NOT NULL,
+    review   TEXT
+);
+CREATE TABLE IF NOT EXISTS todos (
+    todo_id    TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    due        INTEGER,
+    status     TEXT NOT NULL,
+    meta       TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_todos_due ON todos (due);
+"#;
+
+/// v8：可重建的画像快照（事实仍来自 attempts/grades，docs/12 M6-W2）
+const MIGRATION_V8: &str = r#"
+CREATE TABLE IF NOT EXISTS profile_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    from_at INTEGER NOT NULL,
+    to_at INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_profile_snapshots_range ON profile_snapshots (from_at, to_at, created_at);
+"#;
+
+/// v9：游戏画像与事件记录（M6-W6；旧 game_state XP/连击表保留为兼容投影）
+const MIGRATION_V9: &str = r#"
+CREATE TABLE IF NOT EXISTS game_profile (
+    player TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS game_events (
+    event_id TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_game_events_created ON game_events (created_at);
+"#;
+
 /// 当前目标 schema 版本（清单最大号）
-pub const SCHEMA_VERSION: i32 = 6;
+pub const SCHEMA_VERSION: i32 = 9;
 
 /// 建库 + 迁移（幂等：已到目标版本则跳过；docs/02-core-store §2）
 pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {

@@ -11,6 +11,19 @@ pub enum LinkRef { Word(u64), Qid(Qid), Grammar(String), Essay(EssayId), Note(No
 pub struct DiaryEntry { entry_id, date, body, review: Option<DiaryReview> }
 pub struct Todo { todo_id, kind: Daily(DailyPlan)|Review(CardId)|Drill(String)|Writing(EssayPrompt)|ExamPrep, title, due, status, meta }
 
+// —— M6-W1 类型定案（docs 补全 2026-09-29；行类型在 core（store 共用），ID 注册表见 docs/02 §1：NoteId/EntryId/TodoId = uuid v7 TEXT）——
+pub enum NoteKind { Word, Question, Grammar, Phrase, Free }
+pub struct LinkRef { Word(String /*lemma——稳定 word_id 随 EC-DICT 导入（09 注记）*/), Qid(Qid), Grammar(String), Essay(String), Note(NoteId) }  // 双链：词↔题↔语法点↔作文弱点
+pub struct Note { note_id: NoteId, kind: NoteKind, title: String, body_md: String, links: Vec<LinkRef>, created_at: i64, updated_at: i64 }
+pub struct DiaryEntry { entry_id: EntryId, date: String /*YYYY-MM-DD 唯一*/, body: String, review: Option<DiaryReview> }
+pub struct DiaryReview { corrected_md: String, upgrades: Vec<String>, encouragement: String, model: String, reviewed_at: i64 }  // 鼓励式批改产物（只改错+≤2升级+一句鼓励）
+pub enum TodoKind { Daily(DailyPlan), Review(CardId), Drill(String), Writing(EssayPrompt), ExamPrep }
+pub enum TodoStatus { Pending, Done }
+pub struct Todo { todo_id: TodoId, kind: TodoKind, title: String, due: Option<i64>, status: TodoStatus, meta: String, created_at: i64 }
+pub struct DailyBudget { pub minutes: u16, pub new_words: u16, pub reviews: u16, pub drills: u16 }   // 每日预算（16 onboarding step_budget 载荷）
+pub struct PlanItem { pub kind: String /*review|new|drill|writing*/, pub title: String, pub target: u16, pub done: u16 }
+pub struct DailyPlan { pub date: String, pub items: Vec<PlanItem> }   // 每日清单（plan_for_exam/interleaved_plan/follow 共用）
+// 注：DailyPlan/PlanItem 与 16-config step_budget/follow 同源共用（docs/16 §2）；TodoKind 直引 core 类型（CardId/EssayPrompt 已在 02 契约）
 // upsert（md 导出 + front-matter）/ backlinks / search(FTS) / to_srs_card / export_md
 // review_diary：LLM 鼓励式批改（只改错 + ≤2 升级 + 一句鼓励）；隐私红线：仅请求批改时外发 body（HTTP 断言）
 // link_new_words / plan_for_exam（倒计时排期，<30 天切模考周）/ daily_checklist / complete（发事件）
@@ -89,8 +102,11 @@ pub fn is_fake_root(&self, chain) -> Result<bool>;                   // 假根�
 写 `notes/diary/todos/profile_snapshots`（唯写）；读 attempts/essay_grades/derivations（素材利用统计）。
 出：GenSpec 权重、DailyPlan、Drill、warnings 原料、14-cloud 看板（同一套聚合函数从 sync 事件重放）。
 
+> **M6 落地（2026-09-29）**：W1 已实现笔记 FTS/双链/Markdown 导出、按日记账/复盘、TODO 完成事件与 Ctrl+N/D/K 工作区；W2 已实现本地 HeatMap/弱点趋势/画像快照与 Ctrl+P 屏；W3 已实现预算出题规格、错题复仇队列与交错日程；W4 已实现周报 Markdown 导出及 0–100 估分。知识节点以题目 qid 为键（当前 questions.payload 不保存 Question.tags）；写作弱点、溯源、词汇增长仍属后续范围。
+
 ## 5. 验证点
 
-- [ ] md 导出/再导入无损；diary 隐私断言（无调用不出站）；倒计时计划全覆盖；
-- [ ] 时间衰减聚合趋势方向正确；**断网环境完整出画像**（零出站断言）；λ 衰减数值（半衰期）断言；writing_weaknesses 聚类去重；复仇战出队；周报与手工 SQL 一致；
+- [x] 笔记 Markdown 导出保留正文结尾（store 配对测试）；diary 隐私默认本地保存、仅 review_diary 显式调用请求 LLM；TODO 幂等完成/事件测试；
+- [x] 时间衰减聚合 Wrong/Partial 权重与快照持久化；断网本地画像集成测试；复仇队列与计划预算测试；估分小样本区间测试；
+- [ ] md 再导入无损；倒计时计划全覆盖；λ 衰减数值（半衰期）断言；writing_weaknesses 聚类去重；周报与手工 SQL 一致；
 - [ ] 根因链无环、root_drill 题目 tag 指向前置节点、假根因分流。

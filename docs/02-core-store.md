@@ -52,7 +52,7 @@ pub enum CardSource { WordSense{word_id, sense_id}, Question{qid}, Note{note_id}
 
 pub enum DomainEvent { AttemptGraded{..}, ReviewDone{..}, TypingFinished{..}, EssayGraded{..}, DiaryReviewed{..},
                        PaperFinished{..}, PackShared{..}, PackImported{..}, DrillCleared{..}, QuizPassed{..},
-                       DialogueFinished{..} }   // 不可变事实，payload 自包含
+                       DialogueFinished{..}, TodoCompleted{..} }   // 不可变事实，payload 自包含（TodoCompleted = M6-W1 todo_complete 发布，docs/12 §1）
 pub trait EventBus: Send + Sync { fn publish(&self, ev: DomainEvent); }   // 订阅者：gamify/sync 投影/profile（旁路幂等）
 
 // 纯函数
@@ -95,6 +95,7 @@ LexiconReader{senses/relations/lookup/confusables}（**读词库资源文件**�
 - **迁移 v5（M5-W6 落地）**：套卷两表——`papers`（`paper_id` PK + `track/title` 列 + `payload` 整 Paper JSON（spec+qids）+ `created_at`）、`paper_runs`（`run_id` PK + `paper_id` + `started_at/deadline/finished_at` + `score/max`）。`PaperRepo{save_paper/load_paper/start_run/finish_run/load_run/paper_score}`；`paper_score(qids)` = 每 qid **最新一次**作答（attempts.rowid 降序窗口）求和——作答经 Practice 正常流落 attempts/grades，历史 run 即 12-notes-profile::predict_score 的回归样本（估分唯一在 12，M6；M5 只落数据与本次得分）。
 - **迁移 v6（M5-W7 落地）**：翻译工作台两表——`translations`（`tx_id` PK + `dir`（`from>to`，LangTag 拼接）+ `source/target` 查询列 + `payload` 整 Translation JSON + `created_at` + `source` 索引）、`tx_favorites`（`tx_id` PK + `created_at`）。`TranslateRepo{insert_translation/get_translation/search_translations/favorite_tx/favorite_translations}`；`tx_id` = 内容哈希（text+dir+glossary）与 llm_cache key 同源——同文同向不重复调 LLM（docs/11 §4 缓存命中）。
 - **迁移 v3（M4 落地）**：`srs_queue` 复习卡——`card_id` PK（= core CardId，source 内容寻址，幂等入卡）+ `payload`（整张 Card JSON：FSRS 状态/模式/错词计数/假对计数/错因标签）+ **`due_at` 整数 unix 秒索引列**（避开 `datetime()` NULL 静默坑，P-15）+ `wrong_count` 查询列（错词本入口）；单写者 08-adaptive（经 engine：on_attempt/review_answer）。同版新增 `get_attempt(attempt_id)`（读回整条 Attempt——attempts.answer 列存的是完整 Attempt JSON）与 `recent_timings(limit)`（近 N 次 total_ms 滚动样本，假对基线原料）。
+- **迁移 v7（M6-W1 落地）**：笔记/日记/TODO 四表——`notes`（`note_id` PK + `kind/title/body_md/payload` + `created_at/updated_at`）、`notes_fts`（FTS5:title/body_md，写入侧随 upsert 同步增删——search(FTS) 唯一口）、`note_links`（`note_id + ref_kind/ref_value` 反查索引 → backlinks）、`diary_entries`（`entry_id` PK + `date` UNIQUE 一日一篇 + `body/review`（review = 鼓励式批改产物 payload））、`todos`（`todo_id` PK + `kind/title/due/status/meta`）。`NoteRepo{upsert_note/get_note/search_notes/backlinks/note_export_md}`、`DiaryRepo{diary_write/diary_read/list_diary}`、`TodoRepo{add_todo/list_todos/todo_complete}`；单写者 = notes 域（经 engine 门面 docs/03 §笔记族）；计划载荷 DailyPlan/DailyBudget 见 docs/12 §1（plan_for_exam/interleaved_plan 共用）。
 
 ## 3. 验证点
 

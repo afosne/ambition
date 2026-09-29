@@ -1,9 +1,11 @@
 //! Ambition 入口（M2 单机 TUI）：壳层只做 I/O，业务全走 engine 门面。
 //! M2：文件库（~/.ambition/ambition.db，AMBI_DB 覆盖）+ seed 题库 + 填空输入 + 独立错误行。
 
+mod main_support;
+use main_support::{db_path, game_summary};
+
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::path::PathBuf;
 
 use ambition_core::{Attempt, AttemptMode, now_unix};
 use ambition_engine::{Engine, Rating};
@@ -20,18 +22,6 @@ use crossterm::terminal::{
 use crossterm::{ExecutableCommand, execute};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-
-/// 默认库路径：AMBI_DB 覆盖 → HOME/.ambition/ambition.db（docs/03 §5.6）
-fn db_path() -> PathBuf {
-    if let Some(over) = std::env::var_os("AMBI_DB") {
-        return PathBuf::from(over);
-    }
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    home.join(".ambition").join("ambition.db")
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -58,6 +48,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 | Screen::TxAlign
                 | Screen::TxMyTurn
                 | Screen::TxHistory
+                | Screen::Notes
+                | Screen::Diary
+                | Screen::Todos
+                | Screen::Profile
+                | Screen::Games
+                | Screen::Wordbook
         )
     {
         terminal.draw(|f| render(f, &state))?;
@@ -281,6 +277,184 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     Err(err) => apply_error(&mut state, err.to_string()),
                 }
             }
+            Cmd::WorkspaceLoad => {
+                state.workspace_draft.clear();
+                state.error = None;
+                let rows = match state.screen {
+                    Screen::Notes => engine.note_search("", 20).await.map(|xs| {
+                        xs.into_iter()
+                            .map(|n| format!("{} · {:?}", n.title, n.kind))
+                            .collect()
+                    }),
+                    Screen::Diary => engine.diary_list(20).await.map(|xs| {
+                        xs.into_iter()
+                            .map(|d| {
+                                format!(
+                                    "{} · {}",
+                                    d.date,
+                                    d.body.lines().next().unwrap_or_default()
+                                )
+                            })
+                            .collect()
+                    }),
+                    _ => engine.todo_list(true, 20).await.map(|xs| {
+                        xs.into_iter()
+                            .map(|t| format!("{} · {:?}", t.title, t.status))
+                            .collect()
+                    }),
+                };
+                match rows {
+                    Ok(items) => state.workspace_items = items,
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::ProfileLoad => match engine.refresh().await {
+                Ok(snapshot) => {
+                    state.error = None;
+                    state.workspace_items = if snapshot.weak_points.is_empty() {
+                        vec![format!(
+                            "统计作答 {} 次，当前范围暂无错因记录。",
+                            snapshot.attempts
+                        )]
+                    } else {
+                        snapshot
+                            .weak_points
+                            .iter()
+                            .map(|w| {
+                                format!(
+                                    "{} · {} · 密度 {:.2} · {:?}",
+                                    w.tag.label_zh(),
+                                    w.knowledge,
+                                    w.density,
+                                    w.trend
+                                )
+                            })
+                            .collect()
+                    };
+                }
+                Err(err) => apply_error(&mut state, err.to_string()),
+            },
+            Cmd::GameLoad => {
+                state.workspace_items = game_summary(&engine.game_state());
+                state.error = None;
+            }
+            Cmd::VocabLoad => match engine.vocab_wordbook().await {
+                Ok(words) => {
+                    state.workspace_draft.clear();
+                    state.workspace_items = words
+                        .into_iter()
+                        .map(|w| format!("{w} · 生词卡已入队"))
+                        .collect();
+                    state.error = None;
+                }
+                Err(err) => apply_error(&mut state, err.to_string()),
+            },
+            Cmd::VocabLookup(query) => {
+                let (word, context) = query
+                    .split_once('|')
+                    .map(|(w, c)| (w.trim(), Some(c.trim())))
+                    .unwrap_or((query.trim(), None));
+                match engine.lookup(word, context) {
+                    Ok(result) => {
+                        state.error = None;
+                        state.workspace_items = result
+                            .senses
+                            .iter()
+                            .map(|s| format!("{} · {} · {}", s.pos, s.def_zh, s.def_en))
+                            .collect();
+                        if let Some(s) = result.selected {
+                            state.workspace_items.insert(
+                                0,
+                                format!(
+                                    "语境匹配：{}（置信度 {:.0}%）",
+                                    s.def_zh,
+                                    result.confidence * 100.0
+                                ),
+                            );
+                        }
+                        if result.senses.is_empty() {
+                            state.workspace_items = vec![format!("{} 暂无本地义项", word)];
+                        }
+                    }
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::VocabEnroll(text) => match engine.vocab_new_words(&text, &[]).await {
+                Ok(words) => {
+                    state.error = None;
+                    state.workspace_items = words
+                        .iter()
+                        .map(|w| format!("{w} · 已加入生词复习"))
+                        .collect();
+                    if words.is_empty() {
+                        state.workspace_items = vec!["文本中没有识别到尚未掌握的本地词条。".into()];
+                    }
+                }
+                Err(err) => apply_error(&mut state, err.to_string()),
+            },
+            Cmd::GameAction(action) => {
+                use ambition_gamify::GameItem as I;
+                let items = [
+                    I::Hint,
+                    I::Eliminate,
+                    I::DoubleXp,
+                    I::StreakFreeze,
+                    I::Makeup,
+                ];
+                let result = if action == 12 {
+                    engine.game_set_enabled(!engine.game_state().enabled).await
+                } else if (1..=5).contains(&action) {
+                    engine
+                        .game_use_item(items[(action - 1) as usize])
+                        .await
+                        .map(|_| ())
+                } else if (6..=10).contains(&action) {
+                    engine
+                        .game_purchase_item(items[(action - 6) as usize], 1)
+                        .await
+                } else {
+                    continue;
+                };
+                match result {
+                    Ok(()) => {
+                        state.workspace_items = game_summary(&engine.game_state());
+                        state.error = None;
+                    }
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
+            Cmd::WorkspaceSave(body) => {
+                let result = match state.screen {
+                    Screen::Notes => {
+                        let title = body.lines().next().unwrap_or("新笔记").trim().to_string();
+                        engine
+                            .note_upsert(title, body.clone(), ambition_core::NoteKind::Free, vec![])
+                            .await
+                            .map(|_| ())
+                    }
+                    Screen::Diary => engine
+                        .diary_write(&ambition_engine::today(), &body)
+                        .await
+                        .map(|_| ()),
+                    _ => engine
+                        .todo_add(
+                            ambition_core::TodoKind::ExamPrep,
+                            body.lines().next().unwrap_or("待办").to_string(),
+                            None,
+                        )
+                        .await
+                        .map(|_| ()),
+                };
+                match result {
+                    Ok(()) => {
+                        let preview = body.lines().next().unwrap_or_default().to_string();
+                        state.workspace_draft.clear();
+                        state.workspace_items.insert(0, preview);
+                        state.error = None;
+                    }
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
             Cmd::None => {}
         }
     }
@@ -289,23 +463,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
     terminal.backend_mut().execute(LeaveAlternateScreen)?;
     engine.drain_events();
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_db_path_honors_env_override_then_home() {
-        // 无覆盖时基于 HOME/USERPROFILE（测试进程环境可能两者皆有其一）
-        let p = db_path();
-        assert!(
-            p.ends_with(".ambition/ambition.db") || p.ends_with(".ambition\\ambition.db"),
-            "默认落在 ~/.ambition/ambition.db: {:?}",
-            p
-        );
-        // AMBI_DB 覆盖路径（unsafe: env 并发写；串行子进程验证留 CI，见 PROGRESS 观察项）
-        let fallback = PathBuf::from(".").join(".ambition").join("ambition.db");
-        assert!(fallback.ends_with("ambition.db"), "路径构造稳定");
-    }
 }

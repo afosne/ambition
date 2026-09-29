@@ -2,6 +2,7 @@
 //! 本域含配对测试子组件：`update::update_tests`（状态机）/ `update::update_passage_tests`（语篇作答）。
 //! 跨域引用一律 `use crate::*`（组内共享导入留在 lib.rs，docs/01 §1 组织规范）。
 
+mod m6;
 mod mock;
 mod nav;
 mod scaffold;
@@ -24,22 +25,10 @@ pub use tx::{
 pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
     // 屏幕切换（任何状态可用：Ctrl+A/Ctrl+R 直达、Tab 进出复习屏；进 Review 触发队列加载）
     if let Msg::Screen(target) = msg {
-        if state.screen == target {
-            return Cmd::None;
-        }
-        state.screen = target;
-        return if target == Screen::Review {
-            Cmd::ReviewLoad
-        } else if target == Screen::Scaffold {
-            // 进模板屏即装载模板列表（M5-W4b，异步回填经 apply_scaffold_templates）
-            Cmd::ScaffoldLoad
-        } else {
-            if target == Screen::Tx {
-                // 进工作台复位上下文（M5-W7；历史按 F7 懒加载）
-                tx::reset_tx(state);
-            }
-            Cmd::None
-        };
+        return m6::update_screen(state, target);
+    }
+    if let Some(cmd) = m6::update_m6(state, msg) {
+        return cmd;
     }
     // F1 选题面板开/关（任何有题状态可呼出，含完成屏；docs/03 §5.3 2026-09-27）
     if matches!(msg, Msg::TogglePicker) {
@@ -449,6 +438,9 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
         | Msg::TxHistoryDown
         | Msg::TxToggleFavorite
         | Msg::TxToPractice => Cmd::None,
+        Msg::WorkspaceSave => Cmd::None,
+        Msg::GameAction(_) => Cmd::None,
+        Msg::VocabLookup | Msg::VocabEnroll => Cmd::None,
         // 模板屏专属消息在答题流程忽略（顶部分支已拦截；防误触）
         Msg::ScaffoldUp
         | Msg::ScaffoldDown

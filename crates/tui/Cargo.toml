@@ -10,6 +10,7 @@ path = "src/main.rs"
 [dependencies]
 ambition-core = { path = "../core" }
 ambition-engine = { path = "../engine" }
+ambition-gamify = { path = "../gamify" }
 ambition-translate = { path = "../translate" }
 ambition-writing = { path = "../writing" }
 crossterm = "0.28"

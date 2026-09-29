@@ -8,11 +8,14 @@ mod assembly;
 #[cfg(test)]
 mod common;
 mod essay;
+mod notes;
 mod paper;
 mod practice;
+mod profile;
 mod scaffold;
 mod srs;
 mod translate;
+mod vocab;
 // 各模块只承载 impl 块与 crate 内部 fns——impl 自动生效，无项可再导出
 // 模块分层（docs/01 §组织：lib.rs 薄壳 + 细分功能目录 assembly/practice/srs，文件 ≤500 行，pre-commit 门禁强制）
 
@@ -21,8 +24,10 @@ pub use ambition_srs::{CardAction, Rating};
 pub use ambition_store::ArbitrationRow;
 pub use assembly::ai::{AiConfig, LLM_CACHE_TTL_SECS};
 pub use assembly::ledger::StoreLedger;
+pub use notes::{date_to_unix, today, unix_to_date};
 pub use paper::MockSession;
 pub use srs::lexicon::{ExamplePair, Pattern, Sense};
+pub use vocab::ContextSense;
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -102,6 +107,8 @@ pub struct Engine {
     grader: ambition_grader::Grader,
     /// LLM 句柄（annotate/model_essays 直用；与 grader 共享同一 Arc，装配单点，M5-W5）
     llm: Option<std::sync::Arc<ambition_llm::LlmRouter>>,
+    /// 最近刷新画像；出题规格同步读取，画像本身仍可由本地事实重算。
+    profile: Mutex<Option<ambition_core::ProfileSnapshot>>,
 }
 
 #[cfg(test)]

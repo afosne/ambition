@@ -7,10 +7,12 @@
 //! - `projector/` 投影器（EventBus 订阅 + 状态水合/快照/效果结算）
 //! - `rules/`   游戏规则（事件映射 / 等级曲线 / 一局结算）
 
+mod minigames;
 mod model;
 mod projector;
 mod rules;
 
+pub use minigames::*;
 pub use model::*;
 pub use projector::GameProjector;
 pub use rules::*;

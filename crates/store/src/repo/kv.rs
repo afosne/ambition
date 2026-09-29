@@ -59,6 +59,42 @@ pub async fn save_game_state(
     Ok(())
 }
 
+pub async fn load_game_profile(
+    pool: &SqlitePool,
+    player: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar("SELECT payload FROM game_profile WHERE player=?")
+        .bind(player)
+        .fetch_optional(pool)
+        .await
+}
+
+pub async fn save_game_profile(
+    pool: &SqlitePool,
+    player: &str,
+    payload: &str,
+    updated_at: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("INSERT INTO game_profile(player,payload,updated_at) VALUES(?,?,?) ON CONFLICT(player) DO UPDATE SET payload=excluded.payload,updated_at=excluded.updated_at")
+        .bind(player).bind(payload).bind(updated_at).execute(pool).await?;
+    Ok(())
+}
+
+pub async fn append_game_event(
+    pool: &SqlitePool,
+    id: &str,
+    payload: &str,
+    created_at: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("INSERT INTO game_events(event_id,payload,created_at) VALUES(?,?,?)")
+        .bind(id)
+        .bind(payload)
+        .bind(created_at)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 /// LLM 缓存读（None = 未命中；docs/05 llm_cache）
 pub async fn cache_get(pool: &SqlitePool, cache_key: &str) -> Result<Option<String>, sqlx::Error> {
     let row = sqlx::query("SELECT payload FROM llm_cache WHERE cache_key = ?")
@@ -85,6 +121,64 @@ pub async fn cache_put(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_load_game_profile_returns_none_then_saved_payload() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let pool = memory_pool().await;
+                assert_eq!(load_game_profile(&pool, "hero").await.unwrap(), None);
+                save_game_profile(&pool, "hero", "{\"xp\":4}", 1)
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    load_game_profile(&pool, "hero").await.unwrap(),
+                    Some("{\"xp\":4}".into())
+                );
+            });
+    }
+
+    #[test]
+    fn test_save_game_profile_overwrites_same_player() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let pool = memory_pool().await;
+                save_game_profile(&pool, "hero", "{\"xp\":1}", 1)
+                    .await
+                    .unwrap();
+                save_game_profile(&pool, "hero", "{\"xp\":99}", 2)
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    load_game_profile(&pool, "hero").await.unwrap(),
+                    Some("{\"xp\":99}".into())
+                );
+            });
+    }
+
+    #[test]
+    fn test_append_game_event_persists_row_with_payload() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let pool = memory_pool().await;
+                append_game_event(&pool, "evt-1", "{}", 1).await.unwrap();
+                let count: i64 =
+                    sqlx::query_scalar("SELECT count(*) FROM game_events WHERE event_id='evt-1'")
+                        .fetch_one(&pool)
+                        .await
+                        .unwrap();
+                assert_eq!(count, 1);
+            });
+    }
     use crate::common::*;
     use serde_json::json;
 

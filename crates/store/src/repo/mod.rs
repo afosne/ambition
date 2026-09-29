@@ -4,20 +4,26 @@
 pub mod arbitration;
 pub mod attempts;
 pub mod cards;
+pub mod diary;
 pub mod essay;
 pub mod kv;
+pub mod note;
 pub mod paper;
 pub mod question_repo;
+pub mod todo;
 pub mod translation;
 pub mod usage;
 
 pub use arbitration::*;
 pub use attempts::*;
 pub use cards::*;
+pub use diary::*;
 pub use essay::*;
 pub use kv::*;
+pub use note::*;
 pub use paper::*;
 pub use question_repo::*;
+pub use todo::*;
 pub use translation::*;
 pub use usage::*;
 

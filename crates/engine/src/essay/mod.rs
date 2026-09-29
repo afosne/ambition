@@ -116,13 +116,14 @@ impl Engine {
             Some(&grade),
         )
         .await?;
-        // 事件（M5-W5 → gamify Xp(5)、不进连击，docs/13；中毒取内层可见，P-8）
-        ambition_core::lock_recover(&self.events, "Engine.events").push(DomainEvent::EssayGraded {
+        // 事件（M5-W5 → gamify Xp(5)、不进连击，docs/13）。
+        self.settle(DomainEvent::EssayGraded {
             essay_id: question.qid.0,
             rubric_id: sub.rubric_id.clone(),
             score: grade.score,
             max: grade.max,
-        });
+        })
+        .await;
         Ok(grade)
     }
 

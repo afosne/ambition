@@ -10,6 +10,8 @@ pub enum GameEffect { Xp(i32), Coins(i32), ComboUp, ComboBreak, StreakAdvanced, 
 pub fn on_event(&self, ev: &DomainEvent) -> Vec<GameEffect>;   // 事件→效果映射表；apply 幂等（event_id 去重）
 // M4：ReviewDone → Xp(1)（复习即反馈、只给小额经验，不进连击——排程不受游戏影响，§原则）
 // M5：EssayGraded → Xp(5)（完成大作文/批改闭环强反馈；只经验不连击——写作质量不受游戏影响，同 §原则）
+// M6：DiaryReviewed → Xp(2)（日记批改完成——日常写作轻反馈；只经验不连击，日课节奏不受游戏影响，同 §原则）
+// M6：TodoCompleted → Xp(1)（待办完成最小反馈；只经验不连击——计划推进不受游戏影响，同 §原则）
 // M5：PaperFinished → Xp(10)（模考交卷大事件；只经验不连击——应试状态不受游戏影响，同 §原则；徽章「模考上岸」随后续阶段）
 pub fn round_settle(&self, r: &RoundResult) -> Vec<GameEffect>;   // 所有游戏/对战统一结算口
 // 进度：level_of(xp) / streak_update(Advance|FreezeUsed|Reset 从轻) / check_badges（词汇里程碑/错题清零/模考上岸/盲打通关/写作连优）
@@ -18,6 +20,8 @@ pub fn round_settle(&self, r: &RoundResult) -> Vec<GameEffect>;   // 所有游�
 // 经济/健康：use_item(Hint|Eliminate|DoubleXp|StreakFreeze|Makeup) / effort_score(学习量0.6+进步0.4，防劝退排行) / playtime_guard(每日上限/久坐/未成年人脱敏)
 ```
 表：`game_state/game_events`（事件溯源，可重放）。
+
+> **M6 落地（2026-09-29）**：事件效果、可持久化徽章/物品/连击/地图进度、商店购买/使用、游戏开关与独立小游戏规则（MemoryMatch/combo_sprint/root_composer/boss_battle/effort_score/playtime_guard）已进入 gamify；TUI 游戏屏展示成长数据并提供物品操作。社交、家长、组件、年报、对战属于后续阶段。
 
 ## 2. 成长展示（原 35）
 
@@ -66,6 +70,7 @@ pub async fn bot_battle(&self) -> Result<BattleResult>;     // 无服务端降�
 
 ## 6. 验证点
 
-- [ ] 事件→效果映射表全变体；游戏关闭零写入；effort_score 防劝退用例；streak 边界；未成年人脱敏；
+- [x] 本地已实现事件→效果测试覆盖作答/作文/模考/复习/日记/TODO；游戏关闭不结算；effort_score 与 playtime_guard 边界；物品、冻结连击、双倍经验与记忆配对测试；
+- [ ] 游戏事件稳定 ID 去重/重放；未成年人脱敏；
 - [ ] 分享卡隐私审计；房间消息短 TTL；家长无授权 403 + 断言无正文；widget 锁屏脱敏/反馈进 FSRS/离线可播；
 - [ ] 年报数字对账 + fun_facts 零隐私；对战交集选题/乱序限时/homework 过 qc/降级可玩。

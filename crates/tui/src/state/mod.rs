@@ -29,6 +29,18 @@ pub enum Screen {
     TxMyTurn,
     /// 翻译历史屏（检索 + 收藏 + 转练习）
     TxHistory,
+    /// 笔记工作区（M6-W1，Ctrl+N）
+    Notes,
+    /// 日记工作区（M6-W1，Ctrl+D）
+    Diary,
+    /// 待办工作区（M6-W1，Ctrl+K）
+    Todos,
+    /// 学习画像屏（M6-W2，Ctrl+P）
+    Profile,
+    /// 游戏成长与道具屏（M6-W6，Ctrl+G）
+    Games,
+    /// 离线语境查词与生词本（M6-W5，Ctrl+V）
+    Wordbook,
 }
 
 /// 模考 run 元数据（M5-W6：屏顶倒计时/收卷后得分展示；行数据在 store::paper_runs）
@@ -115,6 +127,9 @@ pub struct AppState {
     pub comments: Option<Comments>,
     /// 最近一次提交的文本作答（作文/翻译批注输入；随题清空）
     pub submitted_text: Option<String>,
+    /// M6-W1 笔记/日记/TODO 工作区草稿与最近列表
+    pub workspace_draft: String,
+    pub workspace_items: Vec<String>,
 }
 
 mod msg;
@@ -173,6 +188,8 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         tx_sel: 0,
         comments: None,
         submitted_text: None,
+        workspace_draft: String::new(),
+        workspace_items: Vec::new(),
     }
 }
 

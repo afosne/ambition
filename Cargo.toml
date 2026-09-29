@@ -13,6 +13,7 @@ members = [
   "crates/store",
   "crates/engine",
   "crates/tui",
+  "crates/vocab",
   "crates/writing",
 ]
 

@@ -5,13 +5,18 @@
 
 use super::*;
 
+mod hints;
+pub use hints::hint;
+
 /// 键位上下文（键位表只此一份；新增屏 = 新增变体）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyCtx {
     /// 选择题作答（未判分）：↑/↓/Space/1-4（单字母已废，docs/03 §5.3）
     Choice,
     /// 填空待答：一切可打印字符进输入行；`editing`=是否编辑中（决定 Esc 语义）
-    Fill { editing: bool },
+    Fill {
+        editing: bool,
+    },
     /// 已判分 · 待人工裁定：y/n 裁决，Enter=下一题
     Pending,
     /// 已判分：Enter=下一题
@@ -32,6 +37,11 @@ pub enum KeyCtx {
     TxMyTurn,
     /// 翻译历史屏（选择/收藏/转练习）
     TxHistory,
+    /// M6-W1 笔记/日记/TODO 编辑工作区
+    Workspace,
+    Profile,
+    Game,
+    Wordbook,
 }
 
 /// 键位 → 消息（唯一键位表；docs/03 §5.3）
@@ -46,6 +56,14 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
             // M5-W7：翻译工作台直达（W 不在直达表保留字内，docs/03 §5.3）
             KeyCode::Char('w') => Some(Msg::Screen(Screen::Tx)),
             KeyCode::Char('r') => Some(Msg::Screen(Screen::Review)),
+            KeyCode::Char('n') => Some(Msg::Screen(Screen::Notes)),
+            KeyCode::Char('d') => Some(Msg::Screen(Screen::Diary)),
+            KeyCode::Char('k') => Some(Msg::Screen(Screen::Todos)),
+            KeyCode::Char('p') => Some(Msg::Screen(Screen::Profile)),
+            KeyCode::Char('g') => Some(Msg::Screen(Screen::Games)),
+            KeyCode::Char('v') => Some(Msg::Screen(Screen::Wordbook)),
+            KeyCode::Char('s') if ctx == KeyCtx::Workspace => Some(Msg::WorkspaceSave),
+            KeyCode::Char('s') if ctx == KeyCtx::Wordbook => Some(Msg::VocabEnroll),
             // M5-W6：开模考（上下文层语义——Ctrl+M 仅答题/完成态可开卷，docs/03 §5.3 直达表）
             KeyCode::Char('m')
                 if matches!(ctx, KeyCtx::Choice | KeyCtx::Graded | KeyCtx::Finished) =>
@@ -68,6 +86,10 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::TxAlign | KeyCtx::TxMyTurn | KeyCtx::TxHistory => {
                     Some(Msg::Screen(Screen::Tx)) // 子屏回主屏
                 }
+                KeyCtx::Workspace => Some(Msg::Screen(Screen::Practice)),
+                KeyCtx::Profile => Some(Msg::Screen(Screen::Practice)),
+                KeyCtx::Game => Some(Msg::Screen(Screen::Practice)),
+                KeyCtx::Wordbook => Some(Msg::Screen(Screen::Practice)),
                 _ => Some(Msg::Quit),
             };
         }
@@ -83,6 +105,10 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Tx => Msg::TxTranslate, // 工作台 Enter=翻译
                 KeyCtx::TxMyTurn => Msg::TxMyTurnSubmit, // 我来翻 Enter=对照评分
                 KeyCtx::TxHistory => Msg::TxToPractice, // 历史 Enter=转练习题
+                KeyCtx::Workspace => Msg::WorkspaceSave,
+                KeyCtx::Profile => Msg::Screen(Screen::Practice),
+                KeyCtx::Game => Msg::Screen(Screen::Practice),
+                KeyCtx::Wordbook => Msg::VocabLookup,
             });
         }
         _ => {}
@@ -135,6 +161,12 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
         (KeyCtx::Tx, KeyCode::F(7)) => Some(Msg::TxHistoryOpen),
         (KeyCtx::Tx, KeyCode::Char(c)) => Some(Msg::Char(c)),
         (KeyCtx::Tx, KeyCode::Backspace) => Some(Msg::Backspace),
+        (KeyCtx::Workspace, KeyCode::Char(c)) => Some(Msg::Char(c)),
+        (KeyCtx::Workspace, KeyCode::Backspace) => Some(Msg::Backspace),
+        (KeyCtx::Game, KeyCode::F(n @ 1..=12)) => Some(Msg::GameAction(n)),
+        (KeyCtx::Wordbook, KeyCode::Char(c)) => Some(Msg::Char(c)),
+        (KeyCtx::Wordbook, KeyCode::Backspace) => Some(Msg::Backspace),
+        (KeyCtx::Wordbook, KeyCode::F(3)) => Some(Msg::VocabEnroll),
         (KeyCtx::TxMyTurn, KeyCode::Char(c)) => Some(Msg::Char(c)),
         (KeyCtx::TxMyTurn, KeyCode::Backspace) => Some(Msg::Backspace),
         (KeyCtx::TxHistory, KeyCode::Up) => Some(Msg::TxHistoryUp),
@@ -153,41 +185,6 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
         (KeyCtx::Scaffold, KeyCode::Char(c)) => Some(Msg::Char(c)),
         (KeyCtx::Scaffold, KeyCode::Backspace) => Some(Msg::Backspace),
         _ => None,
-    }
-}
-
-/// 提示行文案（与路由同源；render 直接取用，禁止硬编码键位）
-pub fn hint(ctx: KeyCtx) -> &'static str {
-    match ctx {
-        KeyCtx::Choice => {
-            " ↑/↓ 移动 · Space 勾选 · Enter 提交 · → 跳过 · F1 选题 · 1-4 自评把握 · Ctrl+M 模考 · Ctrl+Q 退出"
-        }
-        KeyCtx::Fill { editing: true } => {
-            " 打字作答 · Enter 提交 · Tab/→ 下一空（Shift+Tab/← 上一空）· Esc 退出编辑（保留输入）· Ctrl+Q 退出"
-        }
-        KeyCtx::Fill { editing: false } => {
-            " 打字恢复编辑（已输入保留）· Enter 提交 · Esc/Ctrl+Q 退出"
-        }
-        KeyCtx::Pending => " ←/→ 选择判对判错 · Enter 确认裁决 · Esc 跳过 · Ctrl+Q 退出",
-        KeyCtx::Graded => {
-            " Enter/→ 下一题 · ← 上一题 · F1 选题 · F4 批注（作文/翻译）· Ctrl+M 模考 · Ctrl+Q 退出"
-        }
-        KeyCtx::Finished => " Ctrl+Q 退出",
-        KeyCtx::Review => {
-            " Space/Enter 翻面 · 1-4 评分（Again/Hard/Good/Easy）· Tab/Esc 返回答题 · Ctrl+Q 退出"
-        }
-        KeyCtx::Picker => " ↑/↓ 选择题目 · Enter 跳转 · Esc/F1 返回 · Ctrl+Q 退出",
-        KeyCtx::Tx => {
-            " 打字输入源文 · Enter 翻译 · F5 对齐 · F6 我来翻 · F7 历史 · Esc 返回 · Ctrl+Q 退出"
-        }
-        KeyCtx::TxAlign => {
-            " 对照切段（literal/idiomatic/reordered/omitted）· Esc 返回 · Ctrl+Q 退出"
-        }
-        KeyCtx::TxMyTurn => " 打字输入你的译文 · Enter 对照评分 · Esc 返回 · Ctrl+Q 退出",
-        KeyCtx::TxHistory => " ↑/↓ 选择 · Enter 转练习 · Space 收藏/取消 · Esc 返回 · Ctrl+Q 退出",
-        KeyCtx::Scaffold => {
-            " ↑/↓ 选模板 · Tab/←→ 换槽 · Space 切阶段 · Enter 成文 · F3 自查 · Esc 返回 · Ctrl+Q 退出"
-        }
     }
 }
 

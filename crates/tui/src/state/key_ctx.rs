@@ -4,6 +4,18 @@ use crate::*;
 impl AppState {
     /// 键位上下文（keys.rs 唯一路由入参；键位表只此一份）
     pub fn key_ctx(&self) -> KeyCtx {
+        if self.screen == Screen::Profile {
+            return KeyCtx::Profile;
+        }
+        if self.screen == Screen::Games {
+            return KeyCtx::Game;
+        }
+        if self.screen == Screen::Wordbook {
+            return KeyCtx::Wordbook;
+        }
+        if matches!(self.screen, Screen::Notes | Screen::Diary | Screen::Todos) {
+            return KeyCtx::Workspace;
+        }
         if matches!(
             self.screen,
             Screen::Tx | Screen::TxAlign | Screen::TxMyTurn | Screen::TxHistory

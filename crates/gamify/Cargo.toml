@@ -5,3 +5,4 @@ edition.workspace = true
 
 [dependencies]
 ambition-core = { path = "../core" }
+serde = { version = "1", features = ["derive"] }

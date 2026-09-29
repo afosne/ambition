@@ -135,15 +135,14 @@ impl Engine {
         };
         ambition_store::finish_run(&self.pool, run_id, ambition_core::now_unix(), score, total)
             .await?;
-        // 发布（docs/13：模考 Xp(10)；events 中毒取内层可见，P-8）
-        ambition_core::lock_recover(&self.events, "Engine.events").push(
-            DomainEvent::PaperFinished {
-                run_id: run_id.to_string(),
-                paper_id: run.paper_id.clone(),
-                score,
-                max: total,
-            },
-        );
+        // 发布并结算（docs/13：模考 Xp(10)，不进连击）。
+        self.settle(DomainEvent::PaperFinished {
+            run_id: run_id.to_string(),
+            paper_id: run.paper_id.clone(),
+            score,
+            max: total,
+        })
+        .await;
         Ok((score, total))
     }
 }

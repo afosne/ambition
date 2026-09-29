@@ -3,6 +3,78 @@
 use super::decode_payload;
 use crate::*;
 
+#[derive(Debug, Clone)]
+pub struct ProfileAttemptRow {
+    pub qid: String,
+    pub knowledge: Vec<String>,
+    pub created_at: i64,
+    pub verdict: String,
+    pub score: f32,
+    pub max: f32,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProfileSnapshotRow {
+    pub id: String,
+    pub from: i64,
+    pub to: i64,
+    pub payload: String,
+    pub created_at: i64,
+}
+
+/// 画像聚合的本地作答事实；时间范围使用 unix 秒，错误标签由 grades 与 error_tags 联查。
+pub async fn profile_attempt_rows(
+    pool: &SqlitePool,
+    from: i64,
+    to: i64,
+) -> Result<Vec<ProfileAttemptRow>, sqlx::Error> {
+    let rows: Vec<(String, String, i64, String, f32, f32, String)> = sqlx::query_as(
+        "SELECT a.qid, COALESCE((SELECT payload FROM questions q WHERE q.qid=a.qid), ''),
+                CAST(strftime('%s', a.created_at) AS INTEGER), g.verdict, g.score, g.max,
+                COALESCE(group_concat(et.tag, char(31)), '')
+         FROM attempts a JOIN grades g ON g.attempt_id = a.attempt_id
+         LEFT JOIN error_tags et ON et.attempt_id = a.attempt_id
+         WHERE CAST(strftime('%s', a.created_at) AS INTEGER) >= ?
+           AND CAST(strftime('%s', a.created_at) AS INTEGER) < ?
+         GROUP BY a.attempt_id ORDER BY a.rowid",
+    )
+    .bind(from)
+    .bind(to)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(qid, question, created_at, verdict, score, max, tags)| ProfileAttemptRow {
+                knowledge: serde_json::from_str::<ambition_core::Question>(&question)
+                    .map(|q| q.tags)
+                    .unwrap_or_default(),
+                qid,
+                created_at,
+                verdict,
+                score,
+                max,
+                tags: tags
+                    .split(char::from(31))
+                    .filter(|t| !t.is_empty())
+                    .map(str::to_string)
+                    .collect(),
+            },
+        )
+        .collect())
+}
+
+/// 写入画像快照（快照可由 attempts/grades 重算，不是事实源）。
+pub async fn save_profile_snapshot(
+    pool: &SqlitePool,
+    snapshot: &ProfileSnapshotRow,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("INSERT INTO profile_snapshots (snapshot_id, from_at, to_at, payload, created_at) VALUES (?, ?, ?, ?, ?)")
+        .bind(&snapshot.id).bind(snapshot.from).bind(snapshot.to).bind(&snapshot.payload).bind(snapshot.created_at).execute(pool).await?;
+    Ok(())
+}
+
 /// 提交作答 = 单事务（attempts + grades + error_tags + arbitration，docs/02-core-store §事务）
 pub async fn insert_attempt_tx(
     pool: &SqlitePool,
@@ -112,6 +184,48 @@ pub async fn recent_timings(
 mod tests {
     use super::*;
     use crate::common::*;
+
+    #[tokio::test]
+    async fn test_profile_attempt_rows_reads_grades_and_tags() {
+        let pool = memory_pool().await;
+        let question = sample_question();
+        insert_question(&pool, &question).await.expect("题");
+        let attempt = sample_attempt(question.qid.clone());
+        let mut grade = sample_grade(ambition_core::Verdict::Correct);
+        grade.error_tags = vec![ambition_core::ErrorTag::Article];
+        insert_attempt_tx(&pool, &attempt, &grade)
+            .await
+            .expect("作答");
+        let rows = profile_attempt_rows(&pool, 0, i64::MAX)
+            .await
+            .expect("画像行");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].tags, vec!["article"]);
+    }
+
+    #[tokio::test]
+    async fn test_save_profile_snapshot_persists_payload() {
+        let pool = memory_pool().await;
+        save_profile_snapshot(
+            &pool,
+            &ProfileSnapshotRow {
+                id: "profile-1".into(),
+                from: 1,
+                to: 2,
+                payload: "{}".into(),
+                created_at: 2,
+            },
+        )
+        .await
+        .expect("快照");
+        let payload: String = sqlx::query_scalar(
+            "SELECT payload FROM profile_snapshots WHERE snapshot_id='profile-1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("读快照");
+        assert_eq!(payload, "{}");
+    }
     use ambition_core::{AttemptMode, GradedBy, Verdict};
 
     #[test]

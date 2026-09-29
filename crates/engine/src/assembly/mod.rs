@@ -58,12 +58,27 @@ impl Engine {
         }
         let (grader, llm) = build_grader(pool.clone(), &ai);
         let (xp, streak) = ambition_store::load_game_state(&pool, "local").await?;
+        let game_state = match ambition_store::load_game_profile(&pool, "local").await? {
+            Some(raw) => serde_json::from_str::<ambition_gamify::GameState>(&raw).unwrap_or(
+                ambition_gamify::GameState {
+                    xp,
+                    streak,
+                    ..Default::default()
+                },
+            ),
+            None => ambition_gamify::GameState {
+                xp,
+                streak,
+                ..Default::default()
+            },
+        };
         let engine = Self {
             pool,
             events: Mutex::new(Vec::new()),
-            game: GameProjector::hydrate(xp, streak),
+            game: GameProjector::hydrate_state(game_state),
             grader,
             llm,
+            profile: Mutex::new(None),
         };
         engine
             .import_seed(include_str!(
@@ -186,8 +201,8 @@ mod tests {
     async fn test_assemble_hydrates_game_and_imports_seed() {
         let engine = Engine::open_memory().await.expect("assemble 路径");
         assert_eq!(
-            engine.game_state(),
-            ambition_gamify::GameState { xp: 0, streak: 0 },
+            (engine.game_state().xp, engine.game_state().streak),
+            (0, 0),
             "内存库无存档 = 零值"
         );
         assert!(!engine.start_practice(0).await.expect("seed 题").is_empty());
