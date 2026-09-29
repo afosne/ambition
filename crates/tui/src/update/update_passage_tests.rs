@@ -139,8 +139,8 @@ mod tests {
         assert_eq!(s.screen, Screen::Review);
         assert_eq!(
             update(&mut s, Msg::Screen(Screen::Review)),
-            Cmd::None,
-            "同屏切换忽略"
+            Cmd::ReviewLoad,
+            "同屏切换触发重载（#25）"
         );
         // 复习屏：未翻面评分忽略（防误触）
         assert_eq!(update(&mut s, Msg::Rate(3)), Cmd::None, "未翻面不评分");

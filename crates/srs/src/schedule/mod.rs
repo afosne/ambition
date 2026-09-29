@@ -1,5 +1,14 @@
 //! 调度决策与到期队列：decide_action/next_mode/schedule/due_queue/interleave（docs/08）
 
+/// 交错策略（替代裸 bool，docs/01 §1 禁裸 bool，#31）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Interleave {
+    /// 不交错
+    None,
+    /// 同 group 不相邻（贪心轮转）
+    Groups,
+}
+
 use super::*;
 
 /// 作答后对卡片的处置
@@ -119,7 +128,7 @@ pub fn due_queue(
     items: Vec<ReviewItem>,
     now: i64,
     limit: u32,
-    interleave: bool,
+    interleave: Interleave,
 ) -> Vec<ReviewItem> {
     let mut due: Vec<ReviewItem> = items
         .into_iter()
@@ -131,7 +140,7 @@ pub fn due_queue(
             .cmp(&a.card.wrong_count)
             .then(a.card.due_at.cmp(&b.card.due_at))
     });
-    if interleave {
+    if matches!(interleave, Interleave::Groups) {
         interleave_groups(&mut due);
     }
     due.truncate(limit as usize);
@@ -316,7 +325,7 @@ mod tests {
             bare_card("b", 0, 700),
             bare_card("future", 0, now + 1),
         ];
-        let queue = due_queue(items, now, 10, true);
+        let queue = due_queue(items, now, 10, Interleave::Groups);
         assert_eq!(queue.len(), 3, "未到期被过滤");
         assert_eq!(queue[0].group, "a", "错词多者提权排首");
         // 交错：同 group 不相邻（a2 与 a 被 b 隔开或紧邻错位——断言首尾组不同）
@@ -327,10 +336,13 @@ mod tests {
         );
         // limit 截断
         let items2 = vec![bare_card("x", 0, 1), bare_card("y", 0, 1)];
-        assert_eq!(due_queue(items2, now, 1, false).len(), 1);
+        assert_eq!(due_queue(items2, now, 1, Interleave::None).len(), 1);
         // 空/单元素
-        assert!(due_queue(vec![], now, 5, true).is_empty());
-        assert_eq!(due_queue(vec![bare_card("s", 0, 0)], now, 5, true).len(), 1);
+        assert!(due_queue(vec![], now, 5, Interleave::Groups).is_empty());
+        assert_eq!(
+            due_queue(vec![bare_card("s", 0, 0)], now, 5, Interleave::Groups).len(),
+            1
+        );
     }
 
     #[test]

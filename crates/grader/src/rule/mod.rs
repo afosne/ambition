@@ -7,10 +7,19 @@ mod ring_tests;
 
 use crate::*;
 
+/// 冠词策略（替代裸 bool，docs/01 §1 禁裸 bool，#31）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArticlePolicy {
+    /// 保留冠词（默认）
+    Keep,
+    /// 去除冠词 a/an/the
+    Strip,
+}
+
 /// 比对规范化：去首尾空白标点、可选忽略冠词（按 track 配置）
-pub fn normalize_for_compare(input: &str, ignore_articles: bool) -> String {
+pub fn normalize_for_compare(input: &str, policy: ArticlePolicy) -> String {
     let base = normalize_text(input);
-    if !ignore_articles {
+    if matches!(policy, ArticlePolicy::Keep) {
         return base;
     }
     base.split_whitespace()
@@ -155,10 +164,19 @@ mod tests {
 
     #[test]
     fn test_normalize_for_compare_handles_articles() {
-        assert_eq!(normalize_for_compare("The Student!", false), "the student");
-        assert_eq!(normalize_for_compare("The Student!", true), "student");
-        assert_eq!(normalize_for_compare("an apple", true), "apple");
-        assert_eq!(normalize_for_compare("apple", false), "apple");
+        assert_eq!(
+            normalize_for_compare("The Student!", ArticlePolicy::Keep),
+            "the student"
+        );
+        assert_eq!(
+            normalize_for_compare("The Student!", ArticlePolicy::Strip),
+            "student"
+        );
+        assert_eq!(
+            normalize_for_compare("an apple", ArticlePolicy::Strip),
+            "apple"
+        );
+        assert_eq!(normalize_for_compare("apple", ArticlePolicy::Keep), "apple");
     }
 
     fn cloze_question(blanks: usize) -> Question {

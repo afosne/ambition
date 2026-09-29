@@ -105,7 +105,12 @@ impl Engine {
                 }
             }
         }
-        Ok(ambition_srs::due_queue(items, now, limit, true))
+        Ok(ambition_srs::due_queue(
+            items,
+            now,
+            limit,
+            ambition_srs::Interleave::Groups,
+        ))
     }
 
     /// 复习评分（FSRS 调度 + upsert + ReviewDone 事件 → settle 落 game_state，docs/03 §2）

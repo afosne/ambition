@@ -86,6 +86,8 @@ pub struct AppState {
     pub picker_open: bool,
     /// 面板光标（题库下标）
     pub picker_cursor: usize,
+    /// 键位帮助浮层开/关（? 键切换，#24）
+    pub help_open: bool,
     /// 待裁定裁决高亮（0=判对 1=判错；←/→ 切换，Enter 确认）
     pub arbitration_sel: u8,
     /// 模板列表（当前轨；F2 进屏时经 Cmd::ScaffoldLoad 异步装载，M5-W4b）
@@ -168,6 +170,7 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         review: ReviewState::default(),
         picker_open: false,
         picker_cursor: 0,
+        help_open: false,
         arbitration_sel: 0,
         scaffold_templates: Vec::new(),
         scaffold_idx: 0,

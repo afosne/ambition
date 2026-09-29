@@ -424,4 +424,15 @@ mod tests {
         );
         assert!(s.finished, "已推进到完成态");
     }
+
+    /// #24：? 键翻转帮助浮层开/关
+    #[test]
+    fn test_update_toggle_help_opens_and_closes() {
+        let mut s = new_state(vec![sample_question()]);
+        assert!(!s.help_open, "初始关闭");
+        assert_eq!(update(&mut s, Msg::ToggleHelp), Cmd::None);
+        assert!(s.help_open, "? 打开帮助");
+        assert_eq!(update(&mut s, Msg::ToggleHelp), Cmd::None);
+        assert!(!s.help_open, "再 ? 关闭帮助");
+    }
 }

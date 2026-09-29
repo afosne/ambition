@@ -397,7 +397,18 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             Cmd::None
         }
         // ← 上一题（首题原地；状态复位，已作答不保留——docs/03 §5.3 2026-09-27）
+        // #26：复合题（七选五/阅读）有 sub_answers 时先回退子题（弹出最后一个），再切上一题
         Msg::Prev => {
+            let is_composite = matches!(
+                state.questions.get(state.idx).map(|q| &q.kind),
+                Some(QuestionKind::SevenOfFive(_) | QuestionKind::Reading(_))
+            );
+            if is_composite && !state.sub_answers.is_empty() {
+                state.sub_answers.pop();
+                state.sel = 0;
+                state.revisions += 1;
+                return Cmd::None;
+            }
             if state.idx > 0 {
                 state.idx -= 1;
                 reset_question_state(state);
@@ -450,7 +461,12 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
         | Msg::ScaffoldRender
         | Msg::ScaffoldCheck => Cmd::None,
         // 复习屏/面板专属消息在答题流程忽略（顶部分支已拦截；防误触）
-        Msg::Screen(_) | Msg::Flip | Msg::Rate(_) | Msg::TogglePicker | Msg::Jump => Cmd::None,
+        Msg::Screen(_)
+        | Msg::Flip
+        | Msg::Rate(_)
+        | Msg::TogglePicker
+        | Msg::ToggleHelp
+        | Msg::Jump => Cmd::None,
     }
 }
 

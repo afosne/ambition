@@ -34,6 +34,8 @@ pub enum Msg {
     Prev,
     /// F1 选题面板开/关
     TogglePicker,
+    /// ? 键位帮助浮层开/关（#24；文案复用 hint 全表，禁止硬编码）
+    ToggleHelp,
     /// 面板内跳转（Enter）
     Jump,
     /// 模板屏：上/下一个模板（↑/↓）

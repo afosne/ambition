@@ -22,6 +22,6 @@ use ambition_core::{Answer, GradeResult, Question, QuestionKind, Timing};
 use ambition_engine::CardAction;
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Frame;
-use ratatui::layout::Alignment;
+use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};

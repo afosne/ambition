@@ -192,4 +192,26 @@ mod tests {
             "非答题态不开卷"
         );
     }
+
+    /// #24：? 键在任意上下文触发 ToggleHelp（非字母键，不违反禁单字母总则）
+    #[test]
+    fn test_key_to_msg_help_overlay_any_context() {
+        use Msg::*;
+        for ctx in [
+            KeyCtx::Choice,
+            KeyCtx::Pending,
+            KeyCtx::Graded,
+            KeyCtx::Finished,
+            KeyCtx::Review,
+            KeyCtx::Scaffold,
+            KeyCtx::Tx,
+            KeyCtx::Workspace,
+        ] {
+            assert_eq!(
+                key_to_msg(ctx, K::Char('?'), M::empty()),
+                Some(ToggleHelp),
+                "? 在 {ctx:?} 应触发 ToggleHelp"
+            );
+        }
+    }
 }

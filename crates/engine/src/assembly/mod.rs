@@ -80,11 +80,15 @@ impl Engine {
             llm,
             profile: Mutex::new(None),
         };
-        engine
+        // 内置 seed 幂等导入（坏 seed 只 warn 不阻断 open，与 enroll_builtin_cards 同口径，#14）
+        if let Err(e) = engine
             .import_seed(include_str!(
                 "../../../../data/seed/en/cet4/core.qpack.json"
             ))
-            .await?;
+            .await
+        {
+            tracing::warn!("内置 seed 导入失败（不阻断 open）: {e}");
+        }
         // M4：内置义项/句式幂等入卡（坏文件仅 warn 不阻断 open，docs/03 §1）
         engine.enroll_builtin_cards().await;
         Ok(engine)

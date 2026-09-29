@@ -3,6 +3,7 @@ use super::*;
 pub(super) fn update_screen(state: &mut AppState, target: Screen) -> Cmd {
     if state.screen == target {
         return match target {
+            Screen::Review => Cmd::ReviewLoad,
             Screen::Profile => Cmd::ProfileLoad,
             Screen::Games => Cmd::GameLoad,
             Screen::Wordbook => Cmd::VocabLoad,
@@ -31,6 +32,11 @@ pub(super) fn update_screen(state: &mut AppState, target: Screen) -> Cmd {
 }
 
 pub(super) fn update_m6(state: &mut AppState, msg: Msg) -> Option<Cmd> {
+    // ? 键位帮助浮层开/关（#24；任何上下文可用，非字母键不违反禁单字母总则）
+    if matches!(msg, Msg::ToggleHelp) {
+        state.help_open = !state.help_open;
+        return Some(Cmd::None);
+    }
     if matches!(state.screen, Screen::Notes | Screen::Diary | Screen::Todos) {
         return Some(match msg {
             Msg::Quit => Cmd::Quit,
@@ -109,5 +115,20 @@ mod tests {
         let mut state = new_state(vec![]);
         assert_eq!(update_screen(&mut state, Screen::Profile), Cmd::ProfileLoad);
         assert_eq!(update_screen(&mut state, Screen::Profile), Cmd::ProfileLoad);
+    }
+
+    /// #25：Review 屏同屏重载——done 态按 Ctrl+R 同屏触发 ReviewLoad（不再 None）
+    #[test]
+    fn test_update_screen_review_reload_on_same_screen() {
+        let mut state = new_state(vec![]);
+        state.screen = Screen::Review;
+        state.review.loaded = true;
+        state.review.idx = state.review.cards.len(); // done 状态
+        // 同屏再按 Ctrl+R → 重载队列（不再忽略）
+        assert_eq!(
+            update_screen(&mut state, Screen::Review),
+            Cmd::ReviewLoad,
+            "Review 同屏应触发 ReviewLoad（#25）"
+        );
     }
 }

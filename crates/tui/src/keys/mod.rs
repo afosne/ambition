@@ -48,6 +48,10 @@ pub enum KeyCtx {
 pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg> {
     // ① 恒定层：Ctrl 组合（任何上下文）——Ctrl+Q/Ctrl+C 退出；其余 Ctrl+字母 = 屏幕直达
     //    （docs/03 §5.3：Ctrl+A/Ctrl+R 直达已落地，其余屏随后续阶段）；非 Ctrl 的字母永远不进命令层
+    //    ? 键位帮助浮层（#24，任何上下文可用，非字母键不违反禁单字母总则）
+    if code == KeyCode::Char('?') {
+        return Some(Msg::ToggleHelp);
+    }
     if mods.contains(KeyModifiers::CONTROL) {
         return match code {
             KeyCode::Char('q') | KeyCode::Char('c') => Some(Msg::Quit),

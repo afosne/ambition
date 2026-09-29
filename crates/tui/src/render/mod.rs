@@ -279,6 +279,10 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         .style(Style::default());
     frame.render_widget(Clear, frame.area());
     frame.render_widget(paragraph, frame.area());
+    // ? 键位帮助浮层（#24：复用 hint 全表，禁止硬编码；渲染在 m6_screens::render_help_overlay）
+    if state.help_open {
+        m6_screens::render_help_overlay(frame);
+    }
 }
 
 #[cfg(test)]
