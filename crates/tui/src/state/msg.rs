@@ -50,6 +50,8 @@ pub enum Msg {
     TogglePicker,
     /// ? 键位帮助浮层开/关（#24；文案复用 hint 全表，禁止硬编码）
     ToggleHelp,
+    /// F5 讲解浮层开/关（#17 讲解层①②：判分后结构化讲解 + 文字讲解）
+    ToggleExplain,
     /// 面板内跳转（Enter）
     Jump,
     /// 模板屏：上/下一个模板（↑/↓）

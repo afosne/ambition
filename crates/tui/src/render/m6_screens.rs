@@ -38,6 +38,71 @@ pub(super) fn render_help_overlay(frame: &mut Frame, state: &mut AppState) {
     state.register_click(area, Msg::ToggleHelp);
 }
 
+/// #17 讲解层①②：结构化讲解浮层（verdict + 错因标签 + 概率分布 + graded_by）
+pub(super) fn render_explain_overlay(frame: &mut Frame, state: &mut AppState) {
+    let grade = match &state.grade {
+        Some(g) => g,
+        None => return,
+    };
+    let mut lines = String::from(" 结构化讲解（F5 关闭 · 点击关闭）\n\n");
+    // 判定结果
+    lines.push_str(&format!("判定: {:?}\n", grade.verdict));
+    lines.push_str(&format!("得分: {:.1} / {:.1}\n", grade.score, grade.max));
+    lines.push_str(&format!("置信度: {:.2}\n", grade.confidence));
+    lines.push_str(&format!("判定路径: {}\n", graded_by_label(grade.graded_by)));
+    // 错因标签
+    if !grade.error_tags.is_empty() {
+        lines.push_str("\n错因标签:\n");
+        for tag in &grade.error_tags {
+            lines.push_str(&format!("  • {:?}\n", tag));
+        }
+    }
+    // 结构化讲解①：逐项判定（Items 变体）
+    match &grade.detail {
+        ambition_core::GradeDetail::Items(items) => {
+            lines.push_str("\n逐项判定:\n");
+            for (i, item) in items.iter().enumerate() {
+                lines.push_str(&format!(
+                    "  {}: {}\n",
+                    i + 1,
+                    if item.correct { "✔" } else { "✗" },
+                ));
+            }
+        }
+        ambition_core::GradeDetail::Dims(dims) => {
+            lines.push_str("\n维度分:\n");
+            for dim in dims {
+                lines.push_str(&format!(
+                    "  • {}: {:.2} (conf {:.2})\n",
+                    dim.key, dim.score, dim.confidence
+                ));
+            }
+        }
+        ambition_core::GradeDetail::Plain => {}
+    }
+    // ②文字讲解入口提示（无 LLM key 时只显结构化①）
+    lines.push_str("\n---\n");
+    lines.push_str("①结构化讲解（离线可用）\n");
+    lines.push_str("②文字讲解需 LLM key（06::explain）\n");
+    let paragraph = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL).title("讲解"))
+        .style(Style::default());
+    let area = centered_area(frame.area(), 70, 80);
+    frame.render_widget(Clear, area);
+    frame.render_widget(paragraph, area);
+    state.register_click(area, Msg::ToggleExplain);
+}
+
+/// graded_by 中文标签
+fn graded_by_label(gb: ambition_core::GradedBy) -> &'static str {
+    match gb {
+        ambition_core::GradedBy::Rule => "规则层",
+        ambition_core::GradedBy::LlmReview => "LLM 复核",
+        ambition_core::GradedBy::Jev => "Jev 判题",
+        ambition_core::GradedBy::Human => "人工裁决",
+    }
+}
+
 /// #24：居中弹窗区域
 pub(super) fn centered_area(r: Rect, width_pct: u16, height_pct: u16) -> Rect {
     let popup = Layout::vertical([Constraint::Percentage(height_pct)]).split(r)[0];
@@ -152,5 +217,38 @@ mod tests {
         let parent = Rect::new(0, 0, 100, 40);
         let inner = centered_area(parent, 80, 90);
         assert!(inner.width <= 100 && inner.height <= 40, "不超出父区域");
+    }
+
+    /// #17：讲解浮层渲染——不 panic 即通过
+    #[test]
+    fn test_render_explain_overlay_renders_without_panic() {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        let mut state = new_state(vec![crate::sample_question()]);
+        state.grade = Some(ambition_core::GradeResult {
+            verdict: ambition_core::Verdict::Correct,
+            score: 1.0,
+            max: 1.0,
+            confidence: 1.0,
+            graded_by: ambition_core::GradedBy::Rule,
+            detail: ambition_core::GradeDetail::Plain,
+            error_tags: vec![],
+        });
+        terminal
+            .draw(|frame| render_explain_overlay(frame, &mut state))
+            .unwrap();
+        assert!(terminal.backend().buffer().area().area() > 0, "有内容");
+    }
+
+    /// #17：graded_by 中文标签
+    #[test]
+    fn test_graded_by_label_covers_all_variants() {
+        assert_eq!(graded_by_label(ambition_core::GradedBy::Rule), "规则层");
+        assert_eq!(
+            graded_by_label(ambition_core::GradedBy::LlmReview),
+            "LLM 复核"
+        );
+        assert_eq!(graded_by_label(ambition_core::GradedBy::Jev), "Jev 判题");
+        assert_eq!(graded_by_label(ambition_core::GradedBy::Human), "人工裁决");
     }
 }

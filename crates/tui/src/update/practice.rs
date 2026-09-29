@@ -281,6 +281,7 @@ pub fn practice_msg(state: &mut AppState, msg: Msg) -> Cmd {
         | Msg::Rate(_)
         | Msg::TogglePicker
         | Msg::ToggleHelp
+        | Msg::ToggleExplain
         | Msg::Jump
         | Msg::HomeEnter
         | Msg::HomeClick(_)

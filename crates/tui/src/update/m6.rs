@@ -37,6 +37,11 @@ pub(super) fn update_m6(state: &mut AppState, msg: Msg) -> Option<Cmd> {
         state.help_open = !state.help_open;
         return Some(Cmd::None);
     }
+    // F5 讲解浮层开/关（#17 讲解层①②；判分后可用，任何屏幕都可切换）
+    if matches!(msg, Msg::ToggleExplain) {
+        state.explain_open = !state.explain_open;
+        return Some(Cmd::None);
+    }
     if matches!(state.screen, Screen::Notes | Screen::Diary | Screen::Todos) {
         return Some(match msg {
             Msg::Quit => Cmd::Quit,

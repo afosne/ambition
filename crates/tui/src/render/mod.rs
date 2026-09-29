@@ -376,6 +376,10 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
             );
         }
     }
+    // F5 讲解浮层（#17 讲解层①②：结构化讲解 + 文字讲解）
+    if state.explain_open && state.grade.is_some() {
+        m6_screens::render_explain_overlay(frame, state);
+    }
     // ? 键位帮助浮层（#24：复用 hint 全表，禁止硬编码；渲染在 m6_screens::render_help_overlay）
     if state.help_open {
         m6_screens::render_help_overlay(frame, state);

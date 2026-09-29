@@ -14,7 +14,7 @@ pub fn hint(ctx: KeyCtx) -> &'static str {
         }
         KeyCtx::Pending => " ←/→ 选择判对判错 · Enter 确认裁决 · Esc 跳过 · Ctrl+Q 退出",
         KeyCtx::Graded => {
-            " Enter/→ 下一题 · ← 上一题 · F1 选题 · F4 批注（作文/翻译）· Ctrl+M 模考 · Ctrl+Q 退出"
+            " Enter/→ 下一题 · ← 上一题 · F1 选题 · F4 批注（作文/翻译）· F5 讲解 · Ctrl+M 模考 · Ctrl+Q 退出"
         }
         KeyCtx::Finished => " Ctrl+Q 退出",
         KeyCtx::Review => {

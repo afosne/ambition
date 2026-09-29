@@ -184,6 +184,8 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
         (KeyCtx::TxHistory, KeyCode::Char(' ')) => Some(Msg::TxToggleFavorite),
         // 判分后批注（M5-W5，F4——动作键走 F 区；Ctrl+E 保留 Writing 直达，docs/03 §5.3）
         (KeyCtx::Graded, KeyCode::F(4)) => Some(Msg::Annotate),
+        // #17 讲解层①②（F5——动作键走 F 区；判分后结构化讲解 + 文字讲解）
+        (KeyCtx::Graded, KeyCode::F(5)) => Some(Msg::ToggleExplain),
         // 模板作文屏（M5-W4b，docs/03 §5.3 scaffold 族）
         (KeyCtx::Scaffold, KeyCode::Up) => Some(Msg::ScaffoldUp),
         (KeyCtx::Scaffold, KeyCode::Down) => Some(Msg::ScaffoldDown),

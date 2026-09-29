@@ -90,6 +90,8 @@ pub struct AppState {
     pub picker_cursor: usize,
     /// 键位帮助浮层开/关（? 键切换，#24）
     pub help_open: bool,
+    /// 讲解浮层开/关（F5 切换，#17 讲解层①②）
+    pub explain_open: bool,
     /// 主页面菜单光标（↑↓ 选择，Enter 进入）
     pub home_cursor: usize,
     /// 鼠标可点击区域注册表（每帧渲染时 clear → register → main 查表）
@@ -177,6 +179,7 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         picker_open: false,
         picker_cursor: 0,
         help_open: false,
+        explain_open: false,
         home_cursor: 0,
         click_targets: Vec::new(),
         arbitration_sel: 0,
