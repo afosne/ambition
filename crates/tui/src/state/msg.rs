@@ -10,6 +10,10 @@ pub enum Msg {
     Submit,
     Next,
     Quit,
+    /// 主页面 Enter：进入光标选中的功能屏
+    HomeEnter,
+    /// 主页面鼠标点击第 i 项（设 cursor 后进入）
+    HomeClick(usize),
     /// 填空输入行追加字符
     Char(char),
     /// 填空输入行退格
@@ -20,6 +24,16 @@ pub enum Msg {
     Confidence(u8),
     /// Space 选中/取消（选择题；单选无意义，多选=切换）
     Select,
+    /// 鼠标点击第 i 个选项（设 sel=i 后触发 Select）
+    ClickOption(usize),
+    /// 鼠标点击第 i 个填空输入行（设 blank_sel=i 并进入编辑）
+    ClickBlank(usize),
+    /// 鼠标悬停第 i 个选项（只移光标，不触发选中）
+    HoverOption(usize),
+    /// 鼠标悬停第 i 个主菜单项（只移光标，不进入）
+    HoverHome(usize),
+    /// 鼠标悬停第 i 个填空输入行（只移 blank_sel，不进入编辑）
+    HoverBlank(usize),
     /// Esc 退出编辑（保留已输入；打字直接恢复编辑）
     StopEdit,
     /// 切屏（Ctrl+A/Ctrl+R 直达、Tab 进出复习屏，docs/03 §5.3）
@@ -85,6 +99,8 @@ pub enum Cmd {
     None,
     Quit,
     Submit(Answer),
+    /// 主页面进入练习屏 → main 加载题目
+    PracticeLoad,
     /// 人工裁决（main 调 engine.resolve_pending）
     Arbitrate(bool),
     /// 加载复习队列（main 调 engine.due_list）

@@ -69,7 +69,7 @@ pub(crate) fn multi_question() -> Question {
 
 /// 宽度感知渲染收集（P-2：每状态全新 TestBackend、按 unicode-width 跳过宽字符续格——
 /// 原 7 处逐字复制收口到此；各测试按自己的面板尺寸调用）
-pub(crate) fn render_sized(s: &AppState, width: u16, height: u16) -> String {
+pub(crate) fn render_sized(s: &mut AppState, width: u16, height: u16) -> String {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use unicode_width::UnicodeWidthStr;
@@ -124,8 +124,8 @@ mod tests {
 
     #[test]
     fn test_render_sized_collects_width_aware_non_empty_buffer() {
-        let s = crate::new_state(vec![crate::sample_question()]);
-        let buf = render_sized(&s, 72, 18);
+        let mut s = crate::new_state(vec![crate::sample_question()]);
+        let buf = render_sized(&mut s, 72, 18);
         assert!(!buf.is_empty(), "渲染缓冲可收集");
         assert!(buf.contains("university"), "题干可见");
     }

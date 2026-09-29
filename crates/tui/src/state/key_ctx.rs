@@ -4,6 +4,9 @@ use crate::*;
 impl AppState {
     /// 键位上下文（keys.rs 唯一路由入参；键位表只此一份）
     pub fn key_ctx(&self) -> KeyCtx {
+        if self.screen == Screen::Home {
+            return KeyCtx::Home;
+        }
         if self.screen == Screen::Profile {
             return KeyCtx::Profile;
         }
@@ -76,5 +79,12 @@ mod tests {
         assert_eq!(fill.key_ctx(), KeyCtx::Graded);
         fill.finished = true;
         assert_eq!(fill.key_ctx(), KeyCtx::Finished);
+    }
+
+    #[test]
+    fn test_key_ctx_home_routes_to_home() {
+        let mut s = new_state(vec![]);
+        s.screen = Screen::Home;
+        assert_eq!(s.key_ctx(), KeyCtx::Home);
     }
 }

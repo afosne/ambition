@@ -14,6 +14,8 @@ use ambition_writing::{Comments, ScaffoldCheck, ScaffoldStage, Template};
 /// 屏幕（M4：Practice + Review；完整 Screen 集见 docs/03-engine-ui）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
+    /// 主页面（功能菜单选择，启动首屏）
+    Home,
     Practice,
     /// 复习屏（FSRS 翻卡，docs/03 §3 M4）
     Review,
@@ -88,6 +90,10 @@ pub struct AppState {
     pub picker_cursor: usize,
     /// 键位帮助浮层开/关（? 键切换，#24）
     pub help_open: bool,
+    /// 主页面菜单光标（↑↓ 选择，Enter 进入）
+    pub home_cursor: usize,
+    /// 鼠标可点击区域注册表（每帧渲染时 clear → register → main 查表）
+    pub click_targets: Vec<crate::mouse::ClickTarget>,
     /// 待裁定裁决高亮（0=判对 1=判错；←/→ 切换，Enter 确认）
     pub arbitration_sel: u8,
     /// 模板列表（当前轨；F2 进屏时经 Cmd::ScaffoldLoad 异步装载，M5-W4b）
@@ -139,7 +145,7 @@ mod msg;
 pub use msg::{Cmd, Msg};
 
 /// 题目空位数（填空类 = blanks 数；其它题型 = 0——inputs 长度据此重建；M4 题型补全含完形/语法填空）
-pub(crate) fn blank_count(kind: &QuestionKind) -> usize {
+pub fn blank_count(kind: &QuestionKind) -> usize {
     kind.blank_count()
 }
 
@@ -171,6 +177,8 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         picker_open: false,
         picker_cursor: 0,
         help_open: false,
+        home_cursor: 0,
+        click_targets: Vec::new(),
         arbitration_sel: 0,
         scaffold_templates: Vec::new(),
         scaffold_idx: 0,

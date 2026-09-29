@@ -161,3 +161,31 @@
 - **根因**：提交前只关注代码与门禁通过，**忘记同步进度文档与雷点日志**（skill `ambition-pitfall-log` 强制要求每次提交后更新两者）；大量 staged 文件用 `git add` 一次性提交时，文档类文件被遗漏。
 - **解决**：补提交修正 PROGRESS.md（MVP_STAGE→6/6、补哈希/测试数/四段评估）与 PITFALLS.md（BOM P-21 + 本条 P-22）。
 - **预防**：**提交前 checklist**：① `MVP_STAGE` 行是否与阶段表状态一致；② 测试数是否为 `cargo test` 实际输出（不照搬上次数字）；③ PITFALLS.md 是否有新坑条目（P-xx 递增）；④ 四段评估是否完整（代码质量/实际使用/代码耦合度/鲁棒性）；⑤ 改进建议是否追加并勾选承接项。
+
+## P-23 attempt_id 重启后撞 UNIQUE 约束——2026-09-29
+
+- **症状**：TUI 提交答案报 `UNIQUE constraint failed: attempts.attempt_id`（SQLite code 1555）；所有题目提交都失败、无法判分。
+- **根因**：`main.rs` 用进程内计数器 `attempt_seq`（从 0 起）生成 `attempt_id = format!("tui-{attempt_seq}")`；数据库 `~/.ambition/ambition.db` 是持久化文件——首次运行写入 `tui-1`..`tui-N` 后，重启进程计数器归零，再提交第一题又生成 `tui-1`，与已有行冲突。
+- **解决**：ID 加入 unix 秒时间戳前缀：`format!("tui-{}-{attempt_seq}", now_unix())`——同一秒内提交多题靠 `attempt_seq` 区分，跨进程靠时间戳区分，不再撞 UNIQUE。
+- **预防**：任何持久化表的 ID 生成不能只靠进程内计数器；必须含时间戳/随机/UUID 等跨进程唯一分量。新增持久化实体时 review 其 ID 生成策略是否在重启后仍唯一。
+
+## P-24 new_state 默认 screen 不能改——测试全挂——2026-09-29
+
+- **症状**：新增 `Screen::Home` 后把 `new_state` 默认 `screen` 从 `Practice` 改为 `Home`，导致 TUI 全仓 30+ 个测试失败（所有构造状态的测试都期望 `Practice` 屏）。
+- **根因**：`new_state` 是测试基础设施函数（全仓 70+ 处调用），改默认值 = 批量破坏所有测试前置条件；测试在 `Practice` 屏下断言 `key_ctx()`/渲染/更新行为，换到 `Home` 屏全部不匹配。
+- **解决**：保持 `new_state` 默认 `screen: Practice`（向后兼容）；在 `main.rs` 启动后手动 `state.screen = Screen::Home`——生产代码一行设值，测试零改动。
+- **预防**：公共构造函数的默认值属于 API 契约的一部分，改默认值前先评估测试影响面（grep 调用点数量）；优先在调用方设值而非改默认值。
+
+## P-25 鼠标支持：render 签名 &AppState → &mut AppState 全量变更——2026-09-29
+
+- **症状**：为支持鼠标点击（`click_targets` 注册表），需要把 `render` 及所有子渲染函数的 `state` 参数从 `&AppState` 改为 `&mut AppState`，导致全 crate 20+ 处 `render_sized(&s, ...)` 调用编译失败（`E0308` 类型不匹配）。
+- **根因**：`register_click` 需要 `&mut self`（push 到 `click_targets`），而渲染函数签名是 `&AppState`（不可变）。改签名后所有测试中的 `render_sized` 调用和 `render_to` 辅助函数都需要从 `&s` 改为 `&mut s`，且 `let s` 需要改为 `let mut s`。
+- **解决**：逐文件修改——`render_sized` 签名改 `&mut AppState`；各测试 `render_to` 辅助函数签名改 `&mut AppState`；调用点 `&s` → `&mut s`；`let s` → `let mut s`。借用冲突（`let q = &state.questions[..]` 后 `state.register_click`）通过先提取信息到局部变量再注册解决。
+- **预防**：渲染函数需要可变引用时，从底层公共函数（`render_sized`）开始改签名，然后逐层修改调用点。grep `&AppState` 定位所有需要修改的位置。
+
+## P-26 Hover Msg 在 unhandled 列表中的可达性——2026-09-29
+
+- **症状**：新增 `Msg::HoverOption/HoverBlank/HoverHome` 后，在 `update` 的 unhandled 列表中添加这三个变体导致 `unreachable pattern` warning；但移除后 `HoverHome` 在非 Home 屏时走到 139 行 `match msg` 报 `E0004 non-exhaustive patterns`。
+- **根因**：`HoverHome` 在 Home 分支（`if state.screen == Screen::Home`）处理，但当 `screen != Home` 时不会走该分支——HoverHome 在非 Home 屏时走到 139 行 match，是**可达的**。而 `HoverOption`/`HoverBlank` 在 139 行 match 中的 `Msg::ClickOption` 之后处理，到 unhandled 列表时已匹配——是**不可达的**。
+- **解决**：unhandled 列表只加 `HoverHome`（可达），不加 `HoverOption`/`HoverBlank`（不可达）。
+- **预防**：`if screen == X` 分支处理的 Msg 变体在非 X 屏时仍走到主 match——加入 unhandled 列表前分析各分支的可达性。

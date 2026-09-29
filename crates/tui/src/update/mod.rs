@@ -2,17 +2,22 @@
 //! 本域含配对测试子组件：`update::update_tests`（状态机）/ `update::update_passage_tests`（语篇作答）。
 //! 跨域引用一律 `use crate::*`（组内共享导入留在 lib.rs，docs/01 §1 组织规范）。
 
+mod home_update;
 mod m6;
 mod mock;
 mod nav;
+mod practice;
 mod scaffold;
 mod tx;
+#[cfg(test)]
+mod update_mod_tests;
 #[cfg(test)]
 mod update_passage_tests;
 #[cfg(test)]
 mod update_tests;
 
-use self::nav::{advance_question, reset_question_state};
+use self::home_update::{home_enter, home_menu_len};
+use self::nav::reset_question_state;
 use crate::*;
 
 pub use mock::{apply_mock_finish, apply_mock_start};
@@ -26,6 +31,34 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
     // 屏幕切换（任何状态可用：Ctrl+A/Ctrl+R 直达、Tab 进出复习屏；进 Review 触发队列加载）
     if let Msg::Screen(target) = msg {
         return m6::update_screen(state, target);
+    }
+    // 主页面状态机（↑↓ 导航 · Enter 进入功能屏 · Esc 退出已在 keys 路由）
+    if state.screen == Screen::Home {
+        return match msg {
+            Msg::Quit => Cmd::Quit,
+            Msg::MoveDown => {
+                let n = home_menu_len();
+                state.home_cursor = (state.home_cursor + 1) % n;
+                Cmd::None
+            }
+            Msg::MoveUp => {
+                let n = home_menu_len();
+                state.home_cursor = (state.home_cursor + n - 1) % n;
+                Cmd::None
+            }
+            Msg::HomeClick(i) => {
+                let n = home_menu_len();
+                state.home_cursor = i.min(n - 1);
+                home_enter(state)
+            }
+            Msg::HoverHome(i) => {
+                let n = home_menu_len();
+                state.home_cursor = i.min(n - 1);
+                Cmd::None
+            }
+            Msg::HomeEnter => home_enter(state),
+            _ => Cmd::None,
+        };
     }
     if let Some(cmd) = m6::update_m6(state, msg) {
         return cmd;
@@ -56,7 +89,7 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             _ => Cmd::None,
         };
     }
-    // 选题面板独立状态机（↑↓ 列表 · Enter 跳转复位 · 其余消息忽略；Esc/F1 经 TogglePicker 已拦截）
+    // 选题面板独立状态机
     if state.picker_open {
         return match msg {
             Msg::Quit => Cmd::Quit,
@@ -85,12 +118,11 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             _ => Cmd::None,
         };
     }
-    // 模板作文屏独立状态机（M5-W4b，docs/03 §5.3 scaffold 族；须在 finished 守卫之前——完成态也可练模板）
+    // 模板作文屏独立状态机
     if state.screen == Screen::Scaffold {
         return scaffold::scaffold_update(state, msg);
     }
-
-    // 翻译工作台族独立状态机（M5-W7；与 scaffold 同位：先于 finished 守卫——收卷后仍可进工作台）
+    // 翻译工作台族独立状态机
     if matches!(
         state.screen,
         Screen::Tx | Screen::TxAlign | Screen::TxMyTurn | Screen::TxHistory
@@ -108,391 +140,152 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             };
         }
     }
-    match msg {
-        Msg::Quit => Cmd::Quit,
-        Msg::Char(c) => {
-            // 打字即编辑（无需进入键）：首键进入编辑态，字符落当前空位（keys.rs Fill ctx 路由）
-            if state.is_fill_pending() {
-                state.editing = true;
-                if let Some(field) = state.inputs.get_mut(state.blank_sel) {
-                    field.push(c);
-                    state.revisions += 1;
-                }
-            }
-            Cmd::None
-        }
-        Msg::Backspace => {
-            if state.is_fill_pending() {
-                state.editing = true;
-                if state
-                    .inputs
-                    .get_mut(state.blank_sel)
-                    .is_some_and(|field| field.pop().is_some())
-                {
-                    state.revisions += 1;
-                }
-            }
-            Cmd::None
-        }
-        Msg::StopEdit => {
-            // 退出编辑但保留已输入（再打字直接恢复；非编辑态忽略）
-            if state.is_fill_pending() && state.editing {
-                state.editing = false;
-            }
-            Cmd::None
-        }
-        Msg::Select => {
-            // Space 勾选/取消（2026-09-27 修订：单选也可勾选 = 选择状态可见）；仅作答态有效
-            if state.grade.is_some() {
-                return Cmd::None;
-            }
-            match &state.questions[state.idx].kind {
-                // 单选：单元素勾选替换（同位再按=取消；✓ 可见，提交勾选项优先）
-                QuestionKind::SingleChoice(_) => {
-                    let id = state.sel as u32;
-                    if state.checked.contains(&id) {
-                        state.checked.clear();
-                    } else {
-                        state.checked = vec![id];
-                    }
-                    state.revisions += 1;
-                    Cmd::None
-                }
-                // 多选：切换选中集（M1 既有）
-                QuestionKind::MultiChoice(_) => {
-                    let id = state.sel as u32;
-                    if let Some(pos) = state.checked.iter().position(|&x| x == id) {
-                        state.checked.remove(pos);
-                    } else {
-                        state.checked.push(id);
-                        state.checked.sort_unstable();
-                    }
-                    state.revisions += 1;
-                    Cmd::None
-                }
-                // 七选五/阅读：逐槽作答——记录当前槽选中项并前进到下一槽（M4 题型补全）
-                QuestionKind::SevenOfFive(body) if state.sub_answers.len() < body.answer.len() => {
-                    state.sub_answers.push(state.sel as u32);
-                    state.sel = 0;
-                    state.revisions += 1;
-                    Cmd::None
-                }
-                QuestionKind::Reading(body) if state.sub_answers.len() < body.items.len() => {
-                    state.sub_answers.push(state.sel as u32);
-                    state.sel = 0;
-                    state.revisions += 1;
-                    Cmd::None
-                }
-                _ => Cmd::None,
-            }
-        }
-        Msg::ConfirmArbitrate => {
-            // 仅待裁定态生效：确认当前高亮裁决（0=判对 1=判错）；其余状态忽略（防误触）
-            if state
-                .grade
-                .as_ref()
-                .is_some_and(|g| g.verdict == ambition_core::Verdict::Pending)
-            {
-                return Cmd::Arbitrate(state.arbitration_sel == 0);
-            }
-            Cmd::None
-        }
-        Msg::Confidence(level) => {
-            if state.grade.is_none() && !state.is_fill_pending() {
-                state.self_confidence = Some(level.clamp(1, 4));
-            }
-            Cmd::None
-        }
-        Msg::MoveDown | Msg::MoveUp => {
-            // 待裁定：箭头切换「判对/判错」高亮（不计修订）
-            if state
-                .grade
-                .as_ref()
-                .is_some_and(|g| g.verdict == ambition_core::Verdict::Pending)
-            {
-                state.arbitration_sel = 1 - state.arbitration_sel;
-                return Cmd::None;
-            }
-            if state.grade.is_some() {
-                return Cmd::None;
-            }
-            // 填空待答：切换空位（Tab/→/↓ 下一空，Shift+Tab/←/↑ 上一空；单空原地不动）
-            if state.is_fill_pending() {
-                let n = state.inputs.len();
-                if n > 1 {
-                    let delta = if matches!(msg, Msg::MoveDown) {
-                        1
-                    } else {
-                        n - 1
-                    };
-                    state.blank_sel = (state.blank_sel + delta) % n;
-                    state.revisions += 1;
-                }
-                return Cmd::None;
-            }
-            let kind = &state.questions[state.idx].kind;
-            // 阅读：光标在「当前子题」的选项间移动（逐槽作答，M4 题型补全）
-            let option_count = match kind {
-                QuestionKind::Reading(body) => body
-                    .items
-                    .get(state.sub_answers.len())
-                    .map(|item| item.options.len())
-                    .unwrap_or(0),
-                other => other.option_count(),
-            };
-            if option_count == 0 {
-                return Cmd::None;
-            }
-            let delta = if matches!(msg, Msg::MoveDown) {
-                1
-            } else {
-                option_count - 1
-            };
-            state.sel = (state.sel + delta) % option_count;
-            state.revisions += 1;
-            Cmd::None
-        }
-        Msg::Submit => {
-            if state.grade.is_some() {
-                return Cmd::None;
-            }
-            state.error = None; // 重试前清掉上一次的错误行
-            match &state.questions[state.idx].kind {
-                QuestionKind::SingleChoice(_) => {
-                    // 勾选项优先（Space 勾了再移动光标不丢）；未勾 = 按光标位提交
-                    let pick = state.checked.first().copied().unwrap_or(state.sel as u32);
-                    Cmd::Submit(Answer::Choice(vec![pick]))
-                }
-                QuestionKind::MultiChoice(_) => {
-                    // 空选提交报错不提交（2026-09-27 修订：不再静默回退光标位）
-                    if state.checked.is_empty() {
-                        state.error = Some("请先用 Space 选中选项再提交（→ 跳过本题）".to_string());
-                        return Cmd::None;
-                    }
-                    Cmd::Submit(Answer::Choice(state.checked.clone()))
-                }
-                QuestionKind::FillBlank(body) => {
-                    // 每空一位（长度由构造保证；不齐 = 状态异常，防御性报错不伪造提交）
-                    if state.inputs.len() != body.blanks.len() {
-                        state.error = Some(format!(
-                            "本题 {} 个空，当前 {} 个输入位（状态异常）",
-                            body.blanks.len(),
-                            state.inputs.len()
-                        ));
-                        return Cmd::None;
-                    }
-                    Cmd::Submit(Answer::Fill(
-                        state
-                            .inputs
-                            .iter()
-                            .map(|field| field.trim().to_string())
-                            .collect(),
-                    ))
-                }
-                // M4 题型补全：完形/语法填空 = 逐空填空（与 FillBlank 同路，子题递归判分）
-                QuestionKind::Cloze(cloze) => {
-                    if state.inputs.len() != cloze.blanks.len() {
-                        state.error = Some(format!(
-                            "本题 {} 个空，当前 {} 个输入位（状态异常）",
-                            cloze.blanks.len(),
-                            state.inputs.len()
-                        ));
-                        return Cmd::None;
-                    }
-                    Cmd::Submit(Answer::Fill(
-                        state
-                            .inputs
-                            .iter()
-                            .map(|field| field.trim().to_string())
-                            .collect(),
-                    ))
-                }
-                QuestionKind::GrammarFill(gf) => {
-                    if state.inputs.len() != gf.blanks.len() {
-                        state.error = Some(format!(
-                            "本题 {} 个空，当前 {} 个输入位（状态异常）",
-                            gf.blanks.len(),
-                            state.inputs.len()
-                        ));
-                        return Cmd::None;
-                    }
-                    Cmd::Submit(Answer::Fill(
-                        state
-                            .inputs
-                            .iter()
-                            .map(|field| field.trim().to_string())
-                            .collect(),
-                    ))
-                }
-                // 七选五：逐缺口（sub_answers 逐槽记录；未记录槽回退光标位）
-                QuestionKind::SevenOfFive(body) => {
-                    let gaps = body.answer.len();
-                    let mut ids = Vec::with_capacity(gaps);
-                    for gap in 0..gaps {
-                        ids.push(
-                            state
-                                .sub_answers
-                                .get(gap)
-                                .copied()
-                                .unwrap_or(state.sel as u32),
-                        );
-                    }
-                    Cmd::Submit(Answer::Choice(ids))
-                }
-                // 阅读：逐子题 → Answer::Group（未记录子题回退光标位并钳制到选项范围）
-                QuestionKind::Reading(body) => {
-                    let mut subs = Vec::with_capacity(body.items.len());
-                    for (i, item) in body.items.iter().enumerate() {
-                        let pick = state
-                            .sub_answers
-                            .get(i)
-                            .copied()
-                            .unwrap_or(state.sel as u32)
-                            .min(item.options.len().saturating_sub(1) as u32);
-                        subs.push(Answer::Choice(vec![pick]));
-                    }
-                    Cmd::Submit(Answer::Group(subs))
-                }
-                // M5-W2/W3：翻译/作文 = 单文本作答（inputs[0] 单位编辑；空文不提交，docs/03 §1）
-                QuestionKind::Translation(_) | QuestionKind::Essay(_) => {
-                    let hint = if matches!(
-                        state.questions[state.idx].kind,
-                        QuestionKind::Translation(_)
-                    ) {
-                        "译文"
-                    } else {
-                        "作文"
-                    };
-                    let text = state
-                        .inputs
-                        .first()
-                        .map(|field| field.trim().to_string())
-                        .unwrap_or_default();
-                    if text.is_empty() {
-                        state.error = Some(format!("请先输入{hint}内容再提交（→ 跳过本题）"));
-                        return Cmd::None;
-                    }
-                    Cmd::Submit(Answer::Text(text))
-                }
-            }
-        }
-        Msg::Next => {
-            if state.grade.is_none() {
-                return Cmd::None;
-            }
-            advance_question(state);
-            // 模考：末题 Next 即交卷（store 最新一答口径计分，M5-W6）
-            if state.finished && state.mock.is_some() {
-                return Cmd::MockFinish;
-            }
-            Cmd::None
-        }
-        // → 跳过/下一题（不判分，docs/03 §5.3 2026-09-27）
-        Msg::Skip => {
-            advance_question(state);
-            // 模考：走完即交卷（未作答不计分，M5-W6）
-            if state.finished && state.mock.is_some() {
-                return Cmd::MockFinish;
-            }
-            Cmd::None
-        }
-        // ← 上一题（首题原地；状态复位，已作答不保留——docs/03 §5.3 2026-09-27）
-        // #26：复合题（七选五/阅读）有 sub_answers 时先回退子题（弹出最后一个），再切上一题
-        Msg::Prev => {
-            let is_composite = matches!(
-                state.questions.get(state.idx).map(|q| &q.kind),
-                Some(QuestionKind::SevenOfFive(_) | QuestionKind::Reading(_))
-            );
-            if is_composite && !state.sub_answers.is_empty() {
-                state.sub_answers.pop();
-                state.sel = 0;
-                state.revisions += 1;
-                return Cmd::None;
-            }
-            if state.idx > 0 {
-                state.idx -= 1;
-                reset_question_state(state);
-            }
-            Cmd::None
-        }
-        // 开模考（Ctrl+M；卷中同屏防重开，收卷/练习屏可开新卷——M5-W6）
-        Msg::MockStart => {
-            if state.screen == Screen::Mock && !state.finished {
-                return Cmd::None;
-            }
-            Cmd::MockStart
-        }
-        // 批注（M5-W5，Ctrl+E）：判分后 + 作文/翻译 + 有提交文本 → Cmd（其余静默防误触）
-        Msg::Annotate => {
-            let text_kind = matches!(
-                state.questions[state.idx].kind,
-                QuestionKind::Essay(_) | QuestionKind::Translation(_)
-            );
-            if state.grade.is_none() || !text_kind {
-                return Cmd::None;
-            }
-            match state.submitted_text.clone() {
-                Some(text) if !text.trim().is_empty() => Cmd::Annotate(text),
-                _ => {
-                    state.error = Some("无可批注文本（先作答提交）".to_string());
-                    Cmd::None
-                }
-            }
-        }
-        // 工作台族消息在答题流程忽略（Tx* 屏前置状态机已拦截；防误触）
-        Msg::TxTranslate
-        | Msg::TxAlign
-        | Msg::TxMyTurnOpen
-        | Msg::TxMyTurnSubmit
-        | Msg::TxHistoryOpen
-        | Msg::TxHistoryUp
-        | Msg::TxHistoryDown
-        | Msg::TxToggleFavorite
-        | Msg::TxToPractice => Cmd::None,
-        Msg::WorkspaceSave => Cmd::None,
-        Msg::GameAction(_) => Cmd::None,
-        Msg::VocabLookup | Msg::VocabEnroll => Cmd::None,
-        // 模板屏专属消息在答题流程忽略（顶部分支已拦截；防误触）
-        Msg::ScaffoldUp
-        | Msg::ScaffoldDown
-        | Msg::ScaffoldStage
-        | Msg::ScaffoldSlotNext
-        | Msg::ScaffoldSlotPrev
-        | Msg::ScaffoldRender
-        | Msg::ScaffoldCheck => Cmd::None,
-        // 复习屏/面板专属消息在答题流程忽略（顶部分支已拦截；防误触）
-        Msg::Screen(_)
-        | Msg::Flip
-        | Msg::Rate(_)
-        | Msg::TogglePicker
-        | Msg::ToggleHelp
-        | Msg::Jump => Cmd::None,
+    // 练习屏主消息分发（打字/选择/裁决/提交/翻题/鼠标交互）
+    practice::practice_msg(state, msg)
+}
+
+/// 提交答案（按题型构造 Answer）——从 update 主线拆出以控制行数
+pub(crate) fn submit_answer(state: &mut AppState) -> Cmd {
+    if state.grade.is_some() {
+        return Cmd::None;
     }
+    state.error = None;
+    match &state.questions[state.idx].kind {
+        QuestionKind::SingleChoice(_) => {
+            let pick = state.checked.first().copied().unwrap_or(state.sel as u32);
+            Cmd::Submit(Answer::Choice(vec![pick]))
+        }
+        QuestionKind::MultiChoice(_) => {
+            if state.checked.is_empty() {
+                state.error = Some("请先用 Space 选中选项再提交（→ 跳过本题）".to_string());
+                return Cmd::None;
+            }
+            Cmd::Submit(Answer::Choice(state.checked.clone()))
+        }
+        QuestionKind::FillBlank(body) => {
+            let blanks = body.blanks.clone();
+            fill_submit(state, &blanks)
+        }
+        QuestionKind::Cloze(body) => {
+            let blanks = body.blanks.clone();
+            fill_submit(state, &blanks)
+        }
+        QuestionKind::GrammarFill(body) => {
+            let blanks = body.blanks.clone();
+            fill_submit(state, &blanks)
+        }
+        QuestionKind::SevenOfFive(body) => {
+            let gaps = body.answer.len();
+            let mut ids = Vec::with_capacity(gaps);
+            for gap in 0..gaps {
+                ids.push(
+                    state
+                        .sub_answers
+                        .get(gap)
+                        .copied()
+                        .unwrap_or(state.sel as u32),
+                );
+            }
+            Cmd::Submit(Answer::Choice(ids))
+        }
+        QuestionKind::Reading(body) => {
+            let mut subs = Vec::with_capacity(body.items.len());
+            for (i, item) in body.items.iter().enumerate() {
+                let pick = state
+                    .sub_answers
+                    .get(i)
+                    .copied()
+                    .unwrap_or(state.sel as u32)
+                    .min(item.options.len().saturating_sub(1) as u32);
+                subs.push(Answer::Choice(vec![pick]));
+            }
+            Cmd::Submit(Answer::Group(subs))
+        }
+        QuestionKind::Translation(_) | QuestionKind::Essay(_) => {
+            let hint = if matches!(
+                state.questions[state.idx].kind,
+                QuestionKind::Translation(_)
+            ) {
+                "译文"
+            } else {
+                "作文"
+            };
+            let text = state
+                .inputs
+                .first()
+                .map(|field| field.trim().to_string())
+                .unwrap_or_default();
+            if text.is_empty() {
+                state.error = Some(format!("请先输入{hint}内容再提交（→ 跳过本题）"));
+                return Cmd::None;
+            }
+            Cmd::Submit(Answer::Text(text))
+        }
+    }
+}
+
+/// 填空类提交辅助（FillBlank/Cloze/GrammarFill 共用，从 submit_answer 拆出以控制行数）
+pub(crate) fn fill_submit(state: &mut AppState, blanks: &[ambition_core::BlankItem]) -> Cmd {
+    if state.inputs.len() != blanks.len() {
+        state.error = Some(format!(
+            "本题 {} 个空，当前 {} 个输入位（状态异常）",
+            blanks.len(),
+            state.inputs.len()
+        ));
+        return Cmd::None;
+    }
+    Cmd::Submit(Answer::Fill(
+        state
+            .inputs
+            .iter()
+            .map(|field| field.trim().to_string())
+            .collect(),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ambition_core::Verdict;
-    // 配对桩（同文件强制配对；完整场景测试在 update_tests.rs）
 
+    // 配对桩：fn update → test_update（同文件配对门禁）
+    // 完整场景测试在 update_mod_tests.rs
     #[test]
-    fn test_update_moves_cursor_and_submits_choice() {
+    fn test_update_quit_returns_quit_cmd() {
         let mut s = new_state(vec![crate::sample_question()]);
-        assert_eq!(update(&mut s, Msg::MoveDown), Cmd::None);
-        assert_eq!(s.sel, 1, "光标下移");
-        let cmd = update(&mut s, Msg::Submit);
-        assert!(matches!(cmd, Cmd::Submit(Answer::Choice(_))), "提交选择");
-        // 判分后 Submit 被忽略
-        s.grade = Some(GradeResult {
-            verdict: Verdict::Correct,
-            score: 1.0,
-            max: 1.0,
-            confidence: 1.0,
-            graded_by: ambition_core::GradedBy::Rule,
-            detail: ambition_core::GradeDetail::Plain,
-            error_tags: vec![],
-        });
-        assert_eq!(update(&mut s, Msg::Submit), Cmd::None, "已判分忽略提交");
+        assert_eq!(update(&mut s, Msg::Quit), Cmd::Quit);
+    }
+
+    // 配对桩：fn submit_answer → test_submit_answer（同文件配对门禁）
+    #[test]
+    fn test_submit_answer_returns_choice_for_single() {
+        let mut s = new_state(vec![crate::sample_question()]);
+        let cmd = submit_answer(&mut s);
+        assert!(matches!(cmd, Cmd::Submit(Answer::Choice(_))));
+    }
+
+    // 配对桩：fn fill_submit → test_fill_submit（同文件配对门禁）
+    #[test]
+    fn test_fill_submit_rejects_mismatched_blank_count() {
+        use ambition_core::{BlankItem, FillBody, QuestionKind};
+        let q = Question::new(
+            "test".into(),
+            QuestionKind::FillBlank(FillBody {
+                sentence: "___".into(),
+                blanks: vec![BlankItem {
+                    acceptable: vec!["x".into()],
+                }],
+            }),
+            1,
+            vec![],
+            ambition_core::Provenance::Seed,
+        );
+        let mut s = new_state(vec![q]);
+        s.inputs.clear(); // 清空造成不齐（1 blank vs 0 inputs）
+        let blanks = vec![BlankItem {
+            acceptable: vec!["x".into()],
+        }];
+        let cmd = fill_submit(&mut s, &blanks);
+        assert_eq!(cmd, Cmd::None);
+        assert!(s.error.is_some(), "不齐报错");
     }
 }

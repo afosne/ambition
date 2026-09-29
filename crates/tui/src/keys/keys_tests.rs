@@ -75,8 +75,8 @@ mod tests {
         );
         assert_eq!(
             key_to_msg(KeyCtx::Scaffold, K::Esc, mods()),
-            Some(Screen(crate::Screen::Practice)),
-            "Esc 返回答题"
+            Some(Screen(crate::Screen::Home)),
+            "Esc 返回主页面"
         );
         assert_eq!(
             key_to_msg(KeyCtx::Scaffold, K::Enter, mods()),

@@ -2,6 +2,7 @@ use super::KeyCtx;
 
 pub fn hint(ctx: KeyCtx) -> &'static str {
     match ctx {
+        KeyCtx::Home => " ↑/↓ 选择功能 · Enter 进入 · Ctrl+Q 退出",
         KeyCtx::Choice => {
             " ↑/↓ 移动 · Space 勾选 · Enter 提交 · → 跳过 · F1 选题 · 1-4 自评把握 · Ctrl+M 模考 · Ctrl+Q 退出"
         }

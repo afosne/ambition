@@ -11,6 +11,8 @@ pub use hints::hint;
 /// 键位上下文（键位表只此一份；新增屏 = 新增变体）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyCtx {
+    /// 主页面（功能菜单选择，↑↓ 导航 · Enter 进入）
+    Home,
     /// 选择题作答（未判分）：↑/↓/Space/1-4（单字母已废，docs/03 §5.3）
     Choice,
     /// 填空待答：一切可打印字符进输入行；`editing`=是否编辑中（决定 Esc 语义）
@@ -81,24 +83,26 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
     match code {
         KeyCode::Esc => {
             return match ctx {
+                KeyCtx::Home => Some(Msg::Quit),
                 KeyCtx::Fill { editing: true } => Some(Msg::StopEdit),
                 KeyCtx::Pending => Some(Msg::Next), // 跳过本题（保持待裁定桶）
-                KeyCtx::Review => Some(Msg::Screen(Screen::Practice)), // 复习屏返回答题
+                KeyCtx::Review => Some(Msg::Screen(Screen::Home)), // 复习屏返回主页面
                 KeyCtx::Picker => Some(Msg::TogglePicker), // 面板返回答题
-                KeyCtx::Scaffold => Some(Msg::Screen(Screen::Practice)), // 模板屏返回答题
-                KeyCtx::Tx => Some(Msg::Screen(Screen::Practice)), // 工作台返回答题
+                KeyCtx::Scaffold => Some(Msg::Screen(Screen::Home)), // 模板屏返回主页面
+                KeyCtx::Tx => Some(Msg::Screen(Screen::Home)), // 工作台返回主页面
                 KeyCtx::TxAlign | KeyCtx::TxMyTurn | KeyCtx::TxHistory => {
-                    Some(Msg::Screen(Screen::Tx)) // 子屏回主屏
+                    Some(Msg::Screen(Screen::Tx)) // 子屏回翻译主屏
                 }
-                KeyCtx::Workspace => Some(Msg::Screen(Screen::Practice)),
-                KeyCtx::Profile => Some(Msg::Screen(Screen::Practice)),
-                KeyCtx::Game => Some(Msg::Screen(Screen::Practice)),
-                KeyCtx::Wordbook => Some(Msg::Screen(Screen::Practice)),
+                KeyCtx::Workspace => Some(Msg::Screen(Screen::Home)),
+                KeyCtx::Profile => Some(Msg::Screen(Screen::Home)),
+                KeyCtx::Game => Some(Msg::Screen(Screen::Home)),
+                KeyCtx::Wordbook => Some(Msg::Screen(Screen::Home)),
                 _ => Some(Msg::Quit),
             };
         }
         KeyCode::Enter => {
             return Some(match ctx {
+                KeyCtx::Home => Msg::HomeEnter,
                 KeyCtx::Choice | KeyCtx::Fill { .. } => Msg::Submit,
                 KeyCtx::Pending => Msg::ConfirmArbitrate,
                 KeyCtx::Graded | KeyCtx::Finished => Msg::Next,
@@ -110,8 +114,8 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::TxMyTurn => Msg::TxMyTurnSubmit, // 我来翻 Enter=对照评分
                 KeyCtx::TxHistory => Msg::TxToPractice, // 历史 Enter=转练习题
                 KeyCtx::Workspace => Msg::WorkspaceSave,
-                KeyCtx::Profile => Msg::Screen(Screen::Practice),
-                KeyCtx::Game => Msg::Screen(Screen::Practice),
+                KeyCtx::Profile => Msg::Screen(Screen::Home),
+                KeyCtx::Game => Msg::Screen(Screen::Home),
                 KeyCtx::Wordbook => Msg::VocabLookup,
             });
         }
@@ -130,6 +134,8 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
     }
     // ④ 作答 / 裁决 / 收尾（**仅非字母键：方向/Space/数字**；单字母快捷键全废，docs/03 §5.3 总则）
     match (ctx, code) {
+        (KeyCtx::Home, KeyCode::Up) => Some(Msg::MoveUp),
+        (KeyCtx::Home, KeyCode::Down) => Some(Msg::MoveDown),
         (KeyCtx::Choice, KeyCode::Down) => Some(Msg::MoveDown),
         (KeyCtx::Choice, KeyCode::Up) => Some(Msg::MoveUp),
         (KeyCtx::Choice, KeyCode::Char(' ')) => Some(Msg::Select),
@@ -143,7 +149,7 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
         (KeyCtx::Review, KeyCode::Char(c @ '1'..='4')) => {
             Some(Msg::Rate(c.to_digit(10).unwrap_or(1) as u8))
         }
-        (KeyCtx::Review, KeyCode::Tab) => Some(Msg::Screen(Screen::Practice)),
+        (KeyCtx::Review, KeyCode::Tab) => Some(Msg::Screen(Screen::Home)),
         // 翻题：→ 跳过/下一题（不判分）、← 上一题（Choice/Graded，docs/03 §5.3 2026-09-27）
         (KeyCtx::Choice | KeyCtx::Graded, KeyCode::Right) => Some(Msg::Skip),
         (KeyCtx::Choice | KeyCtx::Graded, KeyCode::Left) => Some(Msg::Prev),
@@ -204,8 +210,9 @@ mod tests {
         M::empty()
     }
 
-    fn all_ctxs() -> [KeyCtx; 9] {
+    fn all_ctxs() -> [KeyCtx; 10] {
         [
+            KeyCtx::Home,
             KeyCtx::Choice,
             KeyCtx::Fill { editing: true },
             KeyCtx::Fill { editing: false },
@@ -442,15 +449,15 @@ mod tests {
             None,
             "5 档不存在"
         );
-        // 返回答题：Tab / Esc
+        // 返回主页面：Tab / Esc
         assert_eq!(
             key_to_msg(KeyCtx::Review, K::Tab, mods()),
-            Some(Screen(crate::Screen::Practice))
+            Some(Screen(crate::Screen::Home))
         );
         assert_eq!(
             key_to_msg(KeyCtx::Review, K::Esc, mods()),
-            Some(Screen(crate::Screen::Practice)),
-            "Esc 返回而非退出"
+            Some(Screen(crate::Screen::Home)),
+            "Esc 返回主页面"
         );
         // Ctrl+Q 仍恒退出
         assert_eq!(

@@ -19,6 +19,75 @@ MVP_STAGE: 6/6
 
 ## 进度日志
 
+### 2026-09-29 · 鼠标点击支持——全屏按钮/输入框可点击（用户指令「所有的按钮都需要可以点击 输入框也可以点击」）
+
+- **改动**：
+  - 新增 `mouse.rs` 模块：`ClickTarget { area: Rect, msg: Msg }` 注册表 + `clear_click_targets`/`register_click`/`hit_test` 三方法。
+  - `AppState` 新增 `click_targets: Vec<ClickTarget>` 字段。
+  - `main.rs`：启用 `EnableMouseCapture`/`DisableMouseCapture`；事件循环中 `Event::Mouse(Down(Left))` → `hit_test(row, column)` → Msg → 既有 `update` 管线（与键盘同路径）。
+  - 渲染函数签名全量 `&AppState` → `&mut AppState`（render/render_home/render_review/render_picker/render_scaffold/render_tx_frame/render_workspace/render_help_overlay + render_sized）。
+  - `render_home`：11 个菜单项各注册 2 行高 Rect → `Msg::HomeClick(i)`。
+  - `render`（练习屏）：选择题选项 → `Msg::ClickOption(i)`；填空输入行 → `Msg::ClickBlank(i)`；待裁定判对/判错/确认按钮。
+  - `render_review`：翻面区域 → `Msg::Flip`；评分按钮 1-4 → `Msg::Rate(1..4)`。
+  - `render_workspace`：输入框行 + 保存按钮区域。
+  - `render_help_overlay`：整个浮层区域 → 点击关闭。
+  - 新增 `Msg::HomeClick(usize)`/`ClickOption(usize)`/`ClickBlank(usize)` 三个鼠标专用变体 + `update` 处理逻辑。
+- **PITFALLS**：P-25（render 签名 `&AppState` → `&mut AppState` 全量变更——20+ 处 `render_sized` 调用编译失败；借用冲突通过先提取信息到局部变量再注册解决）。
+- **验证**：`cargo fmt -p ambition-tui`、`cargo clippy -p ambition-tui --tests`（零告警）、`cargo test --workspace`；全仓 **701 测试通过**（上轮 698 → 701，+3：mouse 模块 hit_test 3 测试）。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：mouse 模块 3 个配对测试（命中/优先级/清空）；fmt/clippy 零告警；鼠标与键盘共用同一条 `update` 管线（无分叉）；`ClickTarget` 实现 `PartialEq`（AppState derive 兼容）。
+- **实际使用**：启动后鼠标点击主菜单项直接进入功能屏；练习屏点击选项即选中；填空输入行点击进入编辑态；复习屏点击翻面/评分按钮；帮助浮层点击关闭。
+- **代码耦合度**：鼠标事件复用既有 `Msg` → `update` → `Cmd` 管线（零新 Cmd 变体，仅 3 个 Msg 变体）；`click_targets` 注册表是 AppState 字段（渲染时注册，main 查表），不耦合 engine/store。
+- **鲁棒性**：`hit_test` 从后往前匹配（浮层后注册优先）；`register_click` 过滤零面积区域；`HomeClick`/`ClickOption`/`ClickBlank` 均做边界钳制（`min(n-1)` / `>= opts_len` / `>= inputs_len` 守卫）。
+
+### 2026-09-29 · 鼠标悬停跟随光标（用户指令「选择框应该可以跟随鼠标 更加符合用户使用习惯」）
+
+- **改动**：
+  - `ClickTarget` 重构为双 Msg：`click_msg`（点击触发动作）+ `hover_msg: Option<Msg>`（悬停只移光标）。
+  - 新增 `register_interactive(area, hover_msg, click_msg)` 方法——同时注册悬停和点击。
+  - 新增 `hit_test_hover` 方法——只返回 `hover_msg.is_some()` 的区域。
+  - 新增 `Msg::HoverOption(usize)`/`HoverHome(usize)`/`HoverBlank(usize)`——只移光标不触发选中/进入/编辑。
+  - `main.rs`：`MouseEventKind::Moved` → `hit_test_hover` → Hover Msg → `update`（与点击/键盘同路径）。
+  - `render_home`/`render`（练习屏）：选项/菜单项/填空行从 `register_click` 改为 `register_interactive`。
+  - `update`：`HoverOption` 设 `sel`；`HoverHome` 设 `home_cursor`；`HoverBlank` 设 `blank_sel`——均不触发选中/进入/编辑。
+- **PITFALLS**：P-26（Hover Msg 在 unhandled 列表中的可达性——`HoverHome` 在非 Home 屏可达需加入 unhandled，`HoverOption`/`HoverBlank` 不可达不加）。
+- **验证**：`cargo fmt`/`cargo clippy --tests`（零告警）/`cargo test --workspace`；全仓 **704 测试通过**（上轮 701 → 704，+3 mouse 模块 interactive/hover 测试）。
+
+### 2026-09-29 · 新增主页面（Home 屏）功能菜单（用户指令「运行后打开一个选择的主页面包含所有功能」）
+
+- **改动**：
+  - `Screen::Home` 新变体 + `KeyCtx::Home` 新上下文 + `home_cursor` 字段 + `Msg::HomeEnter` + `Cmd::PracticeLoad`。
+  - `render_home`：11 项功能菜单（练习/复习/模板/模考/翻译/笔记/日记/待办/画像/游戏/词汇本），❯ 光标 + 描述行 + 键位提示。
+  - `key_to_msg` Home 路由：↑↓ 导航 · Enter 进入 · Esc 退出 · Ctrl+Q/C 退出。
+  - `update` Home 状态机：↑↓ 循环移动 · `HomeEnter` 按 cursor 分发到 11 个功能屏（练习走 `Cmd::PracticeLoad` 延迟加载题目，其余复用 `update_screen`）。
+  - `main.rs`：启动进 Home 屏（不预加载题目），`Cmd::PracticeLoad` 分支调用 `engine.start_practice(0)` 按需加载。
+  - 各功能屏 Esc/Tab 返回 Home（而非 Practice）；帮助浮层补 Home 行。
+- **PITFALLS**：P-24（`new_state` 默认 screen 不能改，否则测试全挂——保持 Practice，main 手动设 Home）。
+- **验证**：`cargo fmt --all`、`cargo clippy --all-features --all-targets`、`cargo test --all-features`；全仓 **698 测试通过**（上轮 694 → 698，+4 配对测试：Home 渲染 2 + Home 状态机 1 + key_ctx Home 路由 1）。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：Home 屏渲染与状态机各配对测试（2 渲染 + 1 状态机 + 1 路由）；fmt/clippy 零告警；`home_entries` 与 `home_enter`/`home_menu_len` 三处菜单顺序同源（索引一致）；帮助浮层复用 `hint` 全表不硬编码。
+- **实际使用**：启动即见功能菜单（不再直接进做题）；↑↓ 选功能 · Enter 进入；各功能屏 Esc 返回主菜单；练习屏从 Home 进入时才加载题目（延迟加载减少启动开销）。
+- **代码耦合度**：`Screen::Home` 新增变体不破坏既有屏路由（`new_state` 默认 Practice 不变）；`Cmd::PracticeLoad` 新增不耦合 engine（main.rs 调用已有 `start_practice`）；Home 状态机在 `update` 顶部拦截不影响既有屏逻辑。
+- **鲁棒性**：`home_cursor` 钳制到菜单长度（`min(entries.len()-1)`）；空题库 Home 仍可用（`finished=true` 但 `screen==Home` 维持循环）；各功能屏 Esc 统一回 Home 不回 Practice（消除「做题未完成→Esc→直接退出」误操作）。
+
+### 2026-09-29 · 修复 attempt_id 重启撞 UNIQUE 约束（热修复；用户报错「所有题目提交答案后都报错」）
+
+- **根因**：`main.rs` 用进程内计数器 `attempt_seq`（从 0 起）生成 `attempt_id = format!("tui-{attempt_seq}")`；数据库 `~/.ambition/ambition.db` 是持久化文件——首次运行写入 `tui-1`..`tui-N` 后，重启进程计数器归零，再提交第一题又生成 `tui-1`，与已有行冲突（SQLite code 1555）。
+- **修复**：ID 加入 unix 秒时间戳前缀：`format!("tui-{}-{attempt_seq}", now_unix())`——同一秒内提交多题靠 `attempt_seq` 区分，跨进程靠时间戳区分。
+- **PITFALLS**：P-23 已记录。
+- **验证**：`cargo fmt --all`、`cargo clippy --all-features --all-targets`、`cargo test --all-features`；全仓 **694 测试通过**（上轮 692 → 694，+2 新增 main_support 测试计数变化）。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：单行修复，`now_unix()` 已从 `ambition_core` 导入复用（无新依赖）；fmt/clippy 零告警。
+- **实际使用**：重启 TUI 后提交答案不再报 `UNIQUE constraint failed`；旧数据库已有记录不受影响（新 ID 前缀不同）。
+- **代码耦合度**：改动局限于 `main.rs` 提交路径，不影响 engine/store 层逻辑；`now_unix()` 复用既有 common 工具。
+- **鲁棒性**：时间戳+序号双分量保证全局唯一（同秒多题靠序号、跨进程靠时间戳）；不依赖外部 UUID 依赖。
+
 ### 2026-09-29 · 改进建议批量落实（非阶段任务；用户指令「按照 PROGRESS.md 提出的改进建议进行查看，没有落实的按顺序落实」）
 
 - **摸底**：全量清点 M1-M4 改进建议 34 项——已完成但未勾选 3 项（#5/#10/#32 随 M4#19/M6 落实但 PROGRESS 未标记）、真正未落实 17 项、延后/承接后续 14 项。

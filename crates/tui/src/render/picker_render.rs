@@ -19,7 +19,7 @@ fn kind_label(kind: &QuestionKind) -> &'static str {
 }
 
 /// 渲染选题面板（全屏列表；光标窗 ±8 行 + 首尾省略）
-pub fn render_picker(frame: &mut Frame, state: &AppState) {
+pub fn render_picker(frame: &mut Frame, state: &mut AppState) {
     let mut text = String::from(" 选题面板（↑/↓ 选择 · Enter 跳转 · Esc/F1 返回）\n\n");
     let total = state.questions.len();
     if total == 0 {
@@ -75,7 +75,7 @@ pub fn render_picker(frame: &mut Frame, state: &AppState) {
 mod tests {
     use super::*;
 
-    fn render_to(s: &AppState) -> String {
+    fn render_to(s: &mut AppState) -> String {
         // 宽度感知收集收口到 common::fixtures::render_sized（P-2 续格口径）
         crate::common::render_sized(s, 76, 24)
     }
@@ -164,7 +164,7 @@ mod tests {
         let mut s = new_state(vec![q1, q2]);
         s.picker_open = true;
         s.picker_cursor = 1;
-        let buf = render_to(&s);
+        let buf = render_to(&mut s);
         assert!(buf.contains("选题面板"), "标题: {buf:?}");
         assert!(buf.contains("单选"), "题型标签: {buf:?}");
         assert!(buf.contains("Another stem"), "列表题干: {buf:?}");
@@ -174,7 +174,7 @@ mod tests {
         // 空题库
         let mut empty = new_state(vec![]);
         empty.picker_open = true;
-        let buf = render_to(&empty);
+        let buf = render_to(&mut empty);
         assert!(buf.contains("题库为空"), "空态: {buf:?}");
     }
 }

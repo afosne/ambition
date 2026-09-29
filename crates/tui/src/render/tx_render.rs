@@ -5,7 +5,7 @@
 use super::*;
 
 /// 工作台族入口（Tx/TxAlign/TxMyTurn/TxHistory → 各自正文 + 统一错误行/提示行）
-pub fn render_tx_frame(frame: &mut Frame, state: &AppState) {
+pub fn render_tx_frame(frame: &mut Frame, state: &mut AppState) {
     let mut text = String::from(
         "Ambition · 翻译工作台（Enter 出译 · F5 对齐 · F6 我来翻 · F7 历史 · Esc 返回）\n\n",
     );
@@ -132,8 +132,8 @@ mod tests {
             Screen::TxMyTurn,
             Screen::TxHistory,
         ] {
-            let state = tx_state(screen);
-            let out = crate::common::render_sized(&state, 76, 24);
+            let mut state = tx_state(screen);
+            let out = crate::common::render_sized(&mut state, 76, 24);
             assert!(
                 out.contains("翻译工作台"),
                 "工作台横幅随屏出现 {screen:?}: {out}"
@@ -154,7 +154,7 @@ mod tests {
     fn test_render_tx_main_shows_source_caret_and_result() {
         let mut state = tx_state(Screen::Tx);
         state.tx_source = "我喜欢春天。".to_string();
-        let out = crate::common::render_sized(&state, 76, 24);
+        let out = crate::common::render_sized(&mut state, 76, 24);
         assert!(out.contains("源文: 我喜欢春天。"), "源文可见: {out}");
         assert!(out.contains('▍'), "光标可见");
         // 出译回填后结果区
@@ -170,7 +170,7 @@ mod tests {
             glossary_hits: 2,
         };
         state.tx_result = Some(tx);
-        let out = crate::common::render_sized(&state, 76, 24);
+        let out = crate::common::render_sized(&mut state, 76, 24);
         assert!(out.contains("译文: I like spring."), "译文可见: {out}");
         assert!(out.contains("术语命中 2 条"), "命中数可见");
     }
@@ -192,7 +192,7 @@ mod tests {
                 },
             ],
         });
-        let out = crate::common::render_sized(&state, 76, 24);
+        let out = crate::common::render_sized(&mut state, 76, 24);
         assert!(out.contains("我喜欢  →  I like  [逐字]"), "逐字段: {out}");
         assert!(out.contains("[地道]"), "地道段可见");
     }
@@ -223,7 +223,7 @@ mod tests {
             grade: None,
         };
         state.tx_compare = Some(compare);
-        let out = crate::common::render_sized(&state, 76, 24);
+        let out = crate::common::render_sized(&mut state, 76, 24);
         assert!(out.contains("~ The → A"), "改写标记: {out}");
         assert!(out.contains("非英语目标语"), "降级提示可见");
     }
@@ -245,7 +245,7 @@ mod tests {
         state.tx_history = vec![mk("tx-1", "甲", "A"), mk("tx-2", "乙", "B")];
         state.tx_favorites = vec!["tx-2".to_string()];
         state.tx_sel = 1;
-        let out = crate::common::render_sized(&state, 76, 24);
+        let out = crate::common::render_sized(&mut state, 76, 24);
         assert!(out.contains("❯♥"), "游标+收藏同排: {out}");
         assert!(out.contains("2. 乙 → B"), "游标行内容: {out}");
         assert!(out.contains("1. 甲 → A"), "非游标行内容: {out}");

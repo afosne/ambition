@@ -4,7 +4,7 @@
 use super::*;
 
 /// 渲染复习屏（空队列/本轮完成/翻面前/翻面后四态 + 错误行）
-pub fn render_review(frame: &mut Frame, state: &AppState) {
+pub fn render_review(frame: &mut Frame, state: &mut AppState) {
     let mut text = String::from(
         "Ambition · 复习（FSRS 翻卡）
 
@@ -107,13 +107,47 @@ pub fn render_review(frame: &mut Frame, state: &AppState) {
         .style(Style::default());
     frame.render_widget(Clear, frame.area());
     frame.render_widget(paragraph, frame.area());
+
+    // 注册复习屏可点击区域
+    let inner = Block::default().borders(Borders::ALL).inner(frame.area());
+    let review = &state.review;
+    if review.loaded && review.idx < review.cards.len() {
+        if !review.revealed {
+            // 翻面区域：正面文本行可点击翻面
+            let flip_row = inner.y + 6; // 标题(2) + 空行(1) + 进度(1) + 空行(1) + 正面(1)
+            state.register_click(
+                Rect {
+                    x: inner.x,
+                    y: flip_row,
+                    width: inner.width,
+                    height: 2,
+                },
+                Msg::Flip,
+            );
+        } else {
+            // 评分按钮 1-4：底部 4 列各占 1/4
+            let btn_row = inner.y + inner.height.saturating_sub(2);
+            let btn_width = inner.width / 4;
+            for i in 0..4u16 {
+                state.register_click(
+                    Rect {
+                        x: inner.x + i * btn_width,
+                        y: btn_row,
+                        width: btn_width,
+                        height: 1,
+                    },
+                    Msg::Rate((i + 1) as u8),
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn render_to(s: &AppState) -> String {
+    fn render_to(s: &mut AppState) -> String {
         // 宽度感知收集收口到 common::fixtures::render_sized（P-2 续格口径）
         crate::common::render_sized(s, 76, 22)
     }
@@ -132,27 +166,27 @@ mod tests {
         // 未加载
         let mut s = new_state(vec![crate::sample_question()]);
         s.screen = Screen::Review;
-        let loading = render_to(&s);
+        let loading = render_to(&mut s);
         assert!(loading.contains("加载"), "未加载态: {loading:?}");
         // 空队列
         apply_review_cards(&mut s, vec![]);
-        let empty = render_to(&s);
+        let empty = render_to(&mut s);
         assert!(empty.contains("暂无到期卡片"), "空队列: {empty:?}");
         // 有卡未翻面
         apply_review_cards(&mut s, vec![card()]);
-        let front = render_to(&s);
+        let front = render_to(&mut s);
         assert!(front.contains("She is quick."), "正面: {front:?}");
         assert!(front.contains("背面隐藏"), "未翻面: {front:?}");
         assert!(front.contains("翻面"), "键位提示: {front:?}");
         // 翻面后
         s.review.revealed = true;
-        let back = render_to(&s);
+        let back = render_to(&mut s);
         assert!(back.contains("quick"), "背面: {back:?}");
         assert!(!back.contains("背面隐藏"), "翻面后无隐藏行");
         // 评分完成
         s.review.idx = 1;
         s.review.message = Some("已安排 3 天后再复习".into());
-        let done = render_to(&s);
+        let done = render_to(&mut s);
         assert!(done.contains("本轮"), "完成态: {done:?}");
         assert!(done.contains("3 天后"), "反馈可见: {done:?}");
     }

@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod common;
 mod keys;
+mod mouse;
 mod render;
 mod state;
 mod update;

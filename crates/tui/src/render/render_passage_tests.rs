@@ -7,7 +7,7 @@ mod tests {
 
     #[test]
     fn test_render_draws_passage_kinds() {
-        fn render_to(s: &AppState) -> String {
+        fn render_to(s: &mut AppState) -> String {
             // 宽度感知收集收口到 common::fixtures::render_sized（P-2 续格口径）
             crate::common::render_sized(s, 76, 24)
         }
@@ -26,11 +26,11 @@ mod tests {
             Provenance::Seed,
         );
         let mut s = new_state(vec![cloze]);
-        let buf = render_to(&s);
+        let buf = render_to(&mut s);
         assert!(buf.contains("I ＿＿＿ a student."), "语篇可见: {buf:?}");
         assert!(buf.contains("答案"), "填空输入行: {buf:?}");
         update(&mut s, Msg::Char('a'));
-        let typed = render_to(&s);
+        let typed = render_to(&mut s);
         assert!(typed.contains("a"), "输入可见: {typed:?}");
         // 七选五：语篇缺口标注 + 候选项
         let s75 = Question::new(
@@ -44,8 +44,8 @@ mod tests {
             vec!["reading".into()],
             Provenance::Seed,
         );
-        let s = new_state(vec![s75]);
-        let buf = render_to(&s);
+        let mut s = new_state(vec![s75]);
+        let buf = render_to(&mut s);
         assert!(buf.contains("［＿］"), "缺口标注: {buf:?}");
         assert!(buf.contains("opt one"), "候选句可见: {buf:?}");
         // 阅读：语篇 + 子题
@@ -72,8 +72,8 @@ mod tests {
             vec!["reading".into()],
             Provenance::Seed,
         );
-        let s = new_state(vec![reading]);
-        let buf = render_to(&s);
+        let mut s = new_state(vec![reading]);
+        let buf = render_to(&mut s);
         assert!(buf.contains("cats"), "语篇可见: {buf:?}");
         assert!(buf.contains("What do cats eat?"), "子题可见: {buf:?}");
         assert!(buf.contains("fish"), "子题选项可见: {buf:?}");

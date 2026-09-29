@@ -4,7 +4,7 @@
 use super::*;
 
 /// 模板作文屏（列表光标 + 阶段视图 + 槽位编辑行 + 成文/自查浮层）
-pub fn render_scaffold(frame: &mut Frame, state: &AppState) {
+pub fn render_scaffold(frame: &mut Frame, state: &mut AppState) {
     let mut text =
         String::from(" 模板作文（Esc 返回 · Space 切阶段 · Enter 成文 · Ctrl+S 自查）\n\n");
     let idx = state
@@ -133,8 +133,8 @@ mod tests {
 
     #[test]
     fn test_render_scaffold_shows_list_stage_slots_and_hint() {
-        let state = loaded_state();
-        let out = crate::common::render_sized(&state, 76, 28);
+        let mut state = loaded_state();
+        let out = crate::common::render_sized(&mut state, 76, 28);
         assert!(out.contains("模板作文"), "标题: {out}");
         assert!(out.contains("t1") && out.contains("t2"), "模板列表: {out}");
         assert!(out.contains("❯"), "列表光标: {out}");
@@ -157,7 +157,7 @@ mod tests {
             },
         );
         state.error = Some("请先 Enter 生成成文".to_string());
-        let out = crate::common::render_sized(&state, 76, 28);
+        let out = crate::common::render_sized(&mut state, 76, 28);
         assert!(out.contains("成文:"), "成文预览: {out}");
         assert!(out.contains("My draft essay body."), "成文内容: {out}");
         assert!(out.contains("✗ 未过"), "自查未过标记: {out}");
@@ -167,7 +167,7 @@ mod tests {
 
         let mut empty = new_state(vec![]);
         empty.screen = Screen::Scaffold;
-        let out = crate::common::render_sized(&empty, 76, 28);
+        let out = crate::common::render_sized(&mut empty, 76, 28);
         assert!(out.contains("模板装载中/为空"), "空态: {out}");
     }
 }

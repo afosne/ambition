@@ -2,7 +2,7 @@
 //! M2：文件库（~/.ambition/ambition.db，AMBI_DB 覆盖）+ seed 题库 + 填空输入 + 独立错误行。
 
 mod main_support;
-use main_support::{db_path, game_summary};
+use main_support::{db_path, game_summary, is_residual_screen, setup_terminal, teardown_terminal};
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -13,68 +13,85 @@ use ambition_tui::{
     Cmd, ReviewCard, Screen, apply_error, apply_grade, apply_mock_finish, apply_mock_start,
     apply_review_cards, apply_review_rated, apply_scaffold_check, apply_scaffold_result,
     apply_scaffold_templates, apply_srs_hint, apply_tx_align, apply_tx_compare, apply_tx_history,
-    apply_tx_practice, apply_tx_result, key_to_msg, new_state, render, tx_opts, update,
+    apply_tx_practice, apply_tx_result, blank_count, key_to_msg, new_state, render, tx_opts,
+    update,
 };
-use crossterm::event::{self, Event, KeyEventKind};
-use crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-};
-use crossterm::{ExecutableCommand, execute};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
+use crossterm::event::{self, Event, KeyEventKind, MouseEventKind};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let engine = Engine::open(&db_path()).await?;
-    let questions = engine.start_practice(0).await?;
-    let mut state = new_state(questions);
+    let mut state = new_state(vec![]); // 启动进 Home 屏，题目延迟加载
+    state.screen = Screen::Home;
     let mut attempt_seq = 0i64;
     // 待裁定上下文：最近一次提交的 attempt id（y/n 裁决用，M3）
     let mut last_attempt_id: Option<String> = None;
 
-    enable_raw_mode()?;
-    let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
+    let mut terminal = setup_terminal()?;
 
     // finished 后仍可驻留非答题屏（复习/模板/模考/翻译工作台族，M5-W4..W7），直到显式退出
-    while !state.finished
-        || matches!(
-            state.screen,
-            Screen::Review
-                | Screen::Scaffold
-                | Screen::Mock
-                | Screen::Tx
-                | Screen::TxAlign
-                | Screen::TxMyTurn
-                | Screen::TxHistory
-                | Screen::Notes
-                | Screen::Diary
-                | Screen::Todos
-                | Screen::Profile
-                | Screen::Games
-                | Screen::Wordbook
-        )
-    {
-        terminal.draw(|f| render(f, &state))?;
+    while !state.finished || is_residual_screen(state.screen) {
+        // 渲染：render 会注册可点击区域到 state.click_targets
+        state.clear_click_targets();
+        terminal.draw(|f| render(f, &mut state))?;
         let event = event::read()?;
+        // 鼠标事件 → 查 click_targets 注册表 → Msg
+        let mouse_msg = if let Event::Mouse(mouse) = &event {
+            match mouse.kind {
+                // 悬停跟随：只移光标，不触发动作
+                MouseEventKind::Moved => state.hit_test_hover(mouse.row, mouse.column),
+                // 点击：移光标 + 触发动作
+                MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+                    state.hit_test_click(mouse.row, mouse.column)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
         if matches!(event, Event::Paste(_)) {
             // 纸笔口径禁粘贴（M5-W8 docs/10 §5：Pasted 违规先行反馈；卷面扫描随手交屏 hand_in）
             state.error = Some("检测到粘贴：纸笔口径禁用（卷面 Pasted 违规）".to_string());
             continue;
         }
-        let Event::Key(key) = event else {
-            continue;
-        };
-        if key.kind != KeyEventKind::Press {
-            continue;
-        }
-        // 键位唯一入口（keys.rs：KeyCtx 路由 + 恒定层 Ctrl+Q/Ctrl+C；Enter 提交/下一题在表内）
-        let Some(msg) = key_to_msg(state.key_ctx(), key.code, key.modifiers) else {
-            continue;
+        // 鼠标点击有命中 → 直接用；否则走键盘路由
+        let msg = if let Some(m) = mouse_msg {
+            m
+        } else {
+            let Event::Key(key) = event else {
+                continue;
+            };
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
+            // 键位唯一入口（keys.rs：KeyCtx 路由 + 恒定层 Ctrl+Q/Ctrl+C；Enter 提交/下一题在表内）
+            let Some(msg) = key_to_msg(state.key_ctx(), key.code, key.modifiers) else {
+                continue;
+            };
+            msg
         };
         match update(&mut state, msg) {
             Cmd::Quit => break,
+            Cmd::PracticeLoad => {
+                // 主页面 → 练习：延迟加载题目（首次或重载）
+                match engine.start_practice(0).await {
+                    Ok(questions) => {
+                        state.questions = questions;
+                        state.idx = 0;
+                        state.finished = state.questions.is_empty();
+                        state.inputs = state
+                            .questions
+                            .first()
+                            .map(|q| vec![String::new(); blank_count(&q.kind)])
+                            .unwrap_or_default();
+                        state.screen = Screen::Practice;
+                        state.grade = None;
+                        state.error = None;
+                        state.started_at = std::time::Instant::now();
+                    }
+                    Err(err) => apply_error(&mut state, err.to_string()),
+                }
+            }
             Cmd::Submit(answer) => {
                 attempt_seq += 1;
                 // M5-W5：记录文本作答（作文/翻译批注输入；随题由 reset 清空）
@@ -82,7 +99,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     ambition_core::Answer::Text(text) => Some(text.clone()),
                     _ => None,
                 };
-                let attempt_id = format!("tui-{attempt_seq}");
+                // PID 防碰：时间戳前缀 + 进程内序号 → 重启不撞旧 ID（P-17）
+                let attempt_id = format!("tui-{}-{attempt_seq}", now_unix());
                 let attempt = Attempt {
                     attempt_id: attempt_id.clone(),
                     qid: state.questions[state.idx].qid.clone(),
@@ -459,8 +477,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    disable_raw_mode()?;
-    terminal.backend_mut().execute(LeaveAlternateScreen)?;
-    engine.drain_events();
+    teardown_terminal(&mut terminal, &engine)?;
     Ok(())
 }

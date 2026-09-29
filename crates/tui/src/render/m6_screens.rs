@@ -1,9 +1,10 @@
 use super::*;
 
 /// #24：键位帮助浮层（复用 `hint` 全表，不硬文案）
-pub(super) fn render_help_overlay(frame: &mut Frame) {
+pub(super) fn render_help_overlay(frame: &mut Frame, state: &mut AppState) {
     use crate::keys::hint;
     let ctxs = [
+        ("主页面", KeyCtx::Home),
         ("作答（选择）", KeyCtx::Choice),
         ("作答（填空·编辑中）", KeyCtx::Fill { editing: true }),
         ("作答（填空·待输入）", KeyCtx::Fill { editing: false }),
@@ -22,7 +23,7 @@ pub(super) fn render_help_overlay(frame: &mut Frame) {
         ("游戏成长", KeyCtx::Game),
         ("词汇本", KeyCtx::Wordbook),
     ];
-    let mut lines = String::from(" 键位帮助（? 关闭）\n\n");
+    let mut lines = String::from(" 键位帮助（? 关闭 · 点击关闭）\n\n");
     for (name, ctx) in ctxs {
         lines.push_str(&format!("{name}:{}\n", hint(ctx)));
     }
@@ -32,6 +33,9 @@ pub(super) fn render_help_overlay(frame: &mut Frame) {
     let area = centered_area(frame.area(), 80, 90);
     frame.render_widget(Clear, area);
     frame.render_widget(paragraph, area);
+
+    // 注册整个帮助浮层区域为可点击 → 点击关闭
+    state.register_click(area, Msg::ToggleHelp);
 }
 
 /// #24：居中弹窗区域
@@ -48,7 +52,7 @@ pub(super) fn centered_area(r: Rect, width_pct: u16, height_pct: u16) -> Rect {
     }
 }
 
-pub(super) fn render_workspace(frame: &mut Frame, state: &AppState) -> bool {
+pub(super) fn render_workspace(frame: &mut Frame, state: &mut AppState) -> bool {
     let screen = state.screen;
     let title = match screen {
         Screen::Games => "游戏与成长",
@@ -77,6 +81,36 @@ pub(super) fn render_workspace(frame: &mut Frame, state: &AppState) -> bool {
         Paragraph::new(text).wrap(Wrap { trim: false }),
         frame.area(),
     );
+
+    // 注册工作区屏可点击区域
+    let inner = frame.area();
+    if matches!(
+        screen,
+        Screen::Notes | Screen::Diary | Screen::Todos | Screen::Wordbook
+    ) {
+        // 输入框行（第 2 行）可点击 → 进入编辑
+        state.register_click(
+            Rect {
+                x: inner.x,
+                y: inner.y + 2,
+                width: inner.width,
+                height: 1,
+            },
+            Msg::Select, // 进入编辑态（简化——已有 workspace_draft 编辑入口）
+        );
+        // 底部保存按钮区域（最后 2 行）
+        let btn_row = inner.y + inner.height.saturating_sub(2);
+        state.register_click(
+            Rect {
+                x: inner.x,
+                y: btn_row,
+                width: inner.width,
+                height: 1,
+            },
+            Msg::WorkspaceSave,
+        );
+    }
+
     true
 }
 
@@ -91,11 +125,11 @@ mod tests {
         let mut state = new_state(vec![]);
         state.screen = Screen::Games;
         terminal
-            .draw(|frame| assert!(render_workspace(frame, &state)))
+            .draw(|frame| assert!(render_workspace(frame, &mut state)))
             .unwrap();
         state.screen = Screen::Practice;
         terminal
-            .draw(|frame| assert!(!render_workspace(frame, &state)))
+            .draw(|frame| assert!(!render_workspace(frame, &mut state)))
             .unwrap();
     }
 
@@ -104,7 +138,10 @@ mod tests {
     fn test_render_help_overlay_renders_all_hints() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
-        terminal.draw(render_help_overlay).unwrap();
+        let mut state = new_state(vec![]);
+        terminal
+            .draw(|frame| render_help_overlay(frame, &mut state))
+            .unwrap();
         // 只验证不 panic（P-2 宽字符续格不影响断言逻辑）
         assert!(terminal.backend().buffer().area().area() > 0, "有内容");
     }
