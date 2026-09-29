@@ -2,7 +2,7 @@
 
 > **每次完成一个部分必须更新本文件**（进度日志 + 代码评估四段 + 改进建议），并写入 `PITFALLS.md`（skill `ambition-pitfall-log` 强制）。
 
-MVP_STAGE: 4/6
+MVP_STAGE: 6/6
 
 ## MVP 阶段定义（M1–M6，对应 DESIGN.md §21；M7+ 属于云/Web，不在本次 MVP 内）
 
@@ -13,7 +13,7 @@ MVP_STAGE: 4/6
 | 3 | M3 判题 | jev crate 客户端 + 待裁定桶 + 错因分类 + 中式英语错式库 + 成本台账 | ✅ 完成（2026-09-24，提交 75408b0） |
 | 4 | M4 记忆 | FSRS 接线 fsrs-rs + 错词本/义项/句式 + 假对上线 + 复习队列 | ✅ 完成（2026-09-27，提交 8769432；含用户加码的题型补全） |
 | 5 | M5 写作 | composite scoring + 批注 + 模板作文填槽 + 翻译题型 + 套卷估分 | ✅ 完成（2026-09-29，W1-W8 十四笔；588 测试；模板屏/模考屏/翻译工作台/卷面为表外加码交付） |
-| 6 | M6 闭环 | 笔记/日记/TODO + 画像聚合 + 个性化出题 + 周报 + 游戏全量 | ✅ 完成（2026-09-29，M6 W1-W7；本次提交见 git log） |
+| 6 | M6 闭环 | 笔记/日记/TODO + 画像聚合 + 个性化出题 + 周报 + 游戏全量 | ✅ 完成（2026-09-29，提交 46a9257；M6 W1-W7；689 测试） |
 
 ---
 
@@ -27,7 +27,7 @@ MVP_STAGE: 4/6
 - **W4 周报+估分**：七天统计、模考平均、近五卷预测及小样本区间、Markdown 导出；目标分轨差异回归仍待后续校准。
 - **W5 vocab crate**：新增 `ambition-vocab`，内置 Sense/Pattern/例句资产、语境匹配、本地新词抽取与 FSRS 入卡、Ctrl+V 词汇屏。
 - **W6 游戏底座**：徽章/金币/物品/连击/地图进度投影与持久化、商店/道具/关闭开关、小游戏规则（记忆配对/连击冲刺/词根排序/Boss/努力分/健康守卫）、Ctrl+G 成长及物品屏。
-- **W7 归档验证**：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --quiet`；全仓 **635 测试通过**。`docs/12`/`docs/13` 只勾已验证项，未覆盖的再导入、稳定事件 ID 重放等继续列为后续验证。
+- **W7 归档验证**：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --quiet`；全仓 **689 测试通过**（M5 终态 588 → M6 终态 689，+101）。pre-commit 结构门禁（配对测试 + ≤500 行）首次拦截 8 个缺配对函数（`boss_battle`/`complete`/`append_game_event`/`load_game_profile`/`save_game_profile`/`upsert_note`/`add_todo`/`builtin_patterns`），逐一补齐后过门禁；`note.rs` 首行混入 BOM 字符已修（P-21）。`docs/12`/`docs/13` 只勾已验证项，未覆盖的再导入、稳定事件 ID 重放等继续列为后续验证。
 - **实现检查与边界**：W1 Markdown 导出按原样保留正文末尾；画像集成测试按真实持久化模型使用 qid 节点；记忆配对测试覆盖反向选牌；游戏开关关闭不产生投影效果。社交/家长/组件/年报/对战及 docs/12 中 M16 溯源能力不属于 M6。
 
 #### 本项代码评估（四段）

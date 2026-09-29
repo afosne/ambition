@@ -147,3 +147,17 @@
 - **根因**：新建动作键只数了「已用 Ctrl 字母（q/c/a/r/m/w）」，没查**直达表保留字**（B/G/K/N/O/P/S/T/V/E/D/X/F 都被屏名占着，题包 bullet 里还有 Ctrl+O/X/F）；恒定层在 key_to_msg 最前，冲突方向还容易排查跑偏。
 - **解决**：动作键改 **F 区**（`F3` 模板自查、`F4` 判分后批注——F1 选题/F2 模板之外空闲）；Ctrl+字母只留给屏幕直达；`keys_tests` 补断言「`Ctrl+E`/`Ctrl+S` 在任何 ctx → None（保留字不动作）」；docs/03 模板/批注 bullet 与 hint 同笔改（同源）——提交 `a47442c`。
 - **预防**：绑任何 `Ctrl+字母` 前先 `grep` docs/03 §5.3 直达表**与各屏 bullet 的上下文键**（保留名单含 Ctrl+O/X/F/T/M/E/S…）；新动作键优先 F3–F12、方向键、Tab/Space；hint 文案与 docs/03 bullet 必须同笔提交（键位同源红线 §5.3）。
+
+## P-21 新建文件首行混入 BOM 字符（\uFEFF）——2026-09-29
+
+- **症状**：`crates/store/src/repo/note.rs` 首行被编辑器自动加了 UTF-8 BOM（`\uFEFF`），`cargo fmt` 与 clippy 不报但 git diff 可见一个不可见前缀字符；若不处理会影响 serde 宏展开与 `include_str!` 对齐。
+- **根因**：Windows PowerShell / 某些编辑器在写入新文件时默认加 BOM；string_replace/write 工具创建新文件时未显式指定无 BOM 编码。
+- **解决**：用 `string_replace` 将 BOM 字符（`\uFEFF`）从文件首行删除；`git diff` 确认首行不再有不可见前缀。
+- **预防**：新建 `.rs` 文件后 `git diff` 检查首行是否有不可见 BOM 前缀（`Format-Hex` 或 `Select-String -Pattern "\uFEFF"` 可检出）；生产 Rust 源码必须 UTF-8 无 BOM。
+
+## P-22 提交时漏更新 PROGRESS.md / PITFALLS.md——2026-09-29
+
+- **症状**：M6 阶段提交 `46a9257` 完成后，PROGRESS.md 的 `MVP_STAGE` 仍为 `4/6`（应为 `6/6`）、M6 状态行缺提交哈希、测试数写 `635`（实际 `689`）、四段评估与改进建议不完整；PITFALLS.md 完全未更新。
+- **根因**：提交前只关注代码与门禁通过，**忘记同步进度文档与雷点日志**（skill `ambition-pitfall-log` 强制要求每次提交后更新两者）；大量 staged 文件用 `git add` 一次性提交时，文档类文件被遗漏。
+- **解决**：补提交修正 PROGRESS.md（MVP_STAGE→6/6、补哈希/测试数/四段评估）与 PITFALLS.md（BOM P-21 + 本条 P-22）。
+- **预防**：**提交前 checklist**：① `MVP_STAGE` 行是否与阶段表状态一致；② 测试数是否为 `cargo test` 实际输出（不照搬上次数字）；③ PITFALLS.md 是否有新坑条目（P-xx 递增）；④ 四段评估是否完整（代码质量/实际使用/代码耦合度/鲁棒性）；⑤ 改进建议是否追加并勾选承接项。
