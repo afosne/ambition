@@ -46,10 +46,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     state.hit_test_click(mouse.row, mouse.column)
                 }
                 MouseEventKind::ScrollUp if state.screen == ambition_tui::Screen::Home => {
-                    Some(ambition_tui::Msg::MoveUp)
+                    Some(ambition_tui::Msg::HomeScrollUp)
                 }
                 MouseEventKind::ScrollDown if state.screen == ambition_tui::Screen::Home => {
-                    Some(ambition_tui::Msg::MoveDown)
+                    Some(ambition_tui::Msg::HomeScrollDown)
                 }
                 _ => None,
             }

@@ -280,6 +280,8 @@ pub fn practice_msg(state: &mut AppState, msg: Msg) -> Cmd {
         | Msg::HomeEnter
         | Msg::HomeClick(_)
         | Msg::HoverHome(_)
+        | Msg::HomeScrollUp
+        | Msg::HomeScrollDown
         | Msg::PackImport
         | Msg::PackExport => Cmd::None,
     }

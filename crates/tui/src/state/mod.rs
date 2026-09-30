@@ -98,6 +98,8 @@ pub struct AppState {
     pub home_cursor: usize,
     /// 主页面垂直滚动偏移（光标超出视口时自动调整；鼠标滚轮滚动此值）
     pub home_scroll: usize,
+    /// 主页面菜单视口行数（渲染层回填，update 层用于光标可见性计算）
+    pub home_menu_viewport: usize,
     /// 鼠标可点击区域注册表（每帧渲染时 clear → register → main 查表）
     pub click_targets: Vec<crate::mouse::ClickTarget>,
     /// 待裁定裁决高亮（0=判对 1=判错；←/→ 切换，Enter 确认）
@@ -185,6 +187,7 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         explain_open: false,
         home_cursor: 0,
         home_scroll: 0,
+        home_menu_viewport: 0,
         click_targets: Vec::new(),
         arbitration_sel: 0,
         scaffold_templates: Vec::new(),

@@ -26,6 +26,10 @@ pub use tx::{
     apply_tx_align, apply_tx_compare, apply_tx_history, apply_tx_practice, apply_tx_result, tx_opts,
 };
 
+pub use home_update::{
+    FOOTER_LINES, HEADER_LINES, LINES_PER_ITEM, home_ensure_cursor_visible, home_max_scroll,
+};
+
 /// 纯状态机：键位语义见 keys.rs（唯一键位表），本层只做状态转移与防误触双保险
 pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
     // 屏幕切换（任何状态可用：Ctrl+A/Ctrl+R 直达、Tab 进出复习屏；进 Review 触发队列加载）
@@ -39,11 +43,22 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             Msg::MoveDown => {
                 let n = home_menu_len();
                 state.home_cursor = (state.home_cursor + 1) % n;
+                home_ensure_cursor_visible(state);
                 Cmd::None
             }
             Msg::MoveUp => {
                 let n = home_menu_len();
                 state.home_cursor = (state.home_cursor + n - 1) % n;
+                home_ensure_cursor_visible(state);
+                Cmd::None
+            }
+            Msg::HomeScrollUp => {
+                state.home_scroll = state.home_scroll.saturating_sub(LINES_PER_ITEM);
+                Cmd::None
+            }
+            Msg::HomeScrollDown => {
+                let max = home_max_scroll();
+                state.home_scroll = (state.home_scroll + LINES_PER_ITEM).min(max);
                 Cmd::None
             }
             Msg::HomeClick(i) => {
@@ -54,6 +69,7 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
             Msg::HoverHome(i) => {
                 let n = home_menu_len();
                 state.home_cursor = i.min(n - 1);
+                home_ensure_cursor_visible(state);
                 Cmd::None
             }
             Msg::HomeEnter => home_enter(state),

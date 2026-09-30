@@ -3,14 +3,14 @@
 
 use crate::*;
 
-/// 每个菜单项占用的行数（标题 + 描述 + 空行）
-const LINES_PER_ITEM: usize = 3;
-/// 标题区行数（2 行文本 + 1 行空行）
-const HEADER_LINES: usize = 3;
-/// 底部提示区预留行数
-const FOOTER_LINES: usize = 3;
-
 /// 主页面：功能菜单列表（↑↓ 选择 · Enter 进入）+ 右侧滚动条
+///
+/// 滚动模型：
+/// - `home_scroll` = 菜单内容区域的滚动偏移（行数，不含标题区）
+/// - 滚轮 → `HomeScrollUp/Down` → 只改 `home_scroll`，不碰光标
+/// - 鼠标悬停 → `HoverHome(i)` → 只改 `home_cursor`，不碰滚动
+/// - 键盘 ↑↓ → `MoveUp/Down` → 改光标 + update 层用回填视口确保可见
+/// - 渲染层只做防御性 clamp + 回填视口高度，不主动调整 scroll
 pub fn render_home(frame: &mut Frame, state: &mut AppState) {
     let entries = home_entries();
     let cursor = state.home_cursor.min(entries.len() - 1);
@@ -26,26 +26,15 @@ pub fn render_home(frame: &mut Frame, state: &mut AppState) {
 
     // 菜单项总行数（不含标题区）
     let menu_content_lines = entries.len() * LINES_PER_ITEM;
+    let max_scroll = menu_content_lines.saturating_sub(menu_viewport);
 
-    // —— 计算滚动偏移（以菜单内容行号为准）——
-    // home_scroll 表示菜单内容区域滚动了多少行（不含标题区）
-    state.home_scroll = if menu_content_lines <= menu_viewport {
-        0
-    } else {
-        let cursor_top = cursor * LINES_PER_ITEM;
-        let cursor_bot = cursor_top + LINES_PER_ITEM;
-        // 光标在当前视口上方 → 上滚到光标顶部
-        if cursor_top < state.home_scroll {
-            cursor_top
-        } else if cursor_bot > state.home_scroll + menu_viewport {
-            // 光标在视口下方 → 下滚到光标底部贴近视口底
-            cursor_bot.saturating_sub(menu_viewport)
-        } else {
-            // 光标在视口内 → 保持不动
-            state.home_scroll
-        }
-        .min(menu_content_lines.saturating_sub(menu_viewport))
-    };
+    // 回填视口高度供 update 层使用（键盘导航时计算光标可见性）
+    state.home_menu_viewport = menu_viewport;
+
+    // 渲染层只做防御性 clamp，不主动调整 scroll 跟随光标
+    if state.home_scroll > max_scroll {
+        state.home_scroll = max_scroll;
+    }
 
     // —— 构建全文文本 ——
     let mut text = String::from(

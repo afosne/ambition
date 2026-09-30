@@ -30,6 +30,10 @@ pub enum Msg {
     HoverOption(usize),
     /// 鼠标悬停第 i 个主菜单项（只移光标，不进入）
     HoverHome(usize),
+    /// 主页面滚轮上滚（只滚动页面，不移动光标）
+    HomeScrollUp,
+    /// 主页面滚轮下滚（只滚动页面，不移动光标）
+    HomeScrollDown,
     /// 鼠标悬停第 i 个填空输入行（只移 blank_sel，不进入编辑）
     HoverBlank(usize),
     /// Esc 退出编辑（保留已输入；打字直接恢复编辑）
