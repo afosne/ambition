@@ -9,7 +9,7 @@ mod tests {
         M::empty()
     }
 
-    fn all_ctxs() -> [KeyCtx; 10] {
+    fn all_ctxs() -> [KeyCtx; 13] {
         [
             KeyCtx::Home,
             KeyCtx::Choice,
@@ -21,6 +21,9 @@ mod tests {
             KeyCtx::Review,
             KeyCtx::Picker,
             KeyCtx::Scaffold,
+            KeyCtx::PracticeSelect,
+            KeyCtx::Dialog,
+            KeyCtx::Settings,
         ]
     }
 

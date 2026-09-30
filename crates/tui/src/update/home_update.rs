@@ -10,9 +10,9 @@ pub const HEADER_LINES: usize = 3;
 /// 底部提示区预留行数
 pub const FOOTER_LINES: usize = 3;
 
-/// 主页面菜单项数（与 render::home_entries 顺序同源）
+/// 主页面菜单项数（M7-W1：7 大模块）
 pub fn home_menu_len() -> usize {
-    13
+    7
 }
 
 /// 菜单内容最大可滚动行数（内容总行数 - 视口高度）
@@ -44,22 +44,16 @@ pub fn home_ensure_cursor_visible(state: &mut AppState) {
     // 光标在视口内 → 不动（稳定，不跳动）
 }
 
-/// 主页面 Enter：根据 home_cursor 切到对应功能屏
+/// 主页面 Enter：根据 home_cursor 切到对应功能屏（M7-W1：7 大模块路由）
 pub fn home_enter(state: &mut AppState) -> Cmd {
     let target = match state.home_cursor {
-        0 => return Cmd::PracticeLoad, // 练习 → main 加载题目
-        1 => Screen::Review,
-        2 => Screen::Scaffold,
-        3 => Screen::Mock,
-        4 => Screen::Tx,
-        5 => Screen::Notes,
-        6 => Screen::Diary,
-        7 => Screen::Todos,
-        8 => Screen::Profile,
-        9 => Screen::Games,
-        10 => Screen::Wordbook,
-        11 => Screen::Cost,
-        12 => Screen::Qpack,
+        0 => Screen::PracticeSelect, // 练习 → 练习选择屏
+        1 => Screen::Mock,           // 考试 → 模考屏
+        2 => Screen::Wordbook,       // 词汇 → 词汇本
+        3 => Screen::Dialog,         // 对话 → 占位屏
+        4 => Screen::Games,          // 游戏
+        5 => Screen::Settings,       // 设置 → 占位屏
+        6 => return Cmd::Quit,       // 退出
         _ => return Cmd::None,
     };
     super::m6::update_screen(state, target)
@@ -71,46 +65,47 @@ mod tests {
 
     #[test]
     fn test_home_menu_len_is_thirteen() {
-        assert_eq!(home_menu_len(), 13);
+        assert_eq!(home_menu_len(), 7);
     }
 
     #[test]
     fn test_home_enter_routes_to_expected_screens() {
-        // cursor=0 → PracticeLoad
+        // cursor=0 → PracticeSelect（Msg，非 Cmd）
         let mut s = new_state(vec![]);
         s.screen = Screen::Home;
         s.home_cursor = 0;
-        assert_eq!(home_enter(&mut s), Cmd::PracticeLoad);
+        // home_enter cursor=0 返回 PracticeSelect 的 Cmd 等价
+        let cmd = home_enter(&mut s);
+        assert_eq!(
+            s.screen,
+            Screen::PracticeSelect,
+            "cursor=0 → PracticeSelect"
+        );
+        assert_eq!(cmd, Cmd::None);
 
-        // cursor=1 → Review
+        // cursor=1 → Mock
+        s.screen = Screen::Home;
         s.home_cursor = 1;
-        assert_eq!(home_enter(&mut s), Cmd::ReviewLoad);
-        assert_eq!(s.screen, Screen::Review);
+        home_enter(&mut s);
+        assert_eq!(s.screen, Screen::Mock, "cursor=1 → Mock");
 
-        // cursor=5 → Notes (WorkspaceLoad)
+        // cursor=4 → Games
         s.screen = Screen::Home;
-        s.home_cursor = 5;
-        assert_eq!(home_enter(&mut s), Cmd::WorkspaceLoad);
-        assert_eq!(s.screen, Screen::Notes);
+        s.home_cursor = 4;
+        home_enter(&mut s);
+        assert_eq!(s.screen, Screen::Games, "cursor=4 → Games");
 
-        // cursor=10 → Wordbook (VocabLoad)
+        // cursor=6 → Quit
         s.screen = Screen::Home;
-        s.home_cursor = 10;
-        assert_eq!(home_enter(&mut s), Cmd::VocabLoad);
-        assert_eq!(s.screen, Screen::Wordbook);
-
-        // cursor=11 → Cost (CostLoad)
-        s.screen = Screen::Home;
-        s.home_cursor = 11;
-        assert_eq!(home_enter(&mut s), Cmd::CostLoad);
-        assert_eq!(s.screen, Screen::Cost);
+        s.home_cursor = 6;
+        assert_eq!(home_enter(&mut s), Cmd::Quit, "cursor=6 → Quit");
     }
 
     // 配对桩：fn home_max_scroll → test_home_max_scroll（同文件配对门禁）
     #[test]
     fn test_home_max_scroll_returns_total_minus_min_viewport() {
-        // 13 项 * 3 行 = 39 行内容；保守视口 = 3 行 → max = 36
-        assert_eq!(home_max_scroll(), 36);
+        // 7 项 * 3 行 = 21 行内容；保守视口 = 3 行 → max = 18
+        assert_eq!(home_max_scroll(), 18);
     }
 
     // 配对桩：fn home_ensure_cursor_visible → test_home_ensure_cursor_visible

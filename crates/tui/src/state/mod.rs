@@ -47,6 +47,12 @@ pub enum Screen {
     Cost,
     /// 题包管理（#18：Ctrl+O 导入 / Ctrl+X 导出）
     Qpack,
+    /// 练习选择屏（M7-W1：分类选择 → 题型 → 开始练习）
+    PracticeSelect,
+    /// 对话模块（M7-W1 占位：即将推出）
+    Dialog,
+    /// 设置模块（M7-W1 占位：即将推出）
+    Settings,
 }
 
 /// 模考 run 元数据（M5-W6：屏顶倒计时/收卷后得分展示；行数据在 store::paper_runs）

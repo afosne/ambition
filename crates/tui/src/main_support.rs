@@ -105,6 +105,9 @@ pub(super) fn is_residual_screen(screen: ambition_tui::Screen) -> bool {
             | ambition_tui::Screen::Wordbook
             | ambition_tui::Screen::Cost
             | ambition_tui::Screen::Qpack
+            | ambition_tui::Screen::PracticeSelect
+            | ambition_tui::Screen::Dialog
+            | ambition_tui::Screen::Settings
     )
 }
 

@@ -13,7 +13,7 @@ pub mod review_render;
 pub mod scaffold_render;
 pub mod tx_render;
 
-pub use home_render::{home_entries, render_home};
+pub use home_render::{home_entries, render_home, render_placeholder, render_practice_select};
 pub use picker_render::*;
 pub use review_render::*;
 
@@ -24,6 +24,14 @@ use crate::*;
 pub fn render(frame: &mut Frame, state: &mut AppState) {
     if state.screen == Screen::Home {
         render_home(frame, state);
+        return;
+    }
+    if state.screen == Screen::PracticeSelect {
+        render_practice_select(frame, state);
+        return;
+    }
+    if matches!(state.screen, Screen::Dialog | Screen::Settings) {
+        render_placeholder(frame, state);
         return;
     }
     if m6_screens::render_workspace(frame, state) {

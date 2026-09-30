@@ -30,6 +30,9 @@ pub fn hint(ctx: KeyCtx) -> &'static str {
         }
         KeyCtx::Cost => " 成本台账（只读）· Esc 返回主页",
         KeyCtx::Qpack => " 题包管理（主页菜单进入）· Esc 返回主页",
+        KeyCtx::PracticeSelect => " ↑/↓ 选择练习类型 · Enter 开始 · Esc 返回主页",
+        KeyCtx::Dialog => " 对话模块（即将推出）· Esc 返回主页",
+        KeyCtx::Settings => " 设置模块（即将推出）· Esc 返回主页",
     }
 }
 

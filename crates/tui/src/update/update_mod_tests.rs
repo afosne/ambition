@@ -31,14 +31,12 @@ fn test_update_home_navigates_and_enters_practice() {
     assert_eq!(s.home_cursor, 1);
     assert_eq!(update(&mut s, Msg::MoveUp), Cmd::None);
     assert_eq!(s.home_cursor, 0);
-    assert_eq!(update(&mut s, Msg::HomeEnter), Cmd::PracticeLoad);
-    s.home_cursor = 1;
-    let cmd = update(&mut s, Msg::HomeEnter);
-    assert_eq!(cmd, Cmd::ReviewLoad);
-    assert_eq!(s.screen, Screen::Review);
-    s.screen = Screen::Home;
-    s.home_cursor = 4;
+    // cursor=0 → PracticeSelect 屏
     let cmd = update(&mut s, Msg::HomeEnter);
     assert_eq!(cmd, Cmd::None);
-    assert_eq!(s.screen, Screen::Tx);
+    assert_eq!(s.screen, Screen::PracticeSelect);
+    // cursor=6 → Quit
+    s.screen = Screen::Home;
+    s.home_cursor = 6;
+    assert_eq!(update(&mut s, Msg::HomeEnter), Cmd::Quit);
 }

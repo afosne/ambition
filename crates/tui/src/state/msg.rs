@@ -12,6 +12,8 @@ pub enum Msg {
     Quit,
     /// 主页面 Enter：进入光标选中的功能屏
     HomeEnter,
+    /// 主页面 → 练习选择屏（M7-W1）
+    PracticeSelect,
     /// 主页面鼠标点击第 i 项（设 cursor 后进入）
     HomeClick(usize),
     /// 填空输入行追加字符

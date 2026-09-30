@@ -283,7 +283,8 @@ pub fn practice_msg(state: &mut AppState, msg: Msg) -> Cmd {
         | Msg::HomeScrollUp
         | Msg::HomeScrollDown
         | Msg::PackImport
-        | Msg::PackExport => Cmd::None,
+        | Msg::PackExport
+        | Msg::PracticeSelect => Cmd::None,
     }
 }
 

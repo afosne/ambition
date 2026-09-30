@@ -26,7 +26,10 @@ pub(super) fn update_screen(state: &mut AppState, target: Screen) -> Cmd {
         Cmd::VocabLoad
     } else if target == Screen::Cost {
         Cmd::CostLoad
-    } else if target == Screen::Qpack {
+    } else if matches!(
+        target,
+        Screen::Qpack | Screen::PracticeSelect | Screen::Dialog | Screen::Settings
+    ) {
         Cmd::None
     } else {
         if target == Screen::Tx {
@@ -87,6 +90,22 @@ pub(super) fn update_m6(state: &mut AppState, msg: Msg) -> Option<Cmd> {
     }
     // #18 题包屏：Ctrl+O 导入 / Ctrl+X 导出（在 Home 屏已路由为 Msg，非 Home 屏忽略）
     if state.screen == Screen::Qpack {
+        return Some(if matches!(msg, Msg::Quit) {
+            Cmd::Quit
+        } else {
+            Cmd::None
+        });
+    }
+    // M7-W1：对话模块占位屏（只读 · Esc 返回 Home 已在 keys 路由）
+    if state.screen == Screen::Dialog {
+        return Some(if matches!(msg, Msg::Quit) {
+            Cmd::Quit
+        } else {
+            Cmd::None
+        });
+    }
+    // M7-W1：设置模块占位屏（只读 · Esc 返回 Home 已在 keys 路由）
+    if state.screen == Screen::Settings {
         return Some(if matches!(msg, Msg::Quit) {
             Cmd::Quit
         } else {

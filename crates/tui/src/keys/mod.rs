@@ -50,6 +50,12 @@ pub enum KeyCtx {
     Cost,
     /// 题包管理（#18：Ctrl+O 导入 / Ctrl+X 导出）
     Qpack,
+    /// 练习选择屏（M7-W1：↑↓ 导航 · Enter 选择 · Esc 返回）
+    PracticeSelect,
+    /// 对话模块（M7-W1 占位）
+    Dialog,
+    /// 设置模块（M7-W1 占位）
+    Settings,
 }
 
 /// 键位 → 消息（唯一键位表；docs/03 §5.3）
@@ -99,6 +105,9 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Wordbook => Some(Msg::Screen(Screen::Home)),
                 KeyCtx::Cost => Some(Msg::Screen(Screen::Home)),
                 KeyCtx::Qpack => Some(Msg::Screen(Screen::Home)),
+                KeyCtx::PracticeSelect => Some(Msg::Screen(Screen::Home)),
+                KeyCtx::Dialog => Some(Msg::Screen(Screen::Home)),
+                KeyCtx::Settings => Some(Msg::Screen(Screen::Home)),
                 _ => Some(Msg::Screen(Screen::Home)),
             };
         }
@@ -121,6 +130,9 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Wordbook => Msg::VocabLookup,
                 KeyCtx::Cost => Msg::Screen(Screen::Home),
                 KeyCtx::Qpack => Msg::Screen(Screen::Home),
+                KeyCtx::PracticeSelect => Msg::HomeEnter, // 练习选择屏 Enter=选择条目
+                KeyCtx::Dialog => Msg::Screen(Screen::Home),
+                KeyCtx::Settings => Msg::Screen(Screen::Home),
             });
         }
         _ => {}
@@ -140,6 +152,8 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
     match (ctx, code) {
         (KeyCtx::Home, KeyCode::Up) => Some(Msg::MoveUp),
         (KeyCtx::Home, KeyCode::Down) => Some(Msg::MoveDown),
+        (KeyCtx::PracticeSelect, KeyCode::Up) => Some(Msg::MoveUp),
+        (KeyCtx::PracticeSelect, KeyCode::Down) => Some(Msg::MoveDown),
         (KeyCtx::Choice, KeyCode::Down) => Some(Msg::MoveDown),
         (KeyCtx::Choice, KeyCode::Up) => Some(Msg::MoveUp),
         (KeyCtx::Choice, KeyCode::Char(' ')) => Some(Msg::Select),

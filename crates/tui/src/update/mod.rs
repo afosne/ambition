@@ -78,9 +78,34 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                 Cmd::None
             }
             Msg::HomeEnter => home_enter(state),
+            Msg::PracticeSelect => {
+                state.screen = Screen::PracticeSelect;
+                state.home_cursor = 0;
+                Cmd::None
+            }
             // #18 题包导入/导出（Ctrl+O / Ctrl+X 在 Home 屏路由 → main 副作用）
             Msg::PackImport => Cmd::PackImport(String::new()),
             Msg::PackExport => Cmd::PackExport,
+            _ => Cmd::None,
+        };
+    }
+    // 练习选择屏（M7-W1：↑↓ 导航 · Enter 开始练习 · Esc 返回 Home）
+    if state.screen == Screen::PracticeSelect {
+        return match msg {
+            Msg::Quit => Cmd::Quit,
+            Msg::MoveDown => {
+                state.home_cursor = 0; // W1：仅 1 项（全部题库）
+                Cmd::None
+            }
+            Msg::MoveUp => {
+                state.home_cursor = 0;
+                Cmd::None
+            }
+            Msg::HomeEnter => {
+                // W1：选"全部题库"→ 直接加载练习
+                state.screen = Screen::Home; // 先回 Home（main 会设 Practice）
+                Cmd::PracticeLoad
+            }
             _ => Cmd::None,
         };
     }

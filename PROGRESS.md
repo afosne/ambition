@@ -2,7 +2,7 @@
 
 > **每次完成一个部分必须更新本文件**（进度日志 + 代码评估四段 + 改进建议），并写入 `PITFALLS.md`（skill `ambition-pitfall-log` 强制）。
 
-MVP_STAGE: 6/6
+MVP_STAGE: 6/6（M7 进行中）
 
 ## MVP 阶段定义（M1–M6，对应 DESIGN.md §21；M7+ 属于云/Web，不在本次 MVP 内）
 
@@ -15,9 +15,43 @@ MVP_STAGE: 6/6
 | 5 | M5 写作 | composite scoring + 批注 + 模板作文填槽 + 翻译题型 + 套卷估分 | ✅ 完成（2026-09-29，W1-W8 十四笔；588 测试；模板屏/模考屏/翻译工作台/卷面为表外加码交付） |
 | 6 | M6 闭环 | 笔记/日记/TODO + 画像聚合 + 个性化出题 + 周报 + 游戏全量 | ✅ 完成（2026-09-29，提交 46a9257；M6 W1-W7；689 测试） |
 
+## M7 阶段定义（Home 菜单重构 + 练习分类选择，对应 docs/20-home-redesign.md）
+
+| # | 周次 | 内容 | 状态 |
+|---|---|---|---|
+| 1 | W1 | Home 菜单重构（7 模块）+ Screen/KeyCtx/Msg 新增 + 占位屏 | ✅ 完成（2026-09-30；724 测试全绿） |
+| 2 | W2 | 练习选择屏（PracticeSelect）+ 渲染 + 导航 | ⏳ 待开工 |
+| 3 | W3 | engine + store 层筛选取题 | ⏳ 待开工 |
+| 4 | W4 | 测试全量适配 + 验收 | ⏳ 待开工 |
+
 ---
 
 ## 进度日志
+
+### 2026-09-30 · M7-W1 Home 菜单重构（7 大模块）+ 占位屏 + 练习选择屏骨架
+
+- **背景**：用户要求按 7 大模块（练习/考试/词汇/对话/游戏/设置/退出）重构 Home 菜单，新增练习选择屏，Dialog/Settings 占位。
+- **改动**：
+  - `docs/20-home-redesign.md` 新增设计文档（M7 总纲 + W1-W4 周计划 + 函数级拆分）
+  - `state/mod.rs`：Screen 新增 `PracticeSelect, Dialog, Settings`；`state/msg.rs`：Msg 新增 `PracticeSelect`
+  - `keys/mod.rs`：KeyCtx 新增 `PracticeSelect, Dialog, Settings`；key_to_msg Esc/Enter/↑↓ 路由适配
+  - `keys/hints.rs`：hint 新增 3 ctx 提示文案
+  - `state/key_ctx.rs`：key_ctx() 新增 3 屏路由
+  - `update/home_update.rs`：home_entries/home_menu_len/home_enter 改 7 项路由
+  - `update/mod.rs`：Home 分支 + PracticeSelect 屏状态机
+  - `update/m6.rs`：update_m6/update_screen 新增 Dialog/Settings/PracticeSelect 处理
+  - `update/practice.rs`：unhandled 补 `PracticeSelect`
+  - `render/home_render.rs`：home_entries 改 7 项；新增 `render_practice_select` + `render_placeholder`
+  - `render/mod.rs`：render 新增 3 屏分发
+  - `main_support.rs`：is_residual_screen 补 3 新屏
+  - 测试文件全量适配（update_mod_tests/render_tests/keys_tests/home_render tests）
+- **测试**：724 passed / 0 failed（fmt 0 diff / clippy 0 warning）
+- **代码评估**：
+  - **代码质量**：所有新增枚举变体 match 穷尽（P-28 红线遵守）；键位文案与路由同源（hint 取 keys.rs）；配对测试桩同文件；文件 ≤500 行
+  - **实际使用**：Home 屏显示 7 大模块；cursor=0→PracticeSelect 屏（全部题库选项）；cursor=6→Quit；Dialog/Settings 显示"即将推出"；Esc 非 Home→Home，Home→Quit
+  - **代码耦合度**：PracticeSelect 屏状态机独立于 Home 状态机（互不干扰）；render_placeholder 复用于 Dialog/Settings；update_screen 合并 Qpack/PracticeSelect/Dialog/Settings 为一条分支
+  - **鲁棒性**：PracticeSelect 屏 W1 阶段仅 1 项，MoveUp/MoveDown 直接设 0（避免 modulo_one clippy）；home_enter cursor 越界返回 Cmd::None
+- **改进建议**：W2 需扩展 PracticeSelect 屏为基础练习 9 题型 + 自定义练习；W3 需 engine/store 层筛选取题
 
 ### 2026-09-30 · #17/#18 配对桩补全与最终提交（用户指令「继续 如果完成后就提交」）
 

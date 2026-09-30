@@ -114,23 +114,65 @@ pub fn render_home(frame: &mut Frame, state: &mut AppState) {
     }
 }
 
-/// 主页面菜单项（顺序 = home_cursor 索引）
+/// 主页面菜单项（顺序 = home_cursor 索引；M7-W1：7 大模块重构）
 pub fn home_entries() -> &'static [(&'static str, &'static str)] {
     &[
-        ("开始练习", "按题型顺序作答，判分后自动排入复习队列"),
-        ("间隔复习", "FSRS 翻卡复习到期卡片"),
-        ("模板作文", "按模板槽位成文 + 草稿自查"),
-        ("模拟考试", "限时套卷，收卷后自动估分"),
-        ("翻译工作台", "出译 → 对齐 → 我来翻 → 历史"),
-        ("笔记", "随手记，FTS 全文检索"),
-        ("日记", "每日复盘"),
-        ("待办", "考试倒计时与任务管理"),
-        ("学习画像", "本地作答统计、弱点分析与估分"),
-        ("游戏成长", "徽章/金币/道具/连击/地图进度"),
-        ("词汇本", "离线语境查词与生词复习"),
-        ("成本台账", "LLM 用量统计与费用估算"),
-        ("题包管理", "导入/导出题库 JSON 题包"),
+        ("练习", "基础练习 / 专项训练 / 考试模拟 / 自定义练习"),
+        ("考试", "限时套卷，收卷后自动估分"),
+        ("词汇", "离线语境查词与生词复习"),
+        ("对话", "AI 英语老师（即将推出）"),
+        ("游戏", "徽章/金币/道具/连击/地图进度"),
+        ("设置", "学习偏好与显示设置（即将推出）"),
+        ("退出", "退出 Ambition"),
     ]
+}
+
+/// 练习选择屏（M7-W1：分类选择 → 题型 → 开始练习）
+/// W1 阶段：仅显示"全部题库"一个选项；W2 扩展为基础练习题型列表
+pub fn render_practice_select(frame: &mut Frame, state: &mut AppState) {
+    let text = format!(
+        "Ambition · 练习选择\n\
+         ═══════════════════════════════════════\n\n\
+         ❯ 全部题库\n   按题库顺序作答，判分后自动排入复习队列\n\n\
+         \n{}\n",
+        hint(state.key_ctx())
+    );
+    frame.render_widget(Clear, frame.area());
+    frame.render_widget(
+        Paragraph::new(text).alignment(Alignment::Left).block(
+            Block::default()
+                .title("练习选择".bold())
+                .borders(Borders::ALL)
+                .title_alignment(Alignment::Center),
+        ),
+        frame.area(),
+    );
+}
+
+/// 占位屏（M7-W1：Dialog/Settings 显示"即将推出"）
+pub fn render_placeholder(frame: &mut Frame, state: &mut AppState) {
+    let title = match state.screen {
+        Screen::Dialog => "对话",
+        Screen::Settings => "设置",
+        _ => "占位",
+    };
+    let text = format!(
+        "Ambition · {title}\n\
+         ═══════════════════════════════════════\n\n\
+         🚧 即将推出\n\n\
+         \n{}\n",
+        hint(state.key_ctx())
+    );
+    frame.render_widget(Clear, frame.area());
+    frame.render_widget(
+        Paragraph::new(text).alignment(Alignment::Center).block(
+            Block::default()
+                .title(title.bold())
+                .borders(Borders::ALL)
+                .title_alignment(Alignment::Center),
+        ),
+        frame.area(),
+    );
 }
 
 #[cfg(test)]
@@ -140,9 +182,9 @@ mod tests {
     #[test]
     fn test_home_entries_has_eleven_items_with_titles_and_descs() {
         let entries = home_entries();
-        assert_eq!(entries.len(), 13, "13 个功能菜单项");
-        assert_eq!(entries[0].0, "开始练习");
-        assert_eq!(entries[12].0, "题包管理");
+        assert_eq!(entries.len(), 7, "7 个功能菜单项");
+        assert_eq!(entries[0].0, "练习");
+        assert_eq!(entries[6].0, "退出");
         // 每项描述非空
         for (title, desc) in entries {
             assert!(!title.is_empty(), "标题非空");
@@ -159,5 +201,27 @@ mod tests {
         s.clear_click_targets();
         // 调用 render_home 前后无 panic 即可（TestBackend 在 render_sized 中创建）
         let _ = crate::common::render_sized(&mut s, 72, 40);
+    }
+
+    // 配对桩：fn render_practice_select → test_render_practice_select（同文件配对门禁）
+    #[test]
+    fn test_render_practice_select_shows_entries() {
+        let mut s = new_state(vec![]);
+        s.screen = Screen::PracticeSelect;
+        let out = crate::common::render_sized(&mut s, 72, 20);
+        assert!(out.contains("练习选择"), "标题可见: {out}");
+        assert!(out.contains("全部题库"), "选项可见: {out}");
+    }
+
+    // 配对桩：fn render_placeholder → test_render_placeholder（同文件配对门禁）
+    #[test]
+    fn test_render_placeholder_shows_coming_soon() {
+        let mut s = new_state(vec![]);
+        s.screen = Screen::Dialog;
+        let out = crate::common::render_sized(&mut s, 72, 20);
+        assert!(out.contains("即将推出"), "占位文案可见: {out}");
+        s.screen = Screen::Settings;
+        let out2 = crate::common::render_sized(&mut s, 72, 20);
+        assert!(out2.contains("即将推出"), "设置占位文案可见: {out2}");
     }
 }

@@ -22,6 +22,15 @@ impl AppState {
         if self.screen == Screen::Qpack {
             return KeyCtx::Qpack;
         }
+        if self.screen == Screen::PracticeSelect {
+            return KeyCtx::PracticeSelect;
+        }
+        if self.screen == Screen::Dialog {
+            return KeyCtx::Dialog;
+        }
+        if self.screen == Screen::Settings {
+            return KeyCtx::Settings;
+        }
         if matches!(self.screen, Screen::Notes | Screen::Diary | Screen::Todos) {
             return KeyCtx::Workspace;
         }
