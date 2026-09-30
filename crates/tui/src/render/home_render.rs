@@ -75,17 +75,17 @@ pub fn render_home(frame: &mut Frame, state: &mut AppState) {
     }
 
     // —— 注册可点击区域（补偿 scroll 偏移）——
-    // 菜单项 i 的屏幕 Y = inner.y + HEADER_LINES + i*3 - home_scroll
-    let menu_top_base = inner.y + HEADER_LINES as u16;
+    // Paragraph::scroll((scroll_y, 0)) 跳过前 scroll_y = HEADER_LINES + home_scroll 行。
+    // 菜单项 i 在全文中的行号 = HEADER_LINES + i*3，
+    // 屏幕上的 Y = inner.y + (HEADER_LINES + i*3) - scroll_y = inner.y + i*3 - home_scroll
+    let scroll_u32 = state.home_scroll as u32;
     for i in 0..entries.len() {
-        // 用 u32 + saturating_sub 防止下溢（home_scroll > i*3+menu_top 时结果为 0 → 被视口过滤）
         let offset = (i as u32) * (LINES_PER_ITEM as u32);
-        let scroll_u32 = state.home_scroll as u32;
         // 菜单项在内容区的偏移（行号），小于 scroll 说明在视口上方 → 跳过
         if offset < scroll_u32 {
             continue;
         }
-        let raw_y = (menu_top_base as u32) + offset - scroll_u32;
+        let raw_y = (inner.y as u32) + offset - scroll_u32;
         if raw_y >= inner.y as u32 && raw_y < (inner.y + inner.height) as u32 {
             let item_y = raw_y as u16;
             let clamped_h = (inner.y + inner.height - item_y).min(2);
