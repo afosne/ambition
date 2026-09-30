@@ -57,6 +57,9 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                 Cmd::None
             }
             Msg::HomeEnter => home_enter(state),
+            // #18 题包导入/导出（Ctrl+O / Ctrl+X 在 Home 屏路由 → main 副作用）
+            Msg::PackImport => Cmd::PackImport(String::new()),
+            Msg::PackExport => Cmd::PackExport,
             _ => Cmd::None,
         };
     }

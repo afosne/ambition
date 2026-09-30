@@ -160,10 +160,12 @@ dependencies = [
  "ambition-core",
  "ambition-engine",
  "ambition-gamify",
+ "ambition-gen",
  "ambition-translate",
  "ambition-writing",
  "crossterm",
  "ratatui",
+ "serde_json",
  "tokio",
  "unicode-width 0.2.0",
 ]

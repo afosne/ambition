@@ -5,7 +5,7 @@ use crate::*;
 
 /// 主页面菜单项数（与 render::home_entries 顺序同源）
 pub fn home_menu_len() -> usize {
-    11
+    13
 }
 
 /// 主页面 Enter：根据 home_cursor 切到对应功能屏
@@ -22,6 +22,8 @@ pub fn home_enter(state: &mut AppState) -> Cmd {
         8 => Screen::Profile,
         9 => Screen::Games,
         10 => Screen::Wordbook,
+        11 => Screen::Cost,
+        12 => Screen::Qpack,
         _ => return Cmd::None,
     };
     super::m6::update_screen(state, target)
@@ -32,8 +34,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_home_menu_len_is_eleven() {
-        assert_eq!(home_menu_len(), 11);
+    fn test_home_menu_len_is_thirteen() {
+        assert_eq!(home_menu_len(), 13);
     }
 
     #[test]
@@ -60,5 +62,11 @@ mod tests {
         s.home_cursor = 10;
         assert_eq!(home_enter(&mut s), Cmd::VocabLoad);
         assert_eq!(s.screen, Screen::Wordbook);
+
+        // cursor=11 → Cost (CostLoad)
+        s.screen = Screen::Home;
+        s.home_cursor = 11;
+        assert_eq!(home_enter(&mut s), Cmd::CostLoad);
+        assert_eq!(s.screen, Screen::Cost);
     }
 }

@@ -67,6 +67,8 @@ pub fn home_entries() -> &'static [(&'static str, &'static str)] {
         ("学习画像", "本地作答统计、弱点分析与估分"),
         ("游戏成长", "徽章/金币/道具/连击/地图进度"),
         ("词汇本", "离线语境查词与生词复习"),
+        ("成本台账", "LLM 用量统计与费用估算"),
+        ("题包管理", "导入/导出题库 JSON 题包"),
     ]
 }
 
@@ -77,9 +79,9 @@ mod tests {
     #[test]
     fn test_home_entries_has_eleven_items_with_titles_and_descs() {
         let entries = home_entries();
-        assert_eq!(entries.len(), 11, "11 个功能菜单项");
+        assert_eq!(entries.len(), 13, "13 个功能菜单项");
         assert_eq!(entries[0].0, "开始练习");
-        assert_eq!(entries[10].0, "词汇本");
+        assert_eq!(entries[12].0, "题包管理");
         // 每项描述非空
         for (title, desc) in entries {
             assert!(!title.is_empty(), "标题非空");

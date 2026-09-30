@@ -190,11 +190,11 @@ fn test_render_home_shows_menu_and_cursor() {
         s.screen = Screen::Home;
         s
     };
-    let out = crate::common::render_sized(&mut s, 72, 40);
+    let out = crate::common::render_sized(&mut s, 72, 56);
     assert!(out.contains("俺必胜"), "标题可见: {out}");
     assert!(out.contains("开始练习"), "菜单项可见: {out}");
     assert!(out.contains("❯"), "光标可见: {out}");
-    assert!(out.contains("词汇本"), "末项可见: {out}");
+    assert!(out.contains("题包管理"), "末项可见: {out}");
     assert!(out.contains("Ctrl+Q"), "退出提示可见: {out}");
 }
 
@@ -203,7 +203,7 @@ fn test_render_home_cursor_moves() {
     let mut s = new_state(vec![]);
     s.screen = Screen::Home;
     s.home_cursor = 3;
-    let out = crate::common::render_sized(&mut s, 72, 40);
+    let out = crate::common::render_sized(&mut s, 72, 56);
     assert!(out.contains("❯ 模拟考试"), "光标在第 4 项: {out}");
     assert!(!out.contains("❯ 开始练习"), "第 1 项无光标: {out}");
 }

@@ -93,6 +93,10 @@ pub enum Msg {
     GameAction(u8),
     VocabLookup,
     VocabEnroll,
+    /// #18 题包导入（Ctrl+O → Cmd::PackImport(路径)）
+    PackImport,
+    /// #18 题包导出（Ctrl+X → Cmd::PackExport）
+    PackExport,
 }
 
 /// 状态机输出（Quit/Submit 由 main 执行副作用）
@@ -143,4 +147,10 @@ pub enum Cmd {
     VocabLoad,
     VocabLookup(String),
     VocabEnroll(String),
+    /// #18 成本台账加载（main → engine.cost_summary）
+    CostLoad,
+    /// #18 题包导入（main → engine.import_pack；携带路径或 JSON）
+    PackImport(String),
+    /// #18 题包导出（main → engine.export_pack → 序列化）
+    PackExport,
 }

@@ -16,6 +16,12 @@ impl AppState {
         if self.screen == Screen::Wordbook {
             return KeyCtx::Wordbook;
         }
+        if self.screen == Screen::Cost {
+            return KeyCtx::Cost;
+        }
+        if self.screen == Screen::Qpack {
+            return KeyCtx::Qpack;
+        }
         if matches!(self.screen, Screen::Notes | Screen::Diary | Screen::Todos) {
             return KeyCtx::Workspace;
         }

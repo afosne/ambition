@@ -22,6 +22,8 @@ pub(super) fn render_help_overlay(frame: &mut Frame, state: &mut AppState) {
         ("学习画像", KeyCtx::Profile),
         ("游戏成长", KeyCtx::Game),
         ("词汇本", KeyCtx::Wordbook),
+        ("成本台账", KeyCtx::Cost),
+        ("题包管理", KeyCtx::Qpack),
     ];
     let mut lines = String::from(" 键位帮助（? 关闭 · 点击关闭）\n\n");
     for (name, ctx) in ctxs {
@@ -126,6 +128,8 @@ pub(super) fn render_workspace(frame: &mut Frame, state: &mut AppState) -> bool 
         Screen::Notes => "笔记",
         Screen::Diary => "日记",
         Screen::Todos => "TODO",
+        Screen::Cost => "成本台账（LLM 用量）",
+        Screen::Qpack => "题包管理",
         _ => return false,
     };
     let mut text = format!("Ambition · {title}\n\n");
@@ -133,6 +137,8 @@ pub(super) fn render_workspace(frame: &mut Frame, state: &mut AppState) -> bool 
         text.push_str(&format!("查询：{}▍\n\n", state.workspace_draft));
     } else if matches!(screen, Screen::Notes | Screen::Diary | Screen::Todos) {
         text.push_str(&format!("内容：{}▍\n\n最近记录：\n", state.workspace_draft));
+    } else if screen == Screen::Qpack {
+        text.push_str("Ctrl+O 导入题包（JSON 文件路径）\nCtrl+X 导出当前题库为题包\n\n");
     }
     for item in &state.workspace_items {
         text.push_str(&format!(" {}\n", item));

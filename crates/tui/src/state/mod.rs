@@ -43,6 +43,10 @@ pub enum Screen {
     Games,
     /// 离线语境查词与生词本（M6-W5，Ctrl+V）
     Wordbook,
+    /// 成本面板（#18：LLM 使用量台账，Ctrl+S）
+    Cost,
+    /// 题包管理（#18：Ctrl+O 导入 / Ctrl+X 导出）
+    Qpack,
 }
 
 /// 模考 run 元数据（M5-W6：屏顶倒计时/收卷后得分展示；行数据在 store::paper_runs）

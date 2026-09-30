@@ -7,6 +7,7 @@ pub(super) fn update_screen(state: &mut AppState, target: Screen) -> Cmd {
             Screen::Profile => Cmd::ProfileLoad,
             Screen::Games => Cmd::GameLoad,
             Screen::Wordbook => Cmd::VocabLoad,
+            Screen::Cost => Cmd::CostLoad,
             _ => Cmd::None,
         };
     }
@@ -23,6 +24,10 @@ pub(super) fn update_screen(state: &mut AppState, target: Screen) -> Cmd {
         Cmd::GameLoad
     } else if target == Screen::Wordbook {
         Cmd::VocabLoad
+    } else if target == Screen::Cost {
+        Cmd::CostLoad
+    } else if target == Screen::Qpack {
+        Cmd::None
     } else {
         if target == Screen::Tx {
             tx::reset_tx(state);
@@ -64,6 +69,24 @@ pub(super) fn update_m6(state: &mut AppState, msg: Msg) -> Option<Cmd> {
         });
     }
     if state.screen == Screen::Profile {
+        return Some(if matches!(msg, Msg::Quit) {
+            Cmd::Quit
+        } else {
+            Cmd::None
+        });
+    }
+    // #18 成本面板：只读展示，Esc 返回 Home（已在 keys 路由）；Ctrl+S 同屏重载
+    if state.screen == Screen::Cost {
+        return Some(if matches!(msg, Msg::Quit) {
+            Cmd::Quit
+        } else if matches!(msg, Msg::Screen(Screen::Cost)) {
+            Cmd::CostLoad
+        } else {
+            Cmd::None
+        });
+    }
+    // #18 题包屏：Ctrl+O 导入 / Ctrl+X 导出（在 Home 屏已路由为 Msg，非 Home 屏忽略）
+    if state.screen == Screen::Qpack {
         return Some(if matches!(msg, Msg::Quit) {
             Cmd::Quit
         } else {

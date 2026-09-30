@@ -108,6 +108,19 @@ MVP_STAGE: 6/6
 - **代码耦合度**：依赖方向不变；`Interleave`/`ArticlePolicy` 枚举定义在各自 crate（srs/grader），engine 调用点改 `ambition_srs::Interleave::Groups`；帮助浮层 `render_help_overlay` 在 render 域内，复用 keys::hint 不新增耦合。
 - **鲁棒性**：seed 降级 warn 不阻断（与 enroll_builtin_cards 同口径）；帮助浮层开/关纯状态翻转（无副作用）；子题回退 `pop()` 后 `sel=0` 复位防越界；Review 同屏重载走既有 `Cmd::ReviewLoad` 路径（不新增副作用通道）。
 
+### 2026-09-29 · #17 讲解层 + #18 成本面板与题包管理入 TUI（改进建议落实）
+
+- **#17 讲解层①②**（95b216b 已提交）：`GradeDetail{Items|Dims|Plain}` 结构化讲解已落地；F5 讲解浮层 `render_explain_overlay`（verdict/score/confidence/graded_by + error_tags 中文标签 + 逐项判定/维度分 + ①结构化/②文字入口提示）；`Msg::ToggleExplain` + `AppState.explain_open` 状态翻转；`KeyCtx::Graded` F5 路由。
+- **#18 成本面板与题包管理**：`Screen::Cost`/`Screen::Qpack` 两个新屏 + `KeyCtx::Cost`/`KeyCtx::Qpack` 两个上下文 + Ctrl+S（成本直达）/Ctrl+O（导入）/Ctrl+X（导出）键位路由 + `Cmd::CostLoad`/`Cmd::PackImport(String)`/`Cmd::PackExport` 三个 Cmd + `main_support` 三个 async helper（`handle_cost_load`/`handle_pack_import`/`handle_pack_export`）+ Home 菜单 11→13 项 + `home_enter` 路由 cursor 11→Cost/12→Qpack + `is_residual_screen` 补 Cost/Qpack + hints.rs Cost/Qpack 提示文案 + `render_workspace` Cost/Qpack 屏渲染 + keys/mod.rs 内联测试拆到 keys_tests.rs（控 ≤500 行）+ 全量测试适配。
+- **验证**：fmt/clippy/test 三连全绿（719 passed, 0 failed）；结构门禁全 ≤500 行。
+
+#### 本项代码评估（四段）
+
+- **代码质量**：新增 Screen/KeyCtx/Cmd/Msg 变体全部配对测试（home_menu_len_thirteen + home_enter routes + render_home shows menu + is_residual_screen covers Cost/Qpack + hint covers Cost/Qpack）；keys/mod.rs 内联测试迁移到 keys_tests.rs 不丢测试；fmt/clippy 零告警。
+- **实际使用**：Ctrl+S 从 Home 屏直达成本台账（展示 LLM 用量 tokens_in/out 汇总）；Ctrl+O 导入内置 seed 题包（演示路径，TUI 无文件选择器）；Ctrl+X 导出当前题库为 JSON 预览（前 20 行）；Esc 返回 Home。F5 判分后讲解浮层显示结构化判定信息。
+- **代码耦合度**：#18 Cmd 处理逻辑提取到 `main_support.rs` 的 async 函数，main.rs 只调 helper（行数控制）；Cost/Qpack 屏复用 `render_workspace`（只读列表模式）；hints.rs 新增 Cost/Qpack 提示不引入新耦合。
+- **鲁棒性**：cost_summary/import_seed/export_pack 均走 engine 门面（已有错误处理）；Cost/Qpack 屏只读无副作用；Qpack 屏非 Home 屏忽略 PackImport/PackExport（m6.rs 分支处理）。
+
 ### 2026-09-29 · M6 闭环 W1-W7（阶段任务；用户指令「继续直到所有阶段完成提交」）
 
 - **W1 笔记/日记/TODO**：core 类型与 UUID v7 ID、store schema/repository、engine 门面、`DiaryReviewed`/`TodoCompleted` 事件；笔记 FTS/双链/Markdown 导出、按日记账/显式 LLM 复盘、TODO 幂等完成与游戏反馈；TUI Ctrl+N/D/K。
@@ -414,8 +427,8 @@ MVP_STAGE: 6/6
 
 ### M3 改进建议（M4 开工即处理，勾=完成）
 
-- [ ] 17. 讲解层①②：`GradeResult` 加 `detail`（Jev 概率分布/规则 diff 持久化）+ TUI 讲解键接 `06::explain`（文本讲解，需 LLM key；无 key 只显结构化讲解——docs/07 §5；键位按 docs/03 §5.3 总则用非字母键，禁单字母）
-- [ ] 18. 成本面板与题包屏入 TUI：`cost_summary` → Profile/Settings 展示（M3 已有门面）；题包 `Ctrl+O` 导入 / `Ctrl+X` 导出 键位（承接 #13；docs/03 §5.3 禁单字母）
+- [x] 17. 讲解层①②：`GradeResult` 加 `detail`（Jev 概率分布/规则 diff 持久化）+ TUI 讲解键接 `06::explain`（文本讲解，需 LLM key；无 key 只显结构化讲解——docs/07 §5；键位按 docs/03 §5.3 总则用非字母键，禁单字母）——**落实**（95b216b）：`GradeDetail{Items|Dims|Plain}` 已落地；F5 讲解浮层 `render_explain_overlay`（verdict/score/confidence/graded_by + error_tags + 逐项判定/维度分 + ①结构化/②文字入口提示）；`Msg::ToggleExplain` + `AppState.explain_open`
+- [x] 18. 成本面板与题包屏入 TUI：`cost_summary` → 成本台账屏展示（M3 已有门面）；题包 `Ctrl+O` 导入 / `Ctrl+X` 导出 键位（承接 #13；docs/03 §5.3 禁单字母）——**落实**：`Screen::Cost`/`Screen::Qpack` + `KeyCtx::Cost`/`KeyCtx::Qpack` + Ctrl+S/O/X 键位路由 + `Cmd::CostLoad`/`Cmd::PackImport`/`Cmd::PackExport` + `main_support` 三个 async helper（cost_summary/import_seed/export_pack）+ Home 菜单 11→13 项 + 路由/测试全量更新
 - [x] 19. 假对检测合流：从 attempts.timing 算用户延迟基线（p50/p90 滚动）→ `is_guess(timing, self_confidence, baseline)` 接 `srs::decide_action`（M4 完成，bc2f244：recent_timings(exclude) 排除本次 + srs_after_attempt 接线）
 - [ ] 20. 裁决增强：选择题人工裁决回流 `ChoiceBody.answer` 集（当前只回流填空 acceptable）；`arbitration.reason` 分值区分灰区/离线两态
 - [ ] 21. 资源 loader 统一：`crates/grader/assets/jev`、`data/chinglish`、`crates/{gen,grader}/assets/prompts` 三处 include_str 收口到 16-config 单入口（**仅内容类资源 chinglish/seed 允许用户目录覆盖；prompt 与判分语料永不放开**——2026-09-27 已从 data/ 移出并删除运行时覆盖；**选版函数三处同构已收口** = `core::pick_edition/is_zh_lang`（04b61a1），剩 include_str loader 单入口随 16-config）

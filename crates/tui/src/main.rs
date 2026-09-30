@@ -2,7 +2,10 @@
 //! M2：文件库（~/.ambition/ambition.db，AMBI_DB 覆盖）+ seed 题库 + 填空输入 + 独立错误行。
 
 mod main_support;
-use main_support::{db_path, game_summary, is_residual_screen, setup_terminal, teardown_terminal};
+use main_support::{
+    db_path, game_summary, handle_cost_load, handle_pack_export, handle_pack_import,
+    is_residual_screen, setup_terminal, teardown_terminal,
+};
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -474,6 +477,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             Cmd::None => {}
+            // #18 成本台账 / 题包导入 / 题包导出（提取到 main_support 以控制行数）
+            Cmd::CostLoad => handle_cost_load(&engine, &mut state).await,
+            Cmd::PackImport(_path) => handle_pack_import(&engine, &mut state).await,
+            Cmd::PackExport => handle_pack_export(&engine, &mut state).await,
         }
     }
 

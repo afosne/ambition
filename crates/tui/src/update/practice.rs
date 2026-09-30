@@ -285,7 +285,9 @@ pub fn practice_msg(state: &mut AppState, msg: Msg) -> Cmd {
         | Msg::Jump
         | Msg::HomeEnter
         | Msg::HomeClick(_)
-        | Msg::HoverHome(_) => Cmd::None,
+        | Msg::HoverHome(_)
+        | Msg::PackImport
+        | Msg::PackExport => Cmd::None,
     }
 }
 

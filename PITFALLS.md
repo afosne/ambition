@@ -189,3 +189,17 @@
 - **根因**：`HoverHome` 在 Home 分支（`if state.screen == Screen::Home`）处理，但当 `screen != Home` 时不会走该分支——HoverHome 在非 Home 屏时走到 139 行 match，是**可达的**。而 `HoverOption`/`HoverBlank` 在 139 行 match 中的 `Msg::ClickOption` 之后处理，到 unhandled 列表时已匹配——是**不可达的**。
 - **解决**：unhandled 列表只加 `HoverHome`（可达），不加 `HoverOption`/`HoverBlank`（不可达）。
 - **预防**：`if screen == X` 分支处理的 Msg 变体在非 X 屏时仍走到主 match——加入 unhandled 列表前分析各分支的可达性。
+
+## P-27 `git show HEAD:` 重定向到文件时 PowerShell 转 UTF-16——2026-09-30
+
+- **症状**：用 `git show HEAD:crates/tui/src/main.rs > main.rs` 恢复文件后，`cargo fmt` 报 `stream did not contain valid UTF-8`；检查字节发现前两字节是 `FF FE`（UTF-16 LE BOM），整个文件被 PowerShell 重定向编码为 UTF-16。
+- **根因**：PowerShell 的 `>` 重定向默认使用 UTF-16 LE 编码（尤其是非 ASCII 内容）；`git show` 输出的 UTF-8 字节流被 PowerShell 管道转码为 UTF-16。
+- **解决**：用 `git show HEAD:path | Out-File -Encoding UTF8 path` 或 `Get-Content -Encoding UTF8 | Set-Content -Encoding UTF8` 重新写入；或用 `[System.IO.File]::WriteAllText` 指定 UTF-8 无 BOM。
+- **预防**：在 PowerShell 中用 `>` 重定向 git 输出到文件时，始终检查目标文件编码（`[System.IO.File]::ReadAllBytes` 看前几字节）；优先用 `git checkout -- <file>` 或 `git restore <file>` 代替重定向。
+
+## P-28 新增枚举变体后必须全仓 match 穷尽——2026-09-30
+
+- **症状**：新增 `Screen::Cost`/`Screen::Qpack`、`KeyCtx::Cost`/`KeyCtx::Qpack`、`Msg::PackImport`/`Msg::PackExport`/`Msg::ToggleExplain` 后，`hints.rs`、`practice.rs`、`home_update.rs`、`render_tests.rs` 等多处 match 报 `E0004 non-exhaustive patterns`；`home_menu_len` 返回值与测试断言不匹配（11 vs 13）；Home 渲染测试因菜单变长导致 `Ctrl+Q` 提示行被挤出可视区域。
+- **根因**：新增枚举变体后，所有 match 该枚举的位置都需要补新变体分支；新增菜单项后菜单项数、路由表、渲染高度都要同步更新。
+- **解决**：① `hints.rs` 补 `KeyCtx::Cost`/`KeyCtx::Qpack` 提示文案；② `practice.rs` unhandled 列表补 `PackImport`/`PackExport`/`ToggleExplain`；③ `home_update.rs` `home_menu_len` 11→13 + `home_enter` 补 cursor 11→Cost/12→Qpack；④ `render_tests.rs` 渲染高度 40→56（13 项 × 3 行 + 标题 + 提示 ≈ 45 行）；⑤ `is_residual_screen` 补 Cost/Qpack。
+- **预防**：新增枚举变体后立即 `cargo check` 定位所有非穷尽 match；新增菜单项后同步更新 `home_menu_len`、`home_enter` 路由表、渲染测试高度。
