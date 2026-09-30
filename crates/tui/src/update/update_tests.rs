@@ -167,32 +167,6 @@ mod tests {
     }
 
     #[test]
-    fn test_update_confidence_records_pre_submit_and_resets_on_next() {
-        let mut s = new_state(vec![sample_question()]);
-        assert_eq!(update(&mut s, Msg::Confidence(3)), Cmd::None);
-        assert_eq!(
-            s.self_confidence,
-            Some(3),
-            "自评落状态（→ Attempt.self_confidence）"
-        );
-        update(&mut s, Msg::Confidence(9));
-        assert_eq!(s.self_confidence, Some(4), "越界钳到 4");
-        update(&mut s, Msg::Confidence(0));
-        assert_eq!(s.self_confidence, Some(1), "越界钳到 1");
-        // 判分后不再改（防误触）
-        apply_grade(&mut s, grade(Verdict::Wrong));
-        update(&mut s, Msg::Confidence(2));
-        assert_eq!(s.self_confidence, Some(1), "判分后锁定");
-        // 下一题重置
-        update(&mut s, Msg::Next);
-        assert_eq!(s.self_confidence, None, "新题重新自评");
-        // 填空输入态不吞自评（键位层已路由为字符，状态机双保险）
-        let mut fill = new_state(vec![fill_question(1)]);
-        update(&mut fill, Msg::Confidence(2));
-        assert_eq!(fill.self_confidence, None, "填空输入态不自评");
-    }
-
-    #[test]
     fn test_update_select_toggles_and_guards_empty_submission() {
         // 多选：Space 切换选中集，提交选中集优先
         let mut s = new_state(vec![multi_question()]);

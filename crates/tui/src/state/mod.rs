@@ -76,8 +76,6 @@ pub struct AppState {
     pub started_at: Instant,
     /// 修订次数（光标移动/输入删改，Timing.revision_count）
     pub revisions: u32,
-    /// 自评把握 1-4（提交前键入 → Attempt.self_confidence，假对检测输入，改进 #10）
-    pub self_confidence: Option<u8>,
     /// 填空编辑态（打字即进入；Esc 退出保留文本——keys.rs KeyCtx::Fill{editing}）
     pub editing: bool,
     /// 选择题已选中集合（Space 切换；空 = 未显式选中，提交回退光标位）
@@ -98,6 +96,8 @@ pub struct AppState {
     pub explain_open: bool,
     /// 主页面菜单光标（↑↓ 选择，Enter 进入）
     pub home_cursor: usize,
+    /// 主页面垂直滚动偏移（光标超出视口时自动调整；鼠标滚轮滚动此值）
+    pub home_scroll: usize,
     /// 鼠标可点击区域注册表（每帧渲染时 clear → register → main 查表）
     pub click_targets: Vec<crate::mouse::ClickTarget>,
     /// 待裁定裁决高亮（0=判对 1=判错；←/→ 切换，Enter 确认）
@@ -174,7 +174,6 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         error: None,
         started_at: Instant::now(),
         revisions: 0,
-        self_confidence: None,
         editing: false,
         checked: Vec::new(),
         sub_answers: Vec::new(),
@@ -185,6 +184,7 @@ pub fn new_state(questions: Vec<Question>) -> AppState {
         help_open: false,
         explain_open: false,
         home_cursor: 0,
+        home_scroll: 0,
         click_targets: Vec::new(),
         arbitration_sel: 0,
         scaffold_templates: Vec::new(),

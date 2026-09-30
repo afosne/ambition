@@ -148,12 +148,6 @@ pub fn practice_msg(state: &mut AppState, msg: Msg) -> Cmd {
             }
             Cmd::None
         }
-        Msg::Confidence(level) => {
-            if state.grade.is_none() && !state.is_fill_pending() {
-                state.self_confidence = Some(level.clamp(1, 4));
-            }
-            Cmd::None
-        }
         Msg::MoveDown | Msg::MoveUp => {
             if state
                 .grade

@@ -64,7 +64,7 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
     }
     if state.finished {
         if state.screen == Screen::Mock {
-            text.push_str("模考完成！Ctrl+Q 退出 · Ctrl+A 练习屏 · Ctrl+M 重开一卷。\n");
+            text.push_str("模考完成！Esc 返回主页 · Ctrl+A 练习屏 · Ctrl+M 重开一卷。\n");
             if let Some((score, max)) = state.mock_result {
                 text.push_str(&format!(
                     " 模考得分：{score:.1} / {max}\n",
@@ -73,7 +73,7 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
                 ));
             }
         } else {
-            text.push_str("本组完成！按 Ctrl+Q 退出。\n");
+            text.push_str("本组完成！按 Esc 返回主页。\n");
         }
     } else {
         let q = &state.questions[state.idx];
@@ -137,12 +137,6 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
         }
         // 键位提示：与路由同源（keys.rs::hint，禁止硬编码）
         text.push_str(&format!("\n{}\n", hint(state.key_ctx())));
-        if state.grade.is_none()
-            && !q.kind.is_text_input()
-            && let Some(level) = state.self_confidence
-        {
-            text.push_str(&format!(" 自评把握: {level}/4\n"));
-        }
         // 独立错误行（红字，≠ 判分浮层；P-8）
         if let Some(err) = &state.error {
             text.push_str(&format!("\n ⚠ 提交失败（未判分）: {err}\n"));

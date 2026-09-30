@@ -1,5 +1,7 @@
 //! 键位唯一入口：`KeyCtx` 路由 `key_to_msg` + 同源提示行 `hint`（docs/03 §5.3，2026-09-27 统一重构）
-//! 两层规则：①恒定层 `Ctrl+Q`/`Ctrl+C` 任何上下文退出（raw mode 无 SIGINT）；②上下文层按 `KeyCtx` 选表。
+//! 两层规则：①恒定层 `Ctrl+Q` 任何上下文退出（raw mode 无 SIGINT）；②上下文层按 `KeyCtx` 选表。
+//! Esc 统一返回主页面（仅 Home 屏 Esc 退出）；Ctrl+A 练习直达、Ctrl+R 复习直达保留。
+//! 其余功能屏通过主页菜单 Enter 进入，不再设 Ctrl+字母直达（全键无冲）。
 //! `KeyCtx` 由 `AppState::key_ctx()` 计算；main 不做任何键位改写（Enter→下一题也在表内）；
 //! render 提示行必须取 `hint()`——键位文案与路由同一来源，禁止硬编码。
 
@@ -13,7 +15,7 @@ pub use hints::hint;
 pub enum KeyCtx {
     /// 主页面（功能菜单选择，↑↓ 导航 · Enter 进入）
     Home,
-    /// 选择题作答（未判分）：↑/↓/Space/1-4（单字母已废，docs/03 §5.3）
+    /// 选择题作答（未判分）：↑/↓/Space（单字母已废，docs/03 §5.3）
     Choice,
     /// 填空待答：一切可打印字符进输入行；`editing`=是否编辑中（决定 Esc 语义）
     Fill {
@@ -52,7 +54,7 @@ pub enum KeyCtx {
 
 /// 键位 → 消息（唯一键位表；docs/03 §5.3）
 pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg> {
-    // ① 恒定层：Ctrl 组合（任何上下文）——Ctrl+Q/Ctrl+C 退出；其余 Ctrl+字母 = 屏幕直达
+    // ① 恒定层：Ctrl 组合（任何上下文）——Ctrl+Q 退出；其余 Ctrl+字母 = 屏幕直达
     //    （docs/03 §5.3：Ctrl+A/Ctrl+R 直达已落地，其余屏随后续阶段）；非 Ctrl 的字母永远不进命令层
     //    ? 键位帮助浮层（#24，任何上下文可用，非字母键不违反禁单字母总则）
     if code == KeyCode::Char('?') {
@@ -60,26 +62,14 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
     }
     if mods.contains(KeyModifiers::CONTROL) {
         return match code {
-            KeyCode::Char('q') | KeyCode::Char('c') => Some(Msg::Quit),
-            // 屏幕直达（docs/03 §5.3 直达表落地：Practice=Ctrl+A、Review=Ctrl+R；其余屏随后续阶段）
+            KeyCode::Char('q') => Some(Msg::Quit),
+            // 屏幕直达（仅保留 Ctrl+A 练习、Ctrl+R 复习——核心导航；其余功能屏走主页菜单）
             KeyCode::Char('a') => Some(Msg::Screen(Screen::Practice)),
-            // M5-W7：翻译工作台直达（W 不在直达表保留字内，docs/03 §5.3）
-            KeyCode::Char('w') => Some(Msg::Screen(Screen::Tx)),
             KeyCode::Char('r') => Some(Msg::Screen(Screen::Review)),
-            KeyCode::Char('n') => Some(Msg::Screen(Screen::Notes)),
-            KeyCode::Char('d') => Some(Msg::Screen(Screen::Diary)),
-            KeyCode::Char('k') => Some(Msg::Screen(Screen::Todos)),
-            KeyCode::Char('p') => Some(Msg::Screen(Screen::Profile)),
-            KeyCode::Char('g') => Some(Msg::Screen(Screen::Games)),
-            KeyCode::Char('v') => Some(Msg::Screen(Screen::Wordbook)),
-            // #18 成本面板直达（Ctrl+S——Settings 直达表保留字；原 WorkspaceSave 改为 Ctrl+S 只在 Workspace ctx）
-            KeyCode::Char('s') if ctx == KeyCtx::Home => Some(Msg::Screen(Screen::Cost)),
-            // #18 题包导入/导出直达（Ctrl+O / Ctrl+X——docs/03 §5.3 直达表保留字）
-            KeyCode::Char('o') if ctx == KeyCtx::Home => Some(Msg::PackImport),
-            KeyCode::Char('x') if ctx == KeyCtx::Home => Some(Msg::PackExport),
+            // Ctrl+S 上下文语义：Workspace 保存 / Wordbook 入生词本
             KeyCode::Char('s') if ctx == KeyCtx::Workspace => Some(Msg::WorkspaceSave),
             KeyCode::Char('s') if ctx == KeyCtx::Wordbook => Some(Msg::VocabEnroll),
-            // M5-W6：开模考（上下文层语义——Ctrl+M 仅答题/完成态可开卷，docs/03 §5.3 直达表）
+            // M5-W6：开模考（上下文层语义——Ctrl+M 仅答题/完成态可开卷）
             KeyCode::Char('m')
                 if matches!(ctx, KeyCtx::Choice | KeyCtx::Graded | KeyCtx::Finished) =>
             {
@@ -89,18 +79,19 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
         };
     }
     // ② Esc / Enter：语义按上下文分化
+    //    Esc 统一返回主页面（仅 Home 屏 Esc 退出）；填空编辑中 Esc=退出编辑保留文本
     match code {
         KeyCode::Esc => {
             return match ctx {
                 KeyCtx::Home => Some(Msg::Quit),
                 KeyCtx::Fill { editing: true } => Some(Msg::StopEdit),
                 KeyCtx::Pending => Some(Msg::Next), // 跳过本题（保持待裁定桶）
-                KeyCtx::Review => Some(Msg::Screen(Screen::Home)), // 复习屏返回主页面
-                KeyCtx::Picker => Some(Msg::TogglePicker), // 面板返回答题
-                KeyCtx::Scaffold => Some(Msg::Screen(Screen::Home)), // 模板屏返回主页面
-                KeyCtx::Tx => Some(Msg::Screen(Screen::Home)), // 工作台返回主页面
+                KeyCtx::Review => Some(Msg::Screen(Screen::Home)),
+                KeyCtx::Picker => Some(Msg::TogglePicker),
+                KeyCtx::Scaffold => Some(Msg::Screen(Screen::Home)),
+                KeyCtx::Tx => Some(Msg::Screen(Screen::Home)),
                 KeyCtx::TxAlign | KeyCtx::TxMyTurn | KeyCtx::TxHistory => {
-                    Some(Msg::Screen(Screen::Tx)) // 子屏回翻译主屏
+                    Some(Msg::Screen(Screen::Tx))
                 }
                 KeyCtx::Workspace => Some(Msg::Screen(Screen::Home)),
                 KeyCtx::Profile => Some(Msg::Screen(Screen::Home)),
@@ -108,7 +99,7 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
                 KeyCtx::Wordbook => Some(Msg::Screen(Screen::Home)),
                 KeyCtx::Cost => Some(Msg::Screen(Screen::Home)),
                 KeyCtx::Qpack => Some(Msg::Screen(Screen::Home)),
-                _ => Some(Msg::Quit),
+                _ => Some(Msg::Screen(Screen::Home)),
             };
         }
         KeyCode::Enter => {
@@ -152,9 +143,6 @@ pub fn key_to_msg(ctx: KeyCtx, code: KeyCode, mods: KeyModifiers) -> Option<Msg>
         (KeyCtx::Choice, KeyCode::Down) => Some(Msg::MoveDown),
         (KeyCtx::Choice, KeyCode::Up) => Some(Msg::MoveUp),
         (KeyCtx::Choice, KeyCode::Char(' ')) => Some(Msg::Select),
-        (KeyCtx::Choice, KeyCode::Char(c @ '1'..='4')) => {
-            Some(Msg::Confidence(c.to_digit(10).unwrap_or(1) as u8))
-        }
         (KeyCtx::Pending, KeyCode::Down | KeyCode::Right) => Some(Msg::MoveDown),
         (KeyCtx::Pending, KeyCode::Up | KeyCode::Left) => Some(Msg::MoveUp),
         // 复习屏（docs/03 §3 M4）：Space 翻面 · 1-4=Again/Hard/Good/Easy · Tab 返回

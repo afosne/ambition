@@ -8,7 +8,6 @@ pub(crate) fn reset_question_state(state: &mut AppState) {
     state.grade = None;
     state.sel = 0;
     state.revisions = 0;
-    state.self_confidence = None;
     state.editing = false;
     state.checked.clear();
     state.sub_answers.clear();
@@ -45,7 +44,6 @@ mod tests {
         let mut s = new_state(vec![crate::sample_question()]);
         s.sel = 1;
         s.revisions = 5;
-        s.self_confidence = Some(2);
         s.editing = true;
         s.checked = vec![1];
         s.sub_answers = vec![0];
@@ -58,7 +56,6 @@ mod tests {
                 s.grade.is_none(),
                 s.sel,
                 s.revisions,
-                s.self_confidence,
                 s.editing,
                 s.checked.is_empty(),
                 s.sub_answers.is_empty(),
@@ -66,7 +63,7 @@ mod tests {
                 s.arbitration_sel,
                 s.error.is_none(),
             ),
-            (true, 0, 0, None, false, true, true, true, 0, true),
+            (true, 0, 0, false, true, true, true, 0, true),
             "全部复位"
         );
     }

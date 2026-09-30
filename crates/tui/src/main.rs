@@ -41,11 +41,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // 鼠标事件 → 查 click_targets 注册表 → Msg
         let mouse_msg = if let Event::Mouse(mouse) = &event {
             match mouse.kind {
-                // 悬停跟随：只移光标，不触发动作
                 MouseEventKind::Moved => state.hit_test_hover(mouse.row, mouse.column),
-                // 点击：移光标 + 触发动作
                 MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
                     state.hit_test_click(mouse.row, mouse.column)
+                }
+                MouseEventKind::ScrollUp if state.screen == ambition_tui::Screen::Home => {
+                    Some(ambition_tui::Msg::MoveUp)
+                }
+                MouseEventKind::ScrollDown if state.screen == ambition_tui::Screen::Home => {
+                    Some(ambition_tui::Msg::MoveDown)
                 }
                 _ => None,
             }
@@ -67,7 +71,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             if key.kind != KeyEventKind::Press {
                 continue;
             }
-            // 键位唯一入口（keys.rs：KeyCtx 路由 + 恒定层 Ctrl+Q/Ctrl+C；Enter 提交/下一题在表内）
+            // 键位唯一入口（keys.rs：KeyCtx 路由 + 恒定层 Ctrl+Q；Enter 提交/下一题在表内）
             let Some(msg) = key_to_msg(state.key_ctx(), key.code, key.modifiers) else {
                 continue;
             };
@@ -109,7 +113,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     qid: state.questions[state.idx].qid.clone(),
                     answer,
                     timing: Some(state.timing()),
-                    self_confidence: state.self_confidence,
+                    self_confidence: None,
                     mode: AttemptMode::Practice,
                 };
                 match engine.submit_answer(&attempt).await {

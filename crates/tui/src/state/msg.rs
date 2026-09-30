@@ -20,8 +20,6 @@ pub enum Msg {
     Backspace,
     /// 人工裁决：确认当前高亮的待裁定裁决（arbitration_sel 0=判对 / 1=判错 → Cmd::Arbitrate）
     ConfirmArbitrate,
-    /// 自评把握 1-4
-    Confidence(u8),
     /// Space 选中/取消（选择题；单选无意义，多选=切换）
     Select,
     /// 鼠标点击第 i 个选项（设 sel=i 后触发 Select）

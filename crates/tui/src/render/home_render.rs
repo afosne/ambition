@@ -1,12 +1,49 @@
-//! 主页面渲染（Home 屏功能菜单 + 鼠标交互区域注册）
+//! 主页面渲染（Home 屏功能菜单 + 鼠标交互区域注册 + 右侧滚动条）
 //! 跨域引用一律 `use crate::*`（docs/01 §1 组织规范）。
 
 use crate::*;
 
-/// 主页面：功能菜单列表（↑↓ 选择 · Enter 进入）
+/// 每个菜单项占用的行数（标题 + 描述 + 空行）
+const LINES_PER_ITEM: usize = 3;
+
+/// 主页面：功能菜单列表（↑↓ 选择 · Enter 进入）+ 右侧滚动条
 pub fn render_home(frame: &mut Frame, state: &mut AppState) {
     let entries = home_entries();
     let cursor = state.home_cursor.min(entries.len() - 1);
+
+    // 视口高度（去掉外框边框后的内部可用高度）
+    let inner = Block::default().borders(Borders::ALL).inner(frame.area());
+    let viewport = inner.height as usize;
+
+    // 标题区占 3 行（2 行文本 + 1 行空行），剩余为菜单+提示区
+    let header_lines = 3;
+    let menu_viewport = viewport.saturating_sub(header_lines).saturating_sub(3); // 留 3 行提示/错误
+    let menu_viewport = menu_viewport.max(1);
+
+    // 内容总行数
+    let content_length = entries.len() * LINES_PER_ITEM;
+
+    // 需要滚动时：确保光标项在可见区域内
+    if content_length > menu_viewport {
+        let cursor_line = cursor * LINES_PER_ITEM;
+        // 光标在视口上方 → 上滚
+        if cursor_line < state.home_scroll {
+            state.home_scroll = cursor_line;
+        }
+        // 光标在视口下方 → 下滚
+        let visible_end = state.home_scroll + menu_viewport;
+        if cursor_line + LINES_PER_ITEM > visible_end {
+            state.home_scroll = (cursor_line + LINES_PER_ITEM).saturating_sub(menu_viewport);
+        }
+        // 防止过度滚动
+        let max_scroll = content_length.saturating_sub(menu_viewport);
+        if state.home_scroll > max_scroll {
+            state.home_scroll = max_scroll;
+        }
+    } else {
+        state.home_scroll = 0;
+    }
+
     let mut text = String::from(
         "Ambition · 拾英 —— 俺必胜！\n\
          ═══════════════════════════════════════\n\n",
@@ -24,6 +61,7 @@ pub fn render_home(frame: &mut Frame, state: &mut AppState) {
         Paragraph::new(text)
             .alignment(Alignment::Left)
             .wrap(Wrap { trim: false })
+            .scroll((state.home_scroll as u16, 0))
             .block(
                 Block::default()
                     .title("Ambition, 俺必胜！".bold())
@@ -33,19 +71,39 @@ pub fn render_home(frame: &mut Frame, state: &mut AppState) {
         frame.area(),
     );
 
-    // 注册可点击区域：每个菜单项占 2 行（标题 + 描述 + 空行）
+    // 右侧滚动条（内容超出视口时才显示）
+    if content_length > menu_viewport {
+        let mut sb_state = ScrollbarState::new(content_length).position(state.home_scroll);
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+        frame.render_stateful_widget(scrollbar, inner, &mut sb_state);
+    }
+
+    // 注册可点击区域：每个菜单项占 2 行（标题 + 描述）
     // 布局：外框(1) + 标题(3行) + 菜单项(entries.len() * 3行) + 提示/错误
-    let inner = Block::default().borders(Borders::ALL).inner(frame.area());
-    // 标题占 3 行（2 行文本 + 1 行空行）
-    let menu_top = inner.y + 3;
+    let menu_top = inner.y + header_lines as u16;
     for i in 0..entries.len() {
+        let item_y = menu_top + (i as u16) * LINES_PER_ITEM as u16;
+        // 只注册可见区域内的项（超出视口的不注册）
         let item_rect = Rect {
             x: inner.x,
-            y: menu_top + (i as u16) * 3,
+            y: item_y,
             width: inner.width,
             height: 2,
         };
-        state.register_interactive(item_rect, Msg::HoverHome(i), Msg::HomeClick(i));
+        // 只注册在视口内的区域（避免注册到框外）
+        if item_y < inner.y + inner.height {
+            let clamped_height = item_rect.height.min(inner.y + inner.height - item_y);
+            if clamped_height > 0 {
+                state.register_interactive(
+                    Rect {
+                        height: clamped_height,
+                        ..item_rect
+                    },
+                    Msg::HoverHome(i),
+                    Msg::HomeClick(i),
+                );
+            }
+        }
     }
 
     if state.help_open {

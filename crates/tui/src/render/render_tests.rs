@@ -110,10 +110,7 @@ fn test_render_shows_pending_arbitration_and_error_tags() {
 
     let mut s = new_state(vec![sample_question()]);
     let hint = render_to(&mut s);
-    assert!(hint.contains("1-4 自评把握"), "自评入口可见: {hint:?}");
-    update(&mut s, Msg::Confidence(3));
-    let hinted = render_to(&mut s);
-    assert!(hinted.contains("3/4"), "档位可见: {hinted:?}");
+    assert!(!hint.contains("自评把握"), "自评已废: {hint:?}");
     let mut pending = grade(Verdict::Pending);
     pending.error_tags = vec![ambition_core::ErrorTag::Collocation];
     pending.confidence = 0.42;
@@ -195,7 +192,7 @@ fn test_render_home_shows_menu_and_cursor() {
     assert!(out.contains("开始练习"), "菜单项可见: {out}");
     assert!(out.contains("❯"), "光标可见: {out}");
     assert!(out.contains("题包管理"), "末项可见: {out}");
-    assert!(out.contains("Ctrl+Q"), "退出提示可见: {out}");
+    assert!(out.contains("Esc"), "退出提示可见: {out}");
 }
 
 #[test]
