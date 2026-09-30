@@ -69,7 +69,10 @@ pub fn render_home(frame: &mut Frame, state: &mut AppState) {
 
     // 右侧滚动条（内容超出视口时才显示）
     if menu_content_lines > menu_viewport {
-        let mut sb_state = ScrollbarState::new(menu_content_lines).position(state.home_scroll);
+        // ScrollbarState 按比例渲染：content_length = 全文行数，position = 全文滚动偏移
+        let total_lines = HEADER_LINES + menu_content_lines + FOOTER_LINES;
+        let sb_pos = HEADER_LINES + state.home_scroll;
+        let mut sb_state = ScrollbarState::new(total_lines).position(sb_pos);
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         frame.render_stateful_widget(scrollbar, inner, &mut sb_state);
     }
