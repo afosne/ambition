@@ -57,7 +57,12 @@ pub fn update(state: &mut AppState, msg: Msg) -> Cmd {
                 Cmd::None
             }
             Msg::HomeScrollDown => {
-                let max = home_max_scroll();
+                // 优先使用渲染层回填的实际 max_scroll；首帧前回填值=0 → 兌底到保守估计
+                let max = if state.home_max_scroll_actual > 0 {
+                    state.home_max_scroll_actual
+                } else {
+                    home_max_scroll()
+                };
                 state.home_scroll = (state.home_scroll + LINES_PER_ITEM).min(max);
                 Cmd::None
             }

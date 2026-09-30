@@ -30,6 +30,8 @@ pub fn render_home(frame: &mut Frame, state: &mut AppState) {
 
     // 回填视口高度供 update 层使用（键盘导航时计算光标可见性）
     state.home_menu_viewport = menu_viewport;
+    // 回填实际 max_scroll 供 update 层滚轮下滚限界（首帧前为 0，update 层有 saturating 兌底）
+    state.home_max_scroll_actual = max_scroll;
 
     // 渲染层只做防御性 clamp，不主动调整 scroll 跟随光标
     if state.home_scroll > max_scroll {
@@ -69,10 +71,10 @@ pub fn render_home(frame: &mut Frame, state: &mut AppState) {
 
     // 右侧滚动条（内容超出视口时才显示）
     if menu_content_lines > menu_viewport {
-        // ScrollbarState 按比例渲染：content_length = 全文行数，position = 全文滚动偏移
-        let total_lines = HEADER_LINES + menu_content_lines + FOOTER_LINES;
-        let sb_pos = HEADER_LINES + state.home_scroll;
-        let mut sb_state = ScrollbarState::new(total_lines).position(sb_pos);
+        // ScrollbarState 按比例渲染：content_length = 可滚动总量，position = 当前偏移
+        // position=0 → 滚动条在顶；position=max_scroll → 滚动条到底
+        let mut sb_state =
+            ScrollbarState::new(max_scroll).position(state.home_scroll.min(max_scroll));
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         frame.render_stateful_widget(scrollbar, inner, &mut sb_state);
     }
